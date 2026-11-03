@@ -1,0 +1,4 @@
+Fest eingebundene Bibliotheken (aus dem npm-Register, Version fest):
+htm 3.1.1                 htm/preact/standalone.module.js (enthält Preact und Hooks)
+@supabase/supabase-js 2.118.0   @supabase/supabase-js/supabase.js (UMD)
+dompurify 3.4.17          dompurify/purify.es.mjs (ES-Modul)

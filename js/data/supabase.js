@@ -1,0 +1,153 @@
+// Echte Datenbank: Supabase. Gleiche Schnittstelle wie demo.js.
+// Die Bibliothek wird erst geladen, wenn sie gebraucht wird (im Demo-Modus nie).
+import { TABLES } from './rules.js'
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script')
+    s.src = src
+    s.onload = resolve
+    s.onerror = () => reject(new Error('Bibliothek konnte nicht geladen werden'))
+    document.head.appendChild(s)
+  })
+}
+
+// Art des Links aus einer Mail (Passwort zurücksetzen, Einladung), bevor Supabase die Adresse aufräumt
+function readLinkInfo() {
+  const raw = location.hash.startsWith('#') ? location.hash.slice(1) : ''
+  if (!raw.includes('access_token') && !raw.includes('error')) return { type: null, error: null }
+  const params = new URLSearchParams(raw)
+  return { type: params.get('type'), error: params.get('error_code') || params.get('error') }
+}
+
+// Lange Texte lädt die App erst beim Öffnen. Diese Spalten kommen beim Start ohne sie.
+const LIST_COLUMNS = {
+  meetings: 'id,title,held_at,duration_min,project_id,action_items,extra_names,source,external_id,created_by,created_at,updated_at',
+  emails: 'id,message_id,thread_id,mailbox,provider_id,direction,from_email,from_name,to_emails,cc_emails,subject,sent_at,attachments,created_at',
+}
+// Diese Tabellen sieht ein Gast ohnehin nicht, also gar nicht erst fragen
+const TEAM_ONLY = new Set(['meetings', 'meeting_persons', 'events', 'event_persons', 'emails', 'email_persons'])
+
+export async function createSupabaseApi(config) {
+  const link = readLinkInfo()
+  await loadScript('vendor/@supabase/supabase-js/supabase.js')
+  const client = window.supabase.createClient(config.supabaseUrl, config.supabaseKey, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'beqcrm-auth' },
+  })
+
+  const check = ({ data, error }) => {
+    if (error) throw error
+    return data
+  }
+
+  // Supabase liefert höchstens 1000 Zeilen auf einmal, deshalb seitenweise laden
+  async function fetchAll(table) {
+    const pageSize = 1000
+    let from = 0
+    let rows = []
+    for (;;) {
+      const data = check(await client.from(table).select(LIST_COLUMNS[table] || '*').range(from, from + pageSize - 1))
+      rows = rows.concat(data)
+      if (data.length < pageSize) return rows
+      from += pageSize
+    }
+  }
+
+  return {
+    mode: 'supabase',
+    linkType: link.type,
+    linkError: link.error,
+
+    // ---------- Anmeldung ----------
+    async getSession() {
+      const { data } = await client.auth.getSession()
+      return data.session ? { email: data.session.user.email } : null
+    },
+    onAuthChange(cb) {
+      client.auth.onAuthStateChange((event, session) => cb(event, session ? { email: session.user.email } : null))
+    },
+    async signIn(email, password) {
+      check(await client.auth.signInWithPassword({ email, password }))
+    },
+    async signOut() {
+      await client.auth.signOut()
+    },
+    async resetPassword(email) {
+      check(await client.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname }))
+    },
+    async updatePassword(password) {
+      check(await client.auth.updateUser({ password }))
+    },
+    async myRole() {
+      return check(await client.rpc('my_role'))
+    },
+    async adminName() {
+      const { data, error } = await client.rpc('crm_admin_name')
+      return error ? null : data
+    },
+
+    // ---------- Zweiter Faktor (TOTP) ----------
+    async mfaStatus() {
+      const aal = check(await client.auth.mfa.getAuthenticatorAssuranceLevel())
+      const factors = check(await client.auth.mfa.listFactors())
+      return { level: aal.currentLevel, factors: (factors.totp || []).filter((f) => f.status === 'verified') }
+    },
+    async mfaEnroll() {
+      // Reste abgebrochener Versuche entfernen, sonst scheitert ein neuer Versuch am gleichen Namen
+      const factors = check(await client.auth.mfa.listFactors())
+      for (const f of factors.all || []) {
+        if (f.status === 'unverified') await client.auth.mfa.unenroll({ factorId: f.id })
+      }
+      const data = check(
+        await client.auth.mfa.enroll({
+          factorType: 'totp',
+          issuer: 'beQ CRM',
+          friendlyName: 'beQ CRM ' + new Date().toISOString().slice(0, 16).replace('T', ' '),
+        })
+      )
+      return { factorId: data.id, qr: data.totp.qr_code, secret: data.totp.secret, uri: data.totp.uri }
+    },
+    async mfaVerify(factorId, code) {
+      check(await client.auth.mfa.challengeAndVerify({ factorId, code }))
+    },
+    // Nach dem Einrichten eines neuen Faktors die alten entfernen
+    async mfaRemoveOthers(keepId) {
+      const factors = check(await client.auth.mfa.listFactors())
+      for (const f of factors.totp || []) {
+        if (f.id !== keepId) check(await client.auth.mfa.unenroll({ factorId: f.id }))
+      }
+    },
+
+    // ---------- Daten ----------
+    async loadAll(role) {
+      const guest = role === 'gast'
+      const tables = TABLES.filter((t) => !(guest && TEAM_ONLY.has(t)) && !(guest && t === 'team_members'))
+      const lists = await Promise.all(tables.map(fetchAll))
+      const db = Object.fromEntries(TABLES.map((t) => [t, []]))
+      tables.forEach((t, i) => (db[t] = lists[i]))
+      if (guest) {
+        // Gäste lesen das Team nur über crm_users() (Name und Rolle für die Anzeige)
+        const users = check(await client.rpc('crm_users'))
+        db.team_members = users.map((u) => ({ id: u.email, email: u.email, name: u.name, role: u.role, active: true }))
+      }
+      return db
+    },
+    async fetchRow(table, id) {
+      return check(await client.from(table).select('*').eq('id', id).maybeSingle())
+    },
+    async searchMeetingSummaries(q) {
+      const pattern = '%' + q.replace(/[%_\\]/g, (c) => '\\' + c) + '%'
+      const data = check(await client.from('meetings').select('id').ilike('summary', pattern).limit(300))
+      return data.map((r) => r.id)
+    },
+    async insert(table, row) {
+      return check(await client.from(table).insert(row).select().single())
+    },
+    async update(table, id, patch) {
+      return check(await client.from(table).update(patch).eq('id', id).select().single())
+    },
+    async remove(table, id) {
+      check(await client.from(table).delete().eq('id', id))
+    },
+  }
+}

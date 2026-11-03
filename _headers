@@ -1,0 +1,13 @@
+# Sicherheitsangaben für Netlify (gelten für alle Seiten)
+# Die Seite darf nicht in fremde Seiten eingebettet werden, die Adresse wird nicht weitergegeben,
+# geladen wird nur von der eigenen Seite und von Supabase.
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  X-Robots-Tag: noindex, nofollow
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://odsdaynsczicfaxoqlms.supabase.co wss://odsdaynsczicfaxoqlms.supabase.co; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+
+/sw.js
+  Cache-Control: no-cache
