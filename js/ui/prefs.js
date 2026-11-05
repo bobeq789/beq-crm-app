@@ -1,7 +1,8 @@
-// Einstellungen (Zahnrad): Farbschema pro Gerät, Konto, Team (nur Admins), Demo zurücksetzen
+// Einstellungen (Zahnrad): Farbschema pro Gerät, Konto, Team (nur Admins), Produkte (Sales), Demo zurücksetzen
 import { html, useState } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
-import { norm } from '../lib/util.js'
+import { norm, fmtEuro } from '../lib/util.js'
+import { parseEuro } from './deal.js'
 import {
   state,
   isDemo,
@@ -61,6 +62,8 @@ function TeamAdmin() {
     update('team_members', t.id, { active: !t.active })
   }
 
+  const salesTeams = [...new Set(state.db.team_members.map((t) => t.sales_team).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'))
+
   return html`<${Tile} title="Team" count=${list.filter((t) => t.active).length}>
     <p class="muted small">
       Wer hier aktiv eingetragen ist, darf ins CRM. Das Anmeldekonto legst du zusätzlich in Supabase an („Authentication“, „Users“, „Add user“).
@@ -76,10 +79,14 @@ function TeamAdmin() {
           <select aria-label=${'Rolle von ' + t.name} value=${t.role} disabled=${t.email === state.me.email} onChange=${(e) => update('team_members', t.id, { role: e.target.value })}>
             ${ROLES.map((r) => html`<option value=${r.value}>${r.label}</option>`)}
           </select>
+          ${t.role !== 'gast' && html`<${SalesTeamFields} member=${t} teams=${salesTeams} />`}
           <button type="button" class="btn btn-small" onClick=${() => toggleActive(t)}>${t.active ? 'Deaktivieren' : 'Aktivieren'}</button>
         </li>`
       )}
     </ul>
+    <p class="muted small">
+      Sales-Team und Teamlead bestimmen, wer welche Zahlen in „Sales“ sieht: jeder seine eigenen, ein Teamlead die seines Sales-Teams, Admins alle.
+    </p>
     <form class="team-add" onSubmit=${add}>
       <h3 class="section-title">Neue Person</h3>
       <div class="field-grid three">
@@ -95,6 +102,94 @@ function TeamAdmin() {
         <button type="submit" class="btn btn-primary" disabled=${!form.name.trim() || !/@/.test(form.email)}>Eintragen</button>
       </div>
     </form>
+  <//>`
+}
+
+// Sales-Team (frei benennbar, zum Beispiel „Team Eichenauer“) und Teamlead einer Person
+function SalesTeamFields({ member, teams }) {
+  const [team, setTeam] = useState(member.sales_team || '')
+  const save = () => {
+    const v = team.trim() || null
+    if (v !== (member.sales_team || null)) update('team_members', member.id, { sales_team: v, team_lead: v ? member.team_lead : false })
+  }
+  return html`<span class="sales-team-fields">
+    <input
+      aria-label=${'Sales-Team von ' + member.name}
+      placeholder="Sales-Team"
+      list="sales-teams"
+      value=${team}
+      onInput=${(e) => setTeam(e.target.value)}
+      onBlur=${save}
+      onKeyDown=${(e) => e.key === 'Enter' && e.target.blur()}
+    />
+    <datalist id="sales-teams">${teams.map((t) => html`<option value=${t}></option>`)}</datalist>
+    <label class="check-label" title="Teamlead sieht die Zahlen des ganzen Sales-Teams">
+      <input
+        type="checkbox"
+        checked=${!!member.team_lead}
+        disabled=${!member.sales_team}
+        onChange=${(e) => update('team_members', member.id, { team_lead: e.target.checked })}
+      />
+      Teamlead
+    </label>
+  </span>`
+}
+
+// Produktkatalog für Deals: Preise netto in Euro, Netzwerkplätze je Stück (bezahlt und gratis).
+// Alle im Team sehen ihn, ändern dürfen nur Admins.
+function ProductCatalog() {
+  const admin = isAdmin()
+  const list = [...(state.db.products || [])].sort((a, b) => Number(b.active) - Number(a.active) || a.sort - b.sort)
+  const [form, setForm] = useState({ name: '', price: '', places: '1', bonus: '0' })
+  const add = async (e) => {
+    e.preventDefault()
+    const price = parseEuro(form.price)
+    if (!form.name.trim() || price === null) return toast('Bitte Name und Preis in Euro eingeben.', { error: true })
+    const sort = Math.max(0, ...list.map((p) => p.sort)) + 1
+    const saved = await insert('products', {
+      name: form.name.trim(),
+      price_cents: price,
+      places: Math.max(0, parseInt(form.places, 10) || 0),
+      bonus_places: Math.max(0, parseInt(form.bonus, 10) || 0),
+      sort,
+    })
+    if (saved) setForm({ name: '', price: '', places: '1', bonus: '0' })
+  }
+  const toggle = (p) => update('products', p.id, { active: !p.active })
+  const changePrice = (p, text) => {
+    const price = parseEuro(text)
+    if (price === null) return toast('Bitte einen Preis in Euro eingeben, zum Beispiel 3.500.', { error: true })
+    if (price !== Number(p.price_cents)) update('products', p.id, { price_cents: price })
+  }
+  return html`<${Tile} title="Produkte" count=${list.filter((p) => p.active).length}>
+    <p class="muted small">Preise netto ohne MwSt. Ein geänderter Preis gilt für neue Produktzeilen, bestehende Deals behalten ihren Preis.</p>
+    <ul class="product-list">
+      ${list.map(
+        (p) => html`<li key=${p.id} class=${p.active ? '' : 'inactive'}>
+          <span class="team-who">
+            <strong>${p.name}</strong>
+            <span class="muted small">${p.places + p.bonus_places} Netzwerkplätze${p.bonus_places ? ` (${p.places} + ${p.bonus_places} gratis)` : ''}</span>
+          </span>
+          ${admin
+            ? html`<input class="product-price" aria-label=${'Preis von ' + p.name} inputmode="decimal" value=${String(p.price_cents / 100)} onBlur=${(e) => changePrice(p, e.target.value)} />
+                <button type="button" class="btn btn-small" onClick=${() => toggle(p)}>${p.active ? 'Ausblenden' : 'Einblenden'}</button>`
+            : html`<strong>${fmtEuro(p.price_cents)}</strong>`}
+        </li>`
+      )}
+    </ul>
+    ${admin &&
+    html`<form class="team-add" onSubmit=${add}>
+      <h3 class="section-title">Neues Produkt</h3>
+      <div class="field-grid four">
+        <${Field} label="Name" htmlFor="pr-name"><input id="pr-name" value=${form.name} onInput=${(e) => setForm({ ...form, name: e.target.value })} /><//>
+        <${Field} label="Preis in Euro" htmlFor="pr-price"><input id="pr-price" inputmode="decimal" value=${form.price} onInput=${(e) => setForm({ ...form, price: e.target.value })} /><//>
+        <${Field} label="Plätze" htmlFor="pr-places"><input id="pr-places" type="number" min="0" value=${form.places} onInput=${(e) => setForm({ ...form, places: e.target.value })} /><//>
+        <${Field} label="davon gratis dazu" htmlFor="pr-bonus"><input id="pr-bonus" type="number" min="0" value=${form.bonus} onInput=${(e) => setForm({ ...form, bonus: e.target.value })} /><//>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" disabled=${!form.name.trim() || !form.price.trim()}>Anlegen</button>
+      </div>
+    </form>`}
   <//>`
 }
 
@@ -132,6 +227,7 @@ export function SettingsPage() {
     <//>
 
     ${isAdmin() && html`<${TeamAdmin} />`}
+    ${!isGuest() && html`<${ProductCatalog} />`}
 
     ${isDemo &&
     html`<${Tile} title="Demo">

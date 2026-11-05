@@ -1,7 +1,7 @@
-// Übersicht (Startseite): Schnellerfassung, Zu erledigen, Warte auf Rückmeldung, Letzte Meetings
+// Übersicht (Startseite): Schnellerfassung, Zu erledigen, Team, Termine, Warte auf Rückmeldung, Letzte Meetings
 import { html, useState, useRef } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
-import { todayStr, endOfWeekStr, fmtDateLong, fmtDateTime, fmtTimeRange, firstName, sinceLabel, local, ymd } from '../lib/util.js'
+import { todayStr, endOfWeekStr, fmtDateLong, fmtDateTime, fmtTimeRange, firstName, sinceLabel, local, ymd, norm } from '../lib/util.js'
 import {
   state,
   myEmail,
@@ -11,6 +11,11 @@ import {
   getProject,
   meetingPersons,
   isMyEvent,
+  isOpen,
+  isNew,
+  isMentioned,
+  flagOf,
+  lastHandover,
 } from '../store.js'
 import { openEvent } from '../router.js'
 import { eventsTodayTomorrow } from './calendar.js'
@@ -137,6 +142,47 @@ function WaitingTile({ cards }) {
   <//>`
 }
 
+// Kachel „Team“: was Kollegen geändert haben und was bei anderen liegt
+function TeamTile() {
+  const me = norm(myEmail())
+  const open = state.db.cards.filter(isOpen)
+  const lastChange = (c) => String((flagOf(c.id) || {}).last_change || '')
+  // Erwähnungen („@ dich“) stehen oben, sonst zuletzt geändert zuerst
+  const fresh = open
+    .filter((c) => isNew(c.id))
+    .sort((a, b) => Number(isMentioned(b.id)) - Number(isMentioned(a.id)) || lastChange(b).localeCompare(lastChange(a)))
+    .slice(0, 8)
+  // Liegt bei anderen: jemand anderes ist zuständig, und ich habe sie angelegt oder weitergegeben.
+  // „seit“: letzte Zuweisung an die zuständige Person, sonst das Anlegen.
+  const elsewhere = open
+    .filter((c) => {
+      if (!c.assignee || norm(c.assignee) === me) return false
+      const h = lastHandover(c.id)
+      return norm(c.created_by || '') === me || (h && norm(h.actor || '') === me)
+    })
+    .map((c) => {
+      const h = lastHandover(c.id)
+      return { card: c, since: h && norm(h.assignee || '') === norm(c.assignee) ? h.at : c.created_at }
+    })
+    .sort((a, b) => String(a.since).localeCompare(String(b.since)))
+  return html`<${Tile} title="Team">
+    <div class="task-group">
+      <h3 class="group-title">Neu seit deinem letzten Blick ${fresh.length > 0 && html`<span class="count">${fresh.length}</span>`}</h3>
+      ${fresh.length
+        ? html`<ul class="task-list">${fresh.map((c) => html`<${TaskRow} card=${c} key=${c.id} />`)}</ul>`
+        : html`<${Empty}>Keine Änderungen von anderen.<//>`}
+    </div>
+    <div class="task-group">
+      <h3 class="group-title">Liegt bei anderen ${elsewhere.length > 0 && html`<span class="count">${elsewhere.length}</span>`}</h3>
+      ${elsewhere.length
+        ? html`<ul class="task-list">
+            ${elsewhere.slice(0, 8).map((x) => html`<${TaskRow} card=${x.card} key=${x.card.id} showSince=${true} sinceText=${sinceLabel(x.since)} />`)}
+          </ul>`
+        : html`<${Empty}>Gerade liegt nichts bei anderen.<//>`}
+    </div>
+  <//>`
+}
+
 function EventsTile({ scope }) {
   const list = eventsTodayTomorrow(scope === 'mine', isMyEvent)
   const today = todayStr()
@@ -221,6 +267,7 @@ export function Overview() {
     <div class="overview-grid">
       <div class="col-main"><${TodoTile} cards=${todo} /></div>
       <div class="col-side">
+        <${TeamTile} />
         <${EventsTile} scope=${scope} />
         <${WaitingTile} cards=${waiting} />
         <${MeetingsTile} />

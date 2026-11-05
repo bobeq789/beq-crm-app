@@ -315,3 +315,43 @@ export function googleCalendarUrl({ title, start, end, guests, location, descrip
 export function gmailUrl(mailbox, providerId) {
   return `https://mail.google.com/mail/?authuser=${encodeURIComponent(mailbox || '')}#all/${encodeURIComponent(providerId || '')}`
 }
+
+// Dateiname für den Speicherpfad: Umlaute ausschreiben, Akzente entfernen, Leerzeichen
+// als Unterstrich, sonst nur Buchstaben, Ziffern, Punkt und Bindestrich
+export function safeFileName(name) {
+  const map = { ä: 'ae', ö: 'oe', ü: 'ue', Ä: 'Ae', Ö: 'Oe', Ü: 'Ue', ß: 'ss' }
+  let s = String(name || '')
+    .replace(/[äöüÄÖÜß]/g, (c) => map[c])
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '_')
+    .replace(/[^A-Za-z0-9._-]/g, '')
+    .replace(/_+/g, '_')
+    .replace(/^[._-]+/, '')
+  if (s.length > 120) {
+    const dot = s.lastIndexOf('.')
+    const ext = dot > 0 && s.length - dot <= 10 ? s.slice(dot) : ''
+    s = s.slice(0, 120 - ext.length) + ext
+  }
+  return s || 'datei'
+}
+
+// Angezeigter Name: Pfad ohne Ordner und ohne Zeitstempel vorne
+export function displayFileName(path) {
+  return String(path || '').split('/').pop().replace(/^\d+-/, '')
+}
+
+// „248 KB“, „1,8 MB“
+export function fmtSize(bytes) {
+  if (bytes == null) return ''
+  if (bytes < 1024) return `${bytes} Byte`
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`
+}
+
+// Euro aus Cent: „9.800 €“ (ohne Nachkommastellen, wenn glatt)
+export function fmtEuro(cents) {
+  const v = Number(cents || 0) / 100
+  const whole = Math.round(v) === v
+  return v.toLocaleString('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 })
+}

@@ -493,13 +493,14 @@ select { appearance: auto; }
 .swatch .dot { width: 22px; height: 22px; }
 .swatch.active { border-color: var(--text); }
 .stage-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
-.stage-row { display: grid; grid-template-columns: minmax(0, 1fr) 150px auto; gap: 8px; align-items: center; }
+.stage-row { display: grid; grid-template-columns: minmax(0, 1fr) 150px 84px auto; gap: 8px; align-items: center; }
 .stage-kind-fixed { font-size: 14px; color: var(--muted); padding: 0 12px; }
 .stage-buttons { display: flex; }
 @media (max-width: 599px) {
   .stage-row { grid-template-columns: minmax(0, 1fr) auto; }
   .stage-row select, .stage-row .stage-kind-fixed { grid-column: 1; }
-  .stage-row .stage-buttons { grid-column: 2; grid-row: 1 / span 2; flex-direction: column; }
+  .stage-row .stage-prob { grid-column: 1; }
+  .stage-row .stage-buttons { grid-column: 2; grid-row: 1 / span 3; flex-direction: column; }
 }
 .settings-foot { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); }
 .archived-projects li { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
@@ -761,7 +762,7 @@ input[type='time'] { min-width: 0; }
 .account-data dt { color: var(--muted); }
 .account-data dd { margin: 0; font-weight: 500; overflow-wrap: anywhere; }
 .settings-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.team-list li { display: grid; grid-template-columns: minmax(0, 1fr) 140px auto; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); }
+.team-list li { display: grid; grid-template-columns: minmax(0, 1fr) 140px auto auto; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); }
 .team-list li.inactive .team-who { opacity: 0.5; }
 .team-who { display: flex; flex-direction: column; min-width: 0; }
 .team-who .small { overflow: hidden; text-overflow: ellipsis; }
@@ -799,3 +800,119 @@ input[type='time'] { min-width: 0; }
 @container (max-height: 56px) { .event-chip .event-time { display: none; } }
 @container (max-width: 96px) { .event-chip .event-time { display: none; } }
 .brand-name { text-transform: none; letter-spacing: normal; }
+
+/* ------------------------------------------------------------
+   Verlauf und Marke „Neu“ (Baustein 7)
+   ------------------------------------------------------------ */
+:root { --new-bg: var(--green-light); --new-text: var(--green-dark); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) { --new-bg: rgba(55, 186, 152, 0.22); --new-text: var(--green); } }
+:root[data-theme='dark'] { --new-bg: rgba(55, 186, 152, 0.22); --new-text: var(--green); }
+.badge.badge-new { background: var(--new-bg); color: var(--new-text); font-weight: 600; }
+.history { margin-top: 20px; }
+.history-toggle { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 8px 0; min-height: 40px; font-weight: 700; font-size: 16px; color: var(--text); }
+.history-list li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 14px; }
+.history-text { min-width: 0; overflow-wrap: anywhere; }
+.history-list .small { white-space: nowrap; }
+.history-toggle svg { transition: transform 0.15s; }
+.history-toggle[aria-expanded='true'] svg { transform: rotate(90deg); }
+
+/* Zuständig als Knöpfe (Baustein 8) */
+.assignee-picker .chip-note { margin-left: 6px; font-size: 12px; font-weight: 500; color: var(--muted); }
+.assignee-picker .chip-btn.active .chip-note { color: inherit; opacity: 0.8; }
+
+/* Ganz geteilte Projekte (Baustein 9) */
+.tab .tab-shared { display: inline-flex; align-items: center; color: inherit; opacity: 0.75; }
+.share-note { margin-top: 16px; }
+.shared-intro { margin-bottom: 20px; }
+.shared-intro p { margin: 0 0 6px; }
+.shared-add { display: flex; gap: 8px; margin-bottom: 12px; }
+.shared-add input { flex: 1; min-width: 0; }
+
+/* @Erwähnungen (Baustein 10) */
+.mention-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
+.chip-btn.small { min-height: 32px; padding: 4px 10px; font-size: 13px; }
+.note-content .mention { color: var(--accent-text); font-weight: 700; }
+
+/* Dateien an Aufgaben (Baustein 11) */
+.files { margin-top: 20px; }
+.files-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.files-head .section-title { margin: 0; }
+.file-list li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); }
+.file-open { display: inline-flex; align-items: center; gap: 8px; flex: 1; min-width: 0; border: 0; background: none; padding: 4px 0; color: var(--accent-text); font-weight: 500; text-align: left; cursor: pointer; }
+.file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-meta { white-space: nowrap; }
+@media (max-width: 759px) { .file-list li { flex-wrap: wrap; } .file-meta { order: 3; flex-basis: 100%; padding-left: 24px; } }
+
+/* Sales (Baustein 14) */
+.badge.deal-badge { background: var(--hover); color: var(--text); font-weight: 600; }
+.badge.deal-badge.deal-won { background: var(--today-bg); color: var(--accent-text); }
+.badge.deal-badge.deal-lost { color: var(--muted); text-decoration: line-through; }
+.column-value { margin-left: 6px; font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.deal { margin-top: 20px; }
+.deal-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.deal-head .section-title { margin: 0; }
+.deal-value strong { font-size: 24px; font-weight: 700; color: var(--accent-text); }
+.deal-value .muted { margin-left: 6px; }
+.deal-sub { margin: 16px 0 6px; font-size: 14px; font-weight: 600; color: var(--muted); }
+.deal-items { margin-bottom: 8px; }
+.deal-item { display: grid; grid-template-columns: 1fr 64px 96px 72px auto 36px; align-items: end; gap: 8px; padding: 8px 0; border-top: 1px solid var(--border); }
+.deal-item-name { align-self: center; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.deal-num { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); }
+.deal-num input { min-height: 36px; padding: 4px 8px; width: 100%; }
+.deal-item-sum { align-self: center; white-space: nowrap; text-align: right; min-width: 80px; }
+.deal-add select { max-width: 100%; }
+.deal-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+@media (max-width: 759px) {
+  .deal-item { grid-template-columns: 1fr 1fr 1fr 36px; }
+  .deal-item-name { grid-column: 1 / 4; grid-row: 1; }
+  .deal-item > .icon-btn { grid-column: 4; grid-row: 1; }
+  .deal-num { grid-row: 2; }
+  .deal-item-sum { grid-column: 1 / -1; grid-row: 3; text-align: left; }
+}
+.sales-team-fields { display: inline-flex; align-items: center; gap: 8px; }
+.sales-team-fields input:not([type]) , .sales-team-fields input[list] { width: 150px; min-height: 36px; padding: 4px 8px; }
+.check-label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; white-space: nowrap; }
+.product-list li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); }
+.product-list li.inactive { opacity: 0.55; }
+.product-list .team-who { flex: 1; min-width: 0; }
+.product-price { width: 110px; min-height: 36px; padding: 4px 8px; text-align: right; }
+.field-grid.four { grid-template-columns: 2fr 1fr 1fr 1fr; }
+@media (max-width: 759px) { .field-grid.four { grid-template-columns: 1fr 1fr; } .sales-team-fields { flex-wrap: wrap; } }
+@media (max-width: 599px) { .team-list li .sales-team-fields { grid-column: 1 / -1; } }
+.sales-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-top: 12px; }
+.sales-filters .field { min-width: 180px; margin: 0; }
+.sales-range { margin: 6px 0 16px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: var(--gap); }
+.stat { background: var(--surface); border-radius: var(--radius); padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.stat-label { font-size: 13px; font-weight: 500; color: var(--muted); }
+.stat-value { font-size: 22px; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+.stat-main .stat-value { font-size: 28px; color: var(--accent-text); }
+.sales-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: var(--gap); margin-bottom: var(--gap); }
+.sales-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.sales-table th { text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); padding: 6px 8px 6px 0; border-bottom: 1px solid var(--border); }
+.sales-table td { padding: 8px 8px 8px 0; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.sales-table tr:last-child td { border-bottom: 0; }
+.sales-table .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sales-table .bar-col { width: 32%; }
+.sales-table .link-btn { text-align: left; padding: 0; }
+.bar-track { display: block; height: 10px; }
+.bar-fill { display: block; height: 10px; border-radius: 0 4px 4px 0; background: var(--bar, var(--green-dark)); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) { --bar: var(--green); } }
+:root[data-theme='dark'] { --bar: var(--green); }
+.overdue-text { color: var(--red-text); }
+@media (max-width: 759px) {
+  .sales-grid { grid-template-columns: 1fr; }
+  .sales-filters .field { min-width: 0; flex: 1 1 140px; }
+  .deals-table th:nth-child(3), .deals-table td:nth-child(3) { display: none; }
+  .stats { grid-template-columns: 1fr 1fr; }
+}
+.sales-grid > .tile { margin: 0; }
+
+.stage-prob { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 14px; }
+.stage-prob input { width: 64px; min-height: 40px; padding: 4px 8px; text-align: right; }
+.revenue-table .group-row th, .revenue-table .group-row td { background: var(--hover); padding-top: 10px; padding-bottom: 10px; }
+.revenue-table .group-row th { font-size: 14px; color: var(--text); font-weight: 700; padding-left: 8px; }
+.revenue-table tfoot th, .revenue-table tfoot td { border-top: 2px solid var(--border); }
+.sales-table .block { display: block; }
+.sales-table .nowrap { white-space: nowrap; }
+@media (max-width: 759px) { .revenue-table td, .revenue-table th { font-size: 13px; } }

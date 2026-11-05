@@ -20,9 +20,16 @@ import {
   isGuest,
   activeGuests,
   sharesOf,
+  markCardSeen,
+  state,
+  myEmail,
+  assignCard,
 } from '../store.js'
 import { closeCard } from '../router.js'
-import { Field, PriorityPicker, ProjectSelect, AssigneeSelect, EntityPicker, Notes, Dot, LinkText, brandSafe } from './common.js'
+import { Field, PriorityPicker, ProjectSelect, EntityPicker, Notes, Dot, LinkText, brandSafe } from './common.js'
+import { History } from './history.js'
+import { CardFiles } from './files.js'
+import { CardDeal } from './deal.js'
 
 // Teilen mit Gästen: antippen teilt, noch einmal antippen nimmt es zurück
 function ShareRow({ card }) {
@@ -49,6 +56,39 @@ function ShareRow({ card }) {
         ? 'Geteilt: Der Gast sieht diese Aufgabe mit Kontakt, Firma und Notizen. Notizen mit „Nur intern“, Mails, Meetings und andere Aufgaben bleiben verborgen.'
         : 'Nur das Team sieht diese Aufgabe.'}
     </p>
+  </div>`
+}
+
+// Zuständig als Knöpfe: „Niemand“, „Ich“, dann das Team, dann Gäste. Ein Tipp speichert.
+// Gäste sehen nur „Niemand“, „Ich“ und das Team (sie dürfen keinem anderen Gast zuweisen).
+function AssigneePicker({ card }) {
+  const me = norm(myEmail())
+  const current = norm(card.assignee || '')
+  const guestMode = isGuest()
+  const byName = (a, b) => a.name.localeCompare(b.name, 'de')
+  const others = state.db.team_members.filter((t) => t.active && norm(t.email) !== me)
+  const options = [
+    { value: null, label: 'Niemand' },
+    { value: myEmail(), label: 'Ich' },
+    ...others.filter((t) => t.role !== 'gast').sort(byName).map((t) => ({ value: t.email, label: t.name })),
+    ...(guestMode ? [] : others.filter((t) => t.role === 'gast').sort(byName).map((t) => ({ value: t.email, label: t.name, guest: true }))),
+  ]
+  // Zuständig ist jemand, der nicht mehr aktiv ist: trotzdem anzeigen
+  if (current && current !== me && !options.some((o) => o.value && norm(o.value) === current)) {
+    options.push({ value: card.assignee, label: memberName(card.assignee) })
+  }
+  return html`<div class="chips assignee-picker" role="group" aria-label="Zuständig">
+    ${options.map((o) => {
+      const on = o.value ? norm(o.value) === current : !current
+      return html`<button
+        type="button"
+        class=${'chip-btn' + (on ? ' active' : '')}
+        aria-pressed=${on}
+        onClick=${() => !on && assignCard(card, o.value)}
+      >
+        ${o.label}${o.guest && html`<span class="chip-note">Gast</span>`}
+      </button>`
+    })}
   </div>`
 }
 
@@ -103,15 +143,17 @@ function GuestCard({ card }) {
     <h2 class="panel-title">${card.title}</h2>
     ${card.description && html`<div class="prose"><${LinkText} text=${card.description} /></div>`}
     <dl class="card-facts">
-      ${card.assignee && html`<dt>Zuständig</dt><dd>${memberName(card.assignee)}</dd>`}
       ${person && html`<dt>Kontakt</dt><dd>${person.name}</dd>`}
       ${org && html`<dt>Firma</dt><dd>${org.name}</dd>`}
     </dl>
     <${StagePicker} card=${card} />
+    <${Field} label="Zuständig"><${AssigneePicker} card=${card} /><//>
     <div class="field-grid">
       <${DueField} card=${card} />
       <${Field} label="Dringlichkeit"><${PriorityPicker} value=${card.priority} onChange=${(v) => update('cards', card.id, { priority: v })} /><//>
     </div>
+    <${CardFiles} card=${card} />
+    <${History} card=${card} />
     <h3 class="section-title">Notizen</h3>
     <${Notes} field="card_id" id=${card.id} />
   <//>`
@@ -127,6 +169,8 @@ export function CardPanel({ id }) {
       setTitle(card.title)
       setDescription(card.description || '')
     }
+    // Öffnen setzt „gesehen“, damit die Marke „Neu“ verschwindet
+    markCardSeen(id)
   }, [id])
 
   useEffect(() => {
@@ -204,13 +248,11 @@ export function CardPanel({ id }) {
     ${card.archived && html`<p class="notice">Diese Aufgabe liegt im Archiv.</p>`}
 
     <${StagePicker} card=${card} />
+    <${Field} label="Zuständig"><${AssigneePicker} card=${card} /><//>
 
     <div class="field-grid">
       <${Field} label="Projekt" htmlFor="card-project">
         <${ProjectSelect} id="card-project" value=${card.project_id} onChange=${changeProject} />
-      <//>
-      <${Field} label="Zuständig" htmlFor="card-assignee">
-        <${AssigneeSelect} id="card-assignee" value=${card.assignee} onChange=${(v) => set({ assignee: v })} />
       <//>
       <${DueField} card=${card} />
       <${Field} label="Dringlichkeit">
@@ -240,6 +282,9 @@ export function CardPanel({ id }) {
       <${Icon} name="meetings" size=${16} /> Aus dem Meeting <a href=${'#/meetings/' + meeting.id}>„${meeting.title}“</a> vom ${fmtDate(meeting.held_at)}
     </p>`}
 
+    <${CardDeal} card=${card} />
+    <${CardFiles} card=${card} />
+    <${History} card=${card} />
     <h3 class="section-title">Notizen</h3>
     <${Notes} field="card_id" id=${card.id} />
 

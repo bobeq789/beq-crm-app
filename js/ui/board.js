@@ -2,7 +2,7 @@
 import { html, useState, useEffect, useRef } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { SETTINGS } from '../settings.js'
-import { matches, local } from '../lib/util.js'
+import { matches, local, fmtEuro } from '../lib/util.js'
 import {
   state,
   activeProjects,
@@ -25,9 +25,13 @@ import {
   sharesOf,
   allLabels,
   isOpen,
+  assignedToOther,
+  activeGuests,
+  projectSharesOf,
+  dealOf,
 } from '../store.js'
 import { navigate, openCard } from '../router.js'
-import { PageHead, Dot, Avatar, PrioBadge, DueBadge, Modal, Field, Empty, dialogKinds, useIsMobile } from './common.js'
+import { PageHead, Dot, Avatar, PrioBadge, DueBadge, NewBadge, Modal, Field, Empty, dialogKinds, useIsMobile } from './common.js'
 
 const DONE_LIMIT = 15
 
@@ -50,15 +54,34 @@ function BoardCard({ card, draggable }) {
       <span class="bc-title">${card.title}</span>
       ${(person || org) && html`<span class="bc-sub">${[person && person.name, org && org.name].filter(Boolean).join(' · ')}</span>`}
       <span class="bc-meta">
-        ${card.assignee && html`<${Avatar} email=${card.assignee} />`}
+        <${NewBadge} cardId=${card.id} />
+        ${assignedToOther(card) && html`<${Avatar} email=${card.assignee} />`}
         <${PrioBadge} priority=${card.priority} />
         <${DueBadge} due=${card.due_date} done=${isDone} />
         ${sharesOf(card.id).length > 0 && html`<span class="bc-notes" title="Mit einem Gast geteilt"><${Icon} name="share" size=${14} /></span>`}
         ${noteCount > 0 && html`<span class="bc-notes" title=${noteCount + (noteCount === 1 ? ' Notiz' : ' Notizen')}><${Icon} name="note" size=${14} />${noteCount}</span>`}
         ${card.archived && html`<span class="badge">Archiv</span>`}
+        <${DealBadge} card=${card} />
       </span>
     </button>
   </li>`
+}
+
+// Wert des Deals auf der Karte (nur wenn ich die Zahlen sehen darf, sonst gibt es ihn hier nicht)
+function DealBadge({ card }) {
+  const deal = dealOf(card.id)
+  if (!deal) return null
+  const cls = deal.status === 'gewonnen' ? ' deal-won' : deal.status === 'verloren' ? ' deal-lost' : ''
+  const label = deal.status === 'offen' ? '' : deal.status === 'gewonnen' ? ' gewonnen' : ' verloren'
+  return html`<span class=${'badge deal-badge' + cls} title=${'Deal' + label}>${fmtEuro(deal.value_cents)}${label}</span>`
+}
+
+// Summe der offenen und gewonnenen Deals einer Spalte
+function columnValue(cards) {
+  return cards.reduce((sum, c) => {
+    const d = dealOf(c.id)
+    return d && d.status !== 'verloren' ? sum + Number(d.value_cents || 0) : sum
+  }, 0)
 }
 
 function InlineAdd({ onAdd, onCancel }) {
@@ -112,7 +135,10 @@ function Column({ stage, cards, onDropCard, onAdd, draggable }) {
     }}
   >
     <div class="column-head">
-      <h2 class="column-title">${stage.name} <span class="count">${cards.length}</span></h2>
+      <h2 class="column-title">
+        ${stage.name} <span class="count">${cards.length}</span>
+        ${columnValue(cards) > 0 && html`<span class="column-value" title="Summe der Deals in dieser Spalte (netto, ohne verlorene)">${fmtEuro(columnValue(cards))}</span>`}
+      </h2>
       <button type="button" class="icon-btn small" aria-label=${'Neue Aufgabe in „' + stage.name + '“'} onClick=${() => setAdding(true)}>
         <${Icon} name="plus" size=${18} />
       </button>
@@ -215,10 +241,21 @@ export function Board({ projectId }) {
           onClick=${() => navigate('/board/' + p.id)}
         >
           <${Dot} color=${p.color} />${p.name}
+          ${projectSharesOf(p.id).length > 0 &&
+          html`<span class="tab-shared" title="Mit Gästen geteilt" aria-label="mit Gästen geteilt"><${Icon} name="users" size=${15} /></span>`}
           <span class="count">${state.db.cards.filter((c) => c.project_id === p.id && isOpen(c)).length}</span>
         </button>`
       )}
       <button type="button" class="tab tab-icon" aria-label="Neues Projekt" title="Neues Projekt" onClick=${newProject}><${Icon} name="plus" size=${18} /></button>
+      <button
+        type="button"
+        class="tab tab-icon"
+        aria-label="Projekt teilen"
+        title="Projekt teilen"
+        onClick=${() => openDialog({ kind: 'project-share', projectId: current.id })}
+      >
+        <${Icon} name="share" size=${18} />
+      </button>
       <button
         type="button"
         class="tab tab-icon"
@@ -317,6 +354,23 @@ function StageRow({ stage, index, total, onMove, cardCount }) {
       : html`<select value=${stage.kind} aria-label="Art der Spalte" onChange=${(e) => update('stages', stage.id, { kind: e.target.value })}>
           ${SETTINGS.stageKinds.filter((k) => k.value !== 'done').map((k) => html`<option value=${k.value}>${k.label}</option>`)}
         </select>`}
+    <label class="stage-prob" title="Wahrscheinlichkeit für neue Deals in dieser Spalte (Sales)">
+      <input
+        type="number"
+        min="0"
+        max="100"
+        step="5"
+        inputmode="numeric"
+        aria-label=${'Wahrscheinlichkeit in Prozent für „' + stage.name + '“'}
+        placeholder="%"
+        value=${stage.probability ?? ''}
+        onChange=${(e) => {
+          const v = e.target.value === '' ? null : Math.max(0, Math.min(100, Math.round(Number(e.target.value))))
+          update('stages', stage.id, { probability: Number.isFinite(v) ? v : null })
+        }}
+      />
+      <span>%</span>
+    </label>
     <div class="stage-buttons">
       <button type="button" class="icon-btn small" aria-label="Nach oben" disabled=${index === 0} onClick=${() => onMove(index, -1)}><${Icon} name="up" size=${16} /></button>
       <button type="button" class="icon-btn small" aria-label="Nach unten" disabled=${index === total - 1} onClick=${() => onMove(index, 1)}><${Icon} name="down" size=${16} /></button>
@@ -401,7 +455,7 @@ function ProjectSettings({ d }) {
       </div>
     <//>
     <h3 class="section-title">Spalten</h3>
-    <p class="muted small">Die Art bestimmt, wo Aufgaben in der Übersicht erscheinen. Namen kannst du frei wählen.</p>
+    <p class="muted small">Die Art bestimmt, wo Aufgaben in der Übersicht erscheinen. Namen kannst du frei wählen. Die Prozentzahl ist die Wahrscheinlichkeit für Deals in dieser Spalte (für die gewichtete Pipeline in „Sales“), leer heißt ohne.</p>
     <ul class="stage-list">
       ${stages.map(
         (s, i) =>
@@ -445,3 +499,53 @@ function ProjectSettings({ d }) {
 }
 
 dialogKinds['project-settings'] = ProjectSettings
+
+// Ganzes Projekt mit Gästen teilen: Gäste als Knöpfe, vor dem Teilen eine Rückfrage.
+// Es gibt nur ein Fenster auf einmal, deshalb geht dieses nach der Rückfrage wieder auf.
+function ProjectShare({ d }) {
+  const project = getProject(d.projectId)
+  if (!project) return null
+  const guests = activeGuests()
+  const shares = projectSharesOf(project.id)
+  const reopen = () => openDialog({ kind: 'project-share', projectId: project.id })
+  const toggle = async (g) => {
+    const existing = shares.find((s) => s.email.toLowerCase() === g.email.toLowerCase())
+    if (existing) {
+      const ok = await confirmDialog({
+        title: `Freigabe für ${g.name} aufheben?`,
+        text: `${g.name} sieht dann nur noch Aufgaben aus „${project.name}“, die einzeln mit ${g.name.split(' ')[0]} geteilt sind.`,
+        confirmLabel: 'Aufheben',
+      })
+      if (ok) await remove('project_shares', existing.id)
+    } else {
+      const ok = await confirmDialog({
+        title: `Ganzes Projekt „${project.name}“ mit ${g.name} teilen?`,
+        text: `${g.name} sieht dann alle Aufgaben darin, auch neue, und kann dort selbst Aufgaben anlegen.`,
+        confirmLabel: 'Teilen',
+      })
+      if (ok) {
+        const saved = await insert('project_shares', { project_id: project.id, email: g.email.toLowerCase() })
+        if (saved) toast(`${g.name} sieht jetzt das ganze Projekt „${project.name}“.`)
+      }
+    }
+    reopen()
+  }
+  return html`<${Modal} title=${`„${project.name}“ teilen`} onClose=${closeDialog}>
+    ${guests.length === 0
+      ? html`<p class="muted">Es gibt noch keine Gäste. Ein Admin legt sie in den Einstellungen unter „Team“ mit der Rolle Gast an.</p>`
+      : html`<div class="chips" role="group" aria-label="Gäste">
+          ${guests.map((g) => {
+            const on = shares.some((s) => s.email.toLowerCase() === g.email.toLowerCase())
+            return html`<button type="button" class=${'chip-btn' + (on ? ' active' : '')} aria-pressed=${on} onClick=${() => toggle(g)}>
+              ${on && html`<${Icon} name="check" size=${14} />`} ${g.name}
+            </button>`
+          })}
+        </div>`}
+    <p class="muted small share-note">
+      ${shares.length
+        ? 'Geteilt: Gäste sehen alle Aufgaben dieses Projekts mit Kontakt, Firma, Verlauf und Notizen und können hier selbst Aufgaben anlegen. Notizen mit „Nur intern“, Mails, Meetings und Termine bleiben verborgen.'
+        : 'Einzelne Aufgaben teilst du in der Aufgabe unter „Teilen mit“. Hier gibst du das ganze Projekt frei, auch für künftige Aufgaben.'}
+    </p>
+  <//>`
+}
+dialogKinds['project-share'] = ProjectShare

@@ -1,6 +1,6 @@
 // Echte Datenbank: Supabase. Gleiche Schnittstelle wie demo.js.
 // Die Bibliothek wird erst geladen, wenn sie gebraucht wird (im Demo-Modus nie).
-import { TABLES } from './rules.js'
+import { TABLES, OPTIONAL_TABLES } from './rules.js'
 
 function loadScript(src) {
   return new Promise((resolve, reject) => {
@@ -123,8 +123,11 @@ export async function createSupabaseApi(config) {
       const guest = role === 'gast'
       const tables = TABLES.filter((t) => !(guest && TEAM_ONLY.has(t)) && !(guest && t === 'team_members'))
       const lists = await Promise.all(tables.map(fetchAll))
-      const db = Object.fromEntries(TABLES.map((t) => [t, []]))
+      const db = Object.fromEntries([...TABLES, ...OPTIONAL_TABLES].map((t) => [t, []]))
       tables.forEach((t, i) => (db[t] = lists[i]))
+      // Verzichtbare Tabellen (zum Beispiel project_shares vor 05_projekte_teilen.sql): Fehler heißt leer
+      const optional = await Promise.all(OPTIONAL_TABLES.map((t) => fetchAll(t).catch(() => [])))
+      OPTIONAL_TABLES.forEach((t, i) => (db[t] = optional[i]))
       if (guest) {
         // Gäste lesen das Team nur über crm_users() (Name und Rolle für die Anzeige)
         const users = check(await client.rpc('crm_users'))
@@ -139,6 +142,64 @@ export async function createSupabaseApi(config) {
       const pattern = '%' + q.replace(/[%_\\]/g, (c) => '\\' + c) + '%'
       const data = check(await client.from('meetings').select('id').ilike('summary', pattern).limit(300))
       return data.map((r) => r.id)
+    },
+    // Verlauf einer Karte, neueste oben
+    async cardEvents(cardId) {
+      return check(await client.from('card_events').select('*').eq('card_id', cardId).order('at', { ascending: false }).limit(200))
+    },
+    // Karte als gesehen merken (über card_id und email)
+    async markSeen(cardId, email) {
+      check(await client.from('card_seen').upsert({ card_id: cardId, email: email.toLowerCase(), seen_at: new Date().toISOString() }, { onConflict: 'card_id,email' }))
+    },
+    // Marken „Neu“ (und später „@ dich“)
+    async cardFlags() {
+      return check(await client.rpc('my_card_flags'))
+    },
+    // ---------- Dateien (07_dateien.sql) ----------
+    async listFiles(cardId) {
+      const { data, error } = await client.storage
+        .from('dateien')
+        .list(`karten/${cardId}`, { limit: 500, sortBy: { column: 'created_at', order: 'desc' } })
+      if (error) throw error
+      return (data || [])
+        .filter((f) => f.id)
+        .map((f) => ({ path: `karten/${cardId}/${f.name}`, size: f.metadata ? f.metadata.size : null, created_at: f.created_at }))
+    },
+    async uploadFile(path, file) {
+      const { error } = await client.storage.from('dateien').upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false })
+      if (error) throw error
+    },
+    // Signierter Link, 10 Minuten gültig
+    async fileUrl(path) {
+      const { data, error } = await client.storage.from('dateien').createSignedUrl(path, 600)
+      if (error) throw error
+      return data.signedUrl
+    },
+    async removeFile(path) {
+      const { data, error } = await client.storage.from('dateien').remove([path])
+      if (error) throw error
+      // Ohne Berechtigung meldet Supabase keinen Fehler, sondern löscht einfach nichts
+      if (!data || !data.length) {
+        const e = new Error('permission denied')
+        e.code = '42501'
+        throw e
+      }
+    },
+    async logFile(cardId, name) {
+      check(await client.rpc('log_file', { card: cardId, file_name: name }))
+    },
+
+    // Besitzer des Deals an einer Aufgabe, ohne Werte (08_sales.sql)
+    async cardDealOwner(cardId) {
+      return check(await client.rpc('card_deal_owner', { card: cardId }))
+    },
+
+    // Letzte Zuweisung je Karte (04_zustaendig.sql)
+    async handovers() {
+      return check(await client.rpc('last_handovers'))
+    },
+    async cardShares(cardId) {
+      return check(await client.from('card_shares').select('*').eq('card_id', cardId))
     },
     async insert(table, row) {
       return check(await client.from(table).insert(row).select().single())

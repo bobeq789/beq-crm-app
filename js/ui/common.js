@@ -20,7 +20,12 @@ import {
   cardKind,
   isGuest,
   myEmail,
+  isNew,
+  isMentioned,
+  assignedToOther,
+  saveNote,
 } from '../store.js'
+import { mentionPeople, parseMentions, NoteText } from './mentions.js'
 import { openCard } from '../router.js'
 
 // „beQ“ bleibt auch in Großbuchstaben-Zeilen (Kicker) richtig geschrieben
@@ -69,6 +74,13 @@ export function DueBadge({ due, done }) {
   const info = dueInfo(due)
   if (!info) return null
   return html`<span class=${'badge due-' + (done ? 'later' : info.tone)}><${Icon} name="clock" size=${12} />${info.text}</span>`
+}
+
+// Marke „Neu“: Kollegen haben seit meinem letzten Öffnen etwas geändert
+export function NewBadge({ cardId }) {
+  if (isMentioned(cardId)) return html`<span class="badge badge-new" title="Du wurdest erwähnt">@ dich</span>`
+  if (!isNew(cardId)) return null
+  return html`<span class="badge badge-new" title="Kollegen haben seit deinem letzten Öffnen etwas geändert">Neu</span>`
 }
 
 export function PrioBadge({ priority }) {
@@ -160,9 +172,10 @@ export function TaskRow({ card, showSince, sinceText }) {
     <div class="task-main">
       <button type="button" class="task-title" onClick=${() => openCard(card.id)}>${card.title}</button>
       <div class="task-meta">
+        <${NewBadge} cardId=${card.id} />
         ${project && html`<span class="meta-item"><${Dot} color=${project.color} />${project.name}</span>`}
         ${(person || org) && html`<span class="meta-item muted">${person ? person.name : org.name}</span>`}
-        ${card.assignee && html`<${Avatar} email=${card.assignee} />`}
+        ${assignedToOther(card) && html`<${Avatar} email=${card.assignee} />`}
         <${PrioBadge} priority=${card.priority} />
         ${!done && html`<${DueBadge} due=${card.due_date} />`}
         ${showSince && html`<span class="badge due-later">${sinceText}</span>`}
@@ -411,7 +424,9 @@ function NoteItem({ note }) {
   const edited = note.updated_at && new Date(note.updated_at) - new Date(note.created_at) > 60000
   const save = async () => {
     if (!text.trim()) return
-    await update('notes', note.id, { content: text.trim() })
+    const patch = { content: text.trim() }
+    if (note.card_id && !note.internal) patch.mentions = parseMentions(patch.content, mentionPeople(note.card_id).all)
+    await saveNote(patch, note.id)
     setEditing(false)
   }
   const cancel = () => {
@@ -430,7 +445,7 @@ function NoteItem({ note }) {
             <button type="button" class="btn" onClick=${cancel}>Abbrechen</button>
             <button type="button" class="btn btn-primary" disabled=${!text.trim()} onClick=${save}>Speichern</button>
           </div>`
-      : html`<div class="note-content"><${LinkText} text=${note.content} /></div>`}
+      : html`<div class="note-content"><${NoteText} text=${note.content} mentions=${note.mentions} /></div>`}
     <div class="note-meta">
       <span>
         ${note.internal && html`<span class="note-lock" title="Nur intern, für Gäste unsichtbar"><${Icon} name="lock" size=${14} /> Nur intern · </span>`}
@@ -459,17 +474,40 @@ function NoteItem({ note }) {
 export function Notes({ field, id }) {
   const [text, setText] = useState('')
   const [internal, setInternal] = useState(false)
+  const area = useRef(null)
   const guest = isGuest()
   const list = notesFor(field, id)
+  // Erwähnungen nur an Aufgaben und nicht bei „Nur intern“
+  const people = field === 'card_id' ? mentionPeople(id) : null
+  const showMentions = people && !internal && people.buttons.length > 0
   const save = async () => {
     const content = text.trim()
     if (!content) return
+    const isInternal = guest ? false : internal
+    const mentions = people && !isInternal ? parseMentions(content, people.all) : []
     setText('')
-    await insert('notes', { content, [field]: id, internal: guest ? false : internal })
+    await saveNote({ content, [field]: id, internal: isInternal, mentions })
+  }
+  // „@Vorname “ an der Schreibmarke einfügen
+  const mention = (p) => {
+    const el = area.current
+    const start = el ? el.selectionStart : text.length
+    const end = el ? el.selectionEnd : text.length
+    const before = text.slice(0, start)
+    const insertText = (before && !/\s$/.test(before) ? ' ' : '') + '@' + p.label + ' '
+    const next = before + insertText + text.slice(end)
+    setText(next)
+    requestAnimationFrame(() => {
+      if (!area.current) return
+      area.current.focus()
+      const caret = start + insertText.length
+      area.current.setSelectionRange(caret, caret)
+    })
   }
   return html`<div class="notes">
     <div class="note-new">
       <textarea
+        ref=${area}
         rows="3"
         placeholder="Notiz schreiben …"
         aria-label="Neue Notiz"
@@ -479,6 +517,12 @@ export function Notes({ field, id }) {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save()
         }}
       ></textarea>
+      ${showMentions &&
+      html`<div class="mention-buttons" role="group" aria-label="Erwähnen">
+        ${people.buttons.map(
+          (p) => html`<button type="button" class="chip-btn small" title=${p.name + (p.guest ? ' (Gast)' : '')} onClick=${() => mention(p)}>@${p.label}</button>`
+        )}
+      </div>`}
       <div class="form-actions">
         ${!guest &&
         html`<button

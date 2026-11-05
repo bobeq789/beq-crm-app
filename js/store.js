@@ -3,8 +3,8 @@
 // Geht das Speichern schief, kommt eine Meldung und die Daten werden neu geladen.
 import { useState, useEffect } from './lib/preact.js'
 import { SETTINGS } from './settings.js'
-import { uid, local, todayStr, firstName, initials, norm } from './lib/util.js'
-import { prepareInsert, prepareUpdate, afterInsert, cascadeDelete, emptyDb } from './data/rules.js'
+import { uid, local, todayStr, firstName, initials, norm, safeFileName } from './lib/util.js'
+import { prepareInsert, prepareUpdate, afterInsert, cascadeDelete, emptyDb, recalcDeal } from './data/rules.js'
 import { createDemoApi } from './data/demo.js'
 import { createSupabaseApi } from './data/supabase.js'
 
@@ -28,6 +28,12 @@ export const state = {
   db: emptyDb(),
   // Datensätze, deren lange Texte schon geladen sind
   full: { meetings: new Set(), emails: new Set() },
+  // Marken je Karte: { is_new, mentioned, last_change } (aus dem Verlauf)
+  flags: new Map(),
+  // Letzte Zuweisung je Karte: card_id → { actor, at, assignee } (für „Liegt bei anderen“)
+  handovers: new Map(),
+  // Zählt hoch, wenn neue Verlaufseinträge ohne Kartenänderung dazukommen (zum Beispiel Dateien)
+  historyTick: 0,
   loadedAt: 0,
   toasts: [],
   dialog: null,
@@ -98,7 +104,8 @@ export function errorText(err) {
   if (/Password should be at least/i.test(msg)) return 'Das Passwort ist zu kurz.'
   if (/AAL2 required|aal2/i.test(msg)) return 'Dafür brauchst du den zweiten Faktor. Bitte melde dich neu an.'
   if (/JWT expired|session/i.test(msg)) return 'Deine Anmeldung ist abgelaufen. Bitte melde dich neu an.'
-  if (/guest_guard|Gäste dürfen/i.test(msg)) return 'Als Gast kannst du hier nur Spalte, Dringlichkeit und Fälligkeit ändern.'
+  if (/guest_guard_assignee|Gäste können nur sich selbst/i.test(msg)) return 'Als Gast kannst du nur dich, ein Teammitglied oder niemanden zuständig machen.'
+  if (/guest_guard|Gäste dürfen/i.test(msg)) return 'Als Gast kannst du hier nur Spalte, Dringlichkeit, Fälligkeit und Zuständig ändern.'
   if (code === '42501' || /row-level security|permission denied/i.test(msg)) return 'Keine Berechtigung für diese Änderung.'
   if (code === '23503') return 'Das geht nicht, weil noch Einträge daran hängen.'
   if (code === '23505') return 'Diesen Eintrag gibt es schon.'
@@ -237,6 +244,7 @@ export const mfaRemoveOthers = (keepId) => api.mfaRemoveOthers(keepId)
 export async function reload(throwErrors = false) {
   try {
     state.db = await api.loadAll(state.role)
+    await loadFlags()
     state.full = { meetings: new Set(), emails: new Set() }
     if (isDemo) {
       // Im Demo-Modus ist alles schon vollständig
@@ -248,6 +256,170 @@ export async function reload(throwErrors = false) {
   } catch (err) {
     if (throwErrors) throw err
     toast(errorText(err), { error: true })
+  }
+}
+
+// ------------------------------------------------------------
+// Verlauf und Marke „Neu“
+// ------------------------------------------------------------
+export async function loadFlags() {
+  // Ohne Verlauf (zum Beispiel 03_verlauf.sql oder 04_zustaendig.sql noch nicht ausgeführt)
+  // gibt es einfach keine Marken und keine Liste „Liegt bei anderen“
+  const [flags, handovers] = await Promise.all([api.cardFlags().catch(() => []), api.handovers().catch(() => [])])
+  state.flags = new Map((flags || []).map((r) => [r.card_id, r]))
+  state.handovers = new Map((handovers || []).map((r) => [r.card_id, r]))
+}
+export const isNew = (cardId) => !!(state.flags.get(cardId) || {}).is_new
+// Jemand anderes als ich ist zuständig (dann zeigen Karten und Listen ein Kürzel)
+export const assignedToOther = (card) => !!card.assignee && norm(card.assignee) !== norm(myEmail())
+export const flagOf = (cardId) => state.flags.get(cardId) || null
+export const lastHandover = (cardId) => state.handovers.get(cardId) || null
+export const isMentioned = (cardId) => !!(state.flags.get(cardId) || {}).mentioned
+
+// Öffnen einer Karte: „gesehen“ setzen. Klappt das nicht, still weitermachen.
+export async function markCardSeen(cardId) {
+  if (state.flags.has(cardId)) {
+    state.flags.delete(cardId)
+    emit()
+  }
+  try {
+    await api.markSeen(cardId, myEmail())
+  } catch {
+    // nicht kritisch
+  }
+}
+
+// Zuständig ändern. Bekommt ein Gast die Aufgabe von einem Teammitglied, teilt die
+// Datenbank sie automatisch mit ihm (04_zustaendig.sql). Dann die Freigaben neu laden
+// und Bescheid geben.
+export async function assignCard(card, email) {
+  const target = email ? norm(email) : null
+  const guest = target && !isGuest() && state.db.team_members.find((t) => norm(t.email) === target && t.role === 'gast')
+  const willShare = guest && !sharesOf(card.id).some((s) => norm(s.email) === target)
+  state.handovers.set(card.id, { card_id: card.id, actor: norm(myEmail()), at: new Date().toISOString(), assignee: target })
+  const saved = await update('cards', card.id, { assignee: email || null })
+  if (saved && willShare) {
+    await refreshCardShares(card.id)
+    toast(`${guest.name} sieht diese Karte jetzt auch.`)
+  }
+  return saved
+}
+
+// Freigaben einer Karte neu laden (nach automatischem Teilen durch die Datenbank)
+export async function refreshCardShares(cardId) {
+  try {
+    const rows = await api.cardShares(cardId)
+    state.db = { ...state.db, card_shares: [...state.db.card_shares.filter((s) => s.card_id !== cardId), ...rows] }
+    emit()
+  } catch {
+    // Freigabe kommt spätestens beim nächsten Laden
+  }
+}
+
+// Sieht dieser Gast die Karte schon (einzeln oder über das ganze Projekt)?
+export function guestSeesCard(card, email) {
+  const e = norm(email)
+  return (
+    state.db.card_shares.some((s) => s.card_id === card.id && norm(s.email) === e) ||
+    (state.db.project_shares || []).some((s) => s.project_id === card.project_id && norm(s.email) === e)
+  )
+}
+
+// Notiz speichern bzw. ändern. Erwähnt ein Teammitglied einen Gast, der die Karte
+// noch nicht sieht, teilt die Datenbank sie automatisch (06_erwaehnungen.sql).
+export async function saveNote(fields, noteId = null) {
+  const card = fields.card_id ? getCard(fields.card_id) : noteId ? getCard((state.db.notes.find((n) => n.id === noteId) || {}).card_id) : null
+  const newGuests =
+    card && !isGuest() && !fields.internal
+      ? (fields.mentions || [])
+          .map((m) => state.db.team_members.find((t) => norm(t.email) === norm(m) && t.role === 'gast' && t.active))
+          .filter((g) => g && !guestSeesCard(card, g.email))
+      : []
+  const saved = noteId ? await update('notes', noteId, fields) : await insert('notes', fields)
+  if (saved && newGuests.length) {
+    await refreshCardShares(card.id)
+    newGuests.forEach((g) => toast(`${g.name} sieht diese Karte jetzt auch.`))
+  }
+  return saved
+}
+
+// ------------------------------------------------------------
+// Dateien an Aufgaben (07_dateien.sql): Bucket „dateien“, Pfad karten/<ID>/<Zeit>-<Name>
+// ------------------------------------------------------------
+export const MAX_FILE_BYTES = 25 * 1024 * 1024
+
+export async function listCardFiles(cardId) {
+  try {
+    return await api.listFiles(cardId)
+  } catch {
+    return null
+  }
+}
+
+// Hochladen, danach Verlaufseintrag. Gibt true zurück, wenn es geklappt hat.
+export async function uploadCardFile(cardId, file) {
+  if (file.size > MAX_FILE_BYTES) {
+    toast(`„${file.name}“ ist größer als 25 MB und wurde nicht hochgeladen. Bitte verkleinern oder als Link in eine Notiz schreiben.`, { error: true })
+    return false
+  }
+  const path = `karten/${cardId}/${Date.now()}-${safeFileName(file.name)}`
+  try {
+    await api.uploadFile(path, file)
+  } catch (err) {
+    toast(`„${file.name}“ ließ sich nicht hochladen. ${uploadErrorText(err)}`, { error: true })
+    return false
+  }
+  try {
+    await api.logFile(cardId, file.name)
+    state.historyTick++
+    emit()
+  } catch {
+    // Datei ist da, nur der Verlaufseintrag fehlt
+  }
+  return true
+}
+
+function uploadErrorText(err) {
+  const msg = String((err && err.message) || '')
+  if (/exceeded|too large|413/i.test(msg)) return 'Die Datei ist zu groß.'
+  if (/row-level security|403|Unauthorized/i.test(msg)) return 'Dafür fehlt dir die Berechtigung.'
+  if (/Bucket not found/i.test(msg)) return 'Der Speicher ist noch nicht eingerichtet (07_dateien.sql).'
+  return errorText(err)
+}
+
+// Öffnen: das Fenster sofort beim Tippen öffnen und den Link erst danach hineinladen,
+// sonst stoppt der Popup-Blocker auf dem iPhone das Fenster
+export async function openCardFile(path) {
+  if (isDemo) {
+    toast('Im Demo-Modus haben Dateien keinen Inhalt.')
+    return
+  }
+  const win = window.open('', '_blank')
+  try {
+    const url = await api.fileUrl(path)
+    if (win) win.location.href = url
+    else window.location.href = url
+  } catch (err) {
+    if (win) win.close()
+    toast(`Die Datei ließ sich nicht öffnen. ${errorText(err)}`, { error: true })
+  }
+}
+
+export async function deleteCardFile(path) {
+  try {
+    await api.removeFile(path)
+    return true
+  } catch (err) {
+    toast(`Die Datei ließ sich nicht löschen. ${errorText(err)}`, { error: true })
+    return false
+  }
+}
+
+export async function fetchCardEvents(cardId) {
+  try {
+    return await api.cardEvents(cardId)
+  } catch {
+    return null
   }
 }
 
@@ -441,6 +613,52 @@ export function allLabels() {
   state.db.organizations.forEach((o) => (o.labels || []).forEach((l) => set.add(l)))
   return [...set]
 }
+// Ganz geteilte Projekte (05_projekte_teilen.sql)
+export function projectSharesOf(projectId) {
+  return (state.db.project_shares || []).filter((s) => s.project_id === projectId)
+}
+// Für Gäste: die Projekte, die ganz mit mir geteilt sind
+export function mySharedProjectIds() {
+  const me = norm(myEmail())
+  return new Set((state.db.project_shares || []).filter((s) => norm(s.email) === me).map((s) => s.project_id))
+}
+// ------------------------------------------------------------
+// Sales (08_sales.sql)
+// ------------------------------------------------------------
+export function dealOf(cardId) {
+  return (state.db.deals || []).find((d) => d.card_id === cardId) || null
+}
+export function dealItems(dealId) {
+  return (state.db.deal_items || []).filter((i) => i.deal_id === dealId).sort((a, b) => a.sort - b.sort)
+}
+export function activeProducts() {
+  return (state.db.products || []).filter((p) => p.active).sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name, 'de'))
+}
+// Wessen Zahlen darf ich sehen? Admins alle, Teamleads ihr Team, sonst nur die eigenen
+export function salesPeople() {
+  const me = state.db.team_members.find((t) => norm(t.email) === norm(myEmail()))
+  if (!me || me.role === 'gast') return []
+  const members = state.db.team_members.filter((t) => t.role !== 'gast')
+  if (me.role === 'admin') return members
+  if (me.team_lead && me.sales_team) return members.filter((t) => t.sales_team === me.sales_team)
+  return [me]
+}
+// Besitzer eines Deals, den ich nicht sehen darf (ohne Werte)
+export async function cardDealOwner(cardId) {
+  try {
+    return await api.cardDealOwner(cardId)
+  } catch {
+    return null
+  }
+}
+// Produktzeilen ändern den Wert in der Datenbank. Hier sofort mitrechnen.
+export function syncDealValue(dealId) {
+  const db = { ...state.db }
+  recalcDeal(db, dealId)
+  state.db = db
+  emit()
+}
+
 export function sharesOf(cardId) {
   return state.db.card_shares.filter((s) => s.card_id === cardId)
 }

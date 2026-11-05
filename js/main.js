@@ -13,11 +13,13 @@ import { ContactsList, ContactDetail, ContactForm } from './ui/contacts.js'
 import { OrgsList, OrgDetail, OrgForm } from './ui/orgs.js'
 import { SettingsPage } from './ui/prefs.js'
 import { SharedPage } from './ui/shared.js'
+import { SalesPage } from './ui/sales.js'
 import { Login, SetPassword, NotMember, AuthError, Splash, MfaEnroll, MfaVerify } from './ui/auth.js'
 
 const NAV_TEAM = [
   { key: '', label: 'Übersicht', icon: 'home' },
   { key: 'board', label: 'Board', icon: 'board' },
+  { key: 'sales', label: 'Sales', icon: 'sales' },
   { key: 'kalender', label: 'Kalender', icon: 'calendar' },
   { key: 'meetings', label: 'Meetings', icon: 'meetings' },
   { key: 'kontakte', label: 'Kontakte', icon: 'contacts' },
@@ -34,6 +36,8 @@ function Page({ route }) {
       return html`<${Overview} />`
     case 'board':
       return html`<${Board} projectId=${id} />`
+    case 'sales':
+      return html`<${SalesPage} />`
     case 'kalender':
       return html`<${CalendarPage} />`
     case 'meetings':

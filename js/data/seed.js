@@ -2,7 +2,9 @@
 // Datumsangaben sind relativ zu heute, damit die Demo immer überfällige und heutige Aufgaben zeigt.
 import { SETTINGS } from '../settings.js'
 import { uid, todayStr, addDays } from '../lib/util.js'
-import { emptyDb } from './rules.js'
+import { emptyDb, recalcDeal } from './rules.js'
+
+const nowIsoDemo = () => new Date().toISOString()
 
 export const DEMO_TEAM = [
   { name: 'Anna Berger', email: 'anna.berger@example.com', role: 'admin' },
@@ -30,7 +32,11 @@ export function buildSeed() {
   const today = todayStr()
   const created = daysAgo(30)
 
-  db.team_members = DEMO_TEAM.map((t) => ({ id: uid(), ...t, active: true, created_at: created }))
+  db.team_members = DEMO_TEAM.map((t) => ({ id: uid(), ...t, active: true, created_at: created, sales_team: null, team_lead: false }))
+  // Erfundenes Sales-Team: Jonas leitet „Team Nord“, Mira gehört dazu
+  db.team_members[1].sales_team = 'Team Nord'
+  db.team_members[1].team_lead = true
+  db.team_members[2].sales_team = 'Team Nord'
 
   // Projekte und Spalten aus den Einstellungen
   const projectDefs = [
@@ -310,7 +316,10 @@ export function buildSeed() {
 
   // Eine Karte ist mit dem Gast geteilt, dazu eine öffentliche und eine interne Notiz
   const sharedCard = K['Installationstermin Filiale Hafenstraße bestätigen']
-  db.card_shares.push({ id: uid(), card_id: sharedCard, email: DEMO_GUEST, created_at: daysAgo(2) })
+  db.card_shares.push({ id: uid(), card_id: sharedCard, email: DEMO_GUEST, created_by: A, created_at: daysAgo(2) })
+  // Das Projekt „Events“ ist ganz mit Paul geteilt (er arbeitet bei der Messe mit)
+  const events = db.projects.find((p) => p.name === 'Events')
+  if (events) db.project_shares.push({ id: uid(), project_id: events.id, email: DEMO_GUEST, created_by: J, created_at: daysAgo(3) })
   db.notes.push(
     { id: uid(), content: 'Paul übernimmt die Abstimmung mit der Filialleitung vor Ort.', card_id: sharedCard, person_id: null, org_id: null, meeting_id: null, internal: false, author: A, external_id: null, created_at: daysAgo(2, 11), updated_at: daysAgo(2, 11) },
     { id: uid(), content: 'Intern: Preis für die Installation noch nicht final, bitte nicht mit Paul besprechen.', card_id: sharedCard, person_id: null, org_id: null, meeting_id: null, internal: true, author: J, external_id: null, created_at: daysAgo(1, 16), updated_at: daysAgo(1, 16) }
@@ -409,6 +418,107 @@ export function buildSeed() {
       created_at: daysAgo(ago, 9 + i, 20),
     })
     db.email_persons.push({ id: uid(), email_id: id, person_id: person.id })
+  })
+
+  // Verlauf: jede Karte „angelegt“, Anna hat gestern früh alles gesehen,
+  // danach haben Kollegen einiges geändert (das ist für Anna „Neu“)
+  const hoursAgo = (h) => new Date(Date.now() - h * 3600000).toISOString()
+  db.cards.forEach((c) => {
+    const stage = db.stages.find((st) => st.id === c.stage_id)
+    db.card_events.push({ id: uid(), card_id: c.id, at: c.created_at, actor: c.created_by, kind: 'angelegt', detail: stage ? stage.name : '' })
+    db.card_seen.push({ card_id: c.id, email: A, seen_at: hoursAgo(26) })
+    db.card_seen.push({ card_id: c.id, email: DEMO_GUEST, seen_at: hoursAgo(26) })
+  })
+  const stageOf = (title) => db.stages.find((st) => st.id === db.cards.find((c) => c.id === K[title]).stage_id)
+  const history = [
+    ['Rahmenvertrag mit Netzwerk Technik Brandt prüfen', J, 'spalte', stageOf('Rahmenvertrag mit Netzwerk Technik Brandt prüfen').name, 2],
+    ['Messwerte aus der ersten Pilotwoche auswerten', M, 'notiz', null, 5],
+    ['Messestand für die Fachmesse im Frühjahr buchen', J, 'dringlichkeit', 'hoch', 20],
+    ['Feedbackbogen für Pflegekräfte entwerfen', M, 'faelligkeit', db.cards.find((c) => c.id === K['Feedbackbogen für Pflegekräfte entwerfen']).due_date, 3],
+    ['Installationstermin Filiale Hafenstraße bestätigen', J, 'zustaendig', A, 4],
+    ['Sensorplan für Station 3 abstimmen', J, 'notiz', null, 30],
+  ]
+  history.forEach(([title, actor, kind, detail, h]) => {
+    db.card_events.push({ id: uid(), card_id: K[title], at: hoursAgo(h), actor, kind, detail })
+  })
+
+  // Erwähnungen: Jonas erwähnt Anna, Mira erwähnt Paul (Gast) an seiner geteilten Karte
+  ;[
+    ['Rückmeldung zum Preisblatt von Wohnbau Rheinblick', J, A, '@Anna kannst du bei Wohnbau Rheinblick nachhaken? Die Frist läuft Freitag ab.', 1],
+    ['Installationstermin Filiale Hafenstraße bestätigen', M, DEMO_GUEST, '@Paul passt dir Donnerstag um 9 Uhr für die Montage?', 2],
+  ].forEach(([title, actor, who, content, h]) => {
+    const cardId = K[title]
+    if (!cardId) return
+    db.notes.push({ id: uid(), content, card_id: cardId, person_id: null, org_id: null, meeting_id: null, internal: false, author: actor, external_id: null, mentions: [who], created_at: hoursAgo(h), updated_at: hoursAgo(h) })
+    db.card_events.push({ id: uid(), card_id: cardId, at: hoursAgo(h), actor, kind: 'notiz', detail: null })
+    db.card_events.push({ id: uid(), card_id: cardId, at: hoursAgo(h), actor, kind: 'erwaehnung', detail: who })
+  })
+
+  // Beispieldateien ohne Inhalt (nur Name, Größe, Datum)
+  ;[
+    ['Angebot Pilotinstallation an Nordlicht schicken', 'Angebot_Nordlicht_Pilot.pdf', 248000, 30],
+    ['Angebot Pilotinstallation an Nordlicht schicken', 'Grundriss_Filiale.png', 1870000, 52],
+    ['Installationstermin Filiale Hafenstraße bestätigen', 'Foto_Montagepunkt_Kasse.jpg', 3120000, 5],
+    ['Vortrag für das Partnerforum vorbereiten', 'Partnerforum_Vortrag.pptx', 6400000, 75],
+  ].forEach(([title, name, size, h]) => {
+    const cardId = K[title]
+    if (!cardId) return
+    const at = hoursAgo(h)
+    db.files.push({ card_id: cardId, path: `karten/${cardId}/${new Date(at).getTime()}-${name}`, size, created_at: at })
+    const actor = db.cards.find((c) => c.id === cardId).created_by
+    db.card_events.push({ id: uid(), card_id: cardId, at, actor, kind: 'datei', detail: name.replace(/_/g, ' ') })
+  })
+
+  // Sales: Produktkatalog wie in 08_sales.sql und erfundene Deals
+  const now = nowIsoDemo()
+  ;[
+    ['Netzwerkplatz', 350000, 1, 0],
+    ['Joint-Venture-Paket 1', 500000, 1, 1],
+    ['Joint-Venture-Paket 2', 980000, 4, 2],
+    ['Joint-Venture-Paket 3', 2500000, 10, 6],
+  ].forEach(([name, price, places, bonus], i) =>
+    db.products.push({ id: uid(), name, price_cents: price, places, bonus_places: bonus, active: true, sort: i + 1, created_at: now, updated_at: now })
+  )
+  const product = (name) => db.products.find((p) => p.name === name)
+  const day = (offset) => addDays(todayStr(), offset)
+  // [Aufgabe, Besitzer, Status, Produkte [Name, Menge, Rabatt], Abschluss (Tage, minus = vergangen), Wahrscheinlichkeit, Verlustgrund, Wert ohne Produkte]
+  ;[
+    ['Angebot Pilotinstallation an Nordlicht schicken', A, 'offen', [['Joint-Venture-Paket 2', 1, 0]], 20, 60],
+    ['Rahmenvertrag mit Netzwerk Technik Brandt prüfen', J, 'offen', [['Joint-Venture-Paket 3', 1, 5]], 45, 40],
+    ['Rückmeldung zum Preisblatt von Wohnbau Rheinblick', A, 'offen', [['Netzwerkplatz', 3, 0]], 60, 30],
+    ['Termin mit Quartiersverwaltung Lindenau vereinbaren', M, 'offen', [['Joint-Venture-Paket 1', 1, 0]], 75, 20],
+    ['Datenschutzunterlagen an Klinikverbund senden', M, 'offen', [], 30, 50, null, 1200000],
+    ['Erstgespräch Kaufhaus Sonnenberg nachbereiten', A, 'gewonnen', [['Joint-Venture-Paket 2', 1, 0]], -40],
+    ['Referenzliste für Partner aktualisieren', M, 'gewonnen', [['Joint-Venture-Paket 1', 2, 0]], -12],
+    ['Zugangsdaten für das Dashboard einrichten', J, 'gewonnen', [['Joint-Venture-Paket 3', 1, 0]], -2],
+    ['Freigabe der Hausleitung abwarten', J, 'gewonnen', [['Netzwerkplatz', 1, 0]], -70],
+    ['Schulung für Installationspartner planen', M, 'verloren', [['Netzwerkplatz', 2, 0]], -25, null, 'Budget erst im nächsten Jahr'],
+    ['Abschlussbericht Pilot Nordlicht vorbereiten', A, 'verloren', [['Joint-Venture-Paket 1', 1, 0]], -55, null, 'Anderer Anbieter'],
+  ].forEach(([title, owner, status, items, offset, probability = null, lostReason = null, manual = 0]) => {
+    const cardId = K[title]
+    if (!cardId) return
+    const deal = {
+      id: uid(), card_id: cardId, owner, status, value_cents: manual, probability,
+      expected_close: status === 'offen' ? day(offset) : null,
+      closed_at: status === 'offen' ? null : day(offset),
+      lost_reason: lostReason, external_id: null, created_by: owner, created_at: now, updated_at: now,
+    }
+    db.deals.push(deal)
+    items.forEach(([name, quantity, discount], i) => {
+      const p = product(name)
+      db.deal_items.push({ id: uid(), deal_id: deal.id, product_id: p.id, name: p.name, quantity, unit_price_cents: p.price_cents, discount_percent: discount, places: p.places, bonus_places: p.bonus_places, sort: i + 1, created_at: now })
+    })
+    recalcDeal(db, deal.id)
+  })
+
+  // Anna hat zwei Aufgaben an Mira weitergegeben (Kachel „Team“, „Liegt bei anderen“)
+  ;[
+    ['Datenschutzunterlagen an Klinikverbund senden', 50],
+    ['Schulung für Installationspartner planen', 80],
+  ].forEach(([title, h]) => {
+    const card = db.cards.find((c) => c.id === K[title])
+    card.assignee = M
+    db.card_events.push({ id: uid(), card_id: card.id, at: hoursAgo(h), actor: A, kind: 'zustaendig', detail: M })
   })
 
   return db
