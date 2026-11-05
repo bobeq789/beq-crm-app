@@ -34,8 +34,7 @@ function AuthShell({ children }) {
     <${SignalArcs} />
     <div class="auth-card">
       <div class="auth-brand">
-        <img src="img/logo-dunkel.svg" alt="beQ Hub" width="132" height="34" />
-        <span class="brand-crm">CRM</span>
+        <img src="img/logo-dunkel.svg" alt="beQ CRM" width="134" height="34" />
       </div>
       ${children}
     </div>
@@ -277,7 +276,7 @@ export function AuthError() {
 }
 
 export function Splash() {
-  return html`<div class="splash" aria-busy="true"><img src="img/logo-dunkel.svg" alt="beQ Hub" width="150" height="38" /></div>`
+  return html`<div class="splash" aria-busy="true"><img src="img/logo-dunkel.svg" alt="beQ CRM" width="152" height="38" /></div>`
 }
 
 // ------------------------------------------------------------

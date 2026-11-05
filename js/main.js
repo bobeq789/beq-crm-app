@@ -68,8 +68,7 @@ function Shell({ route }) {
   return html`<div class="shell">
     <header class="topbar">
       <a class="brand" href=${home} aria-label="beQ CRM, zur Startseite">
-        <img src="img/logo-dunkel.svg" alt="beQ Hub" width="102" height="26" />
-        <span class="brand-crm">CRM</span>
+        <img src="img/logo-dunkel.svg" alt="beQ CRM" width="104" height="26" />
       </a>
       <nav class="topnav" aria-label="Bereiche">
         ${nav.map(
