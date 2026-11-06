@@ -1,4 +1,4 @@
-// Einstellungen (Zahnrad): Farbschema pro Gerät, Konto, Team (nur Admins), Produkte (Sales), Demo zurücksetzen
+// Einstellungen (Zahnrad): Farbschema pro Gerät, Konto, Postfächer und Kalender, Team (nur Admins), Produkte (Sales), Demo zurücksetzen
 import { html, useState } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { norm, fmtEuro } from '../lib/util.js'
@@ -19,6 +19,7 @@ import {
   toast,
 } from '../store.js'
 import { PageHead, Tile, Segmented, Field } from './common.js'
+import { MailboxTile } from './mailboxes.js'
 
 const ROLES = [
   { value: 'admin', label: 'Admin' },
@@ -226,6 +227,7 @@ export function SettingsPage() {
       </div>
     <//>
 
+    ${!isGuest() && html`<${MailboxTile} />`}
     ${isAdmin() && html`<${TeamAdmin} />`}
     ${!isGuest() && html`<${ProductCatalog} />`}
 

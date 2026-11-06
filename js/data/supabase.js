@@ -189,6 +189,33 @@ export async function createSupabaseApi(config) {
       check(await client.rpc('log_file', { card: cardId, file_name: name }))
     },
 
+    // ---------- Postfächer (10_postfaecher.sql, Edge Function „google-verbinden“) ----------
+    // Liefert die Google-Adresse, bei der sich die Person anmeldet und zustimmt
+    async connectMailbox() {
+      const { data } = await client.auth.getSession()
+      if (!data.session) throw new Error('JWT expired')
+      let res
+      try {
+        res = await fetch(config.supabaseUrl + '/functions/v1/google-verbinden', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + data.session.access_token, apikey: config.supabaseKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'start' }),
+        })
+      } catch {
+        throw new Error('Failed to fetch')
+      }
+      const body = await res.json().catch(() => ({}))
+      if (res.ok && body.url) return body.url
+      const e = new Error(
+        body.error || (res.status === 404 ? 'Die Verbindung zu Google ist noch nicht eingerichtet. Bitte melde dich beim Admin.' : 'Google ist gerade nicht erreichbar. Bitte gleich noch einmal versuchen.')
+      )
+      e.code = 'meldung'
+      throw e
+    },
+    async disconnectMailbox(id, deleteData) {
+      check(await client.rpc('disconnect_mailbox', { target: id, delete_data: !!deleteData }))
+    },
+
     // Besitzer des Deals an einer Aufgabe, ohne Werte (08_sales.sql)
     async cardDealOwner(cardId) {
       return check(await client.rpc('card_deal_owner', { card: cardId }))

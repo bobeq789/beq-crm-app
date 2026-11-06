@@ -213,7 +213,7 @@ function ConfirmDialog({ d }) {
   return html`<${Modal}
     title=${d.title}
     onClose=${() => done(false)}
-    footer=${html`<button type="button" class="btn" onClick=${() => done(false)}>Abbrechen</button>
+    footer=${html`<button type="button" class="btn" onClick=${() => done(false)}>${d.cancelLabel || 'Abbrechen'}</button>
       <button type="button" class=${d.danger ? 'btn btn-danger' : 'btn btn-primary'} onClick=${() => done(true)}>${d.confirmLabel}</button>`}
   >
     ${d.text && html`<p>${d.text}</p>`}

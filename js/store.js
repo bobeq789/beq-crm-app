@@ -110,7 +110,8 @@ export function errorText(err) {
   if (code === '23503') return 'Das geht nicht, weil noch Einträge daran hängen.'
   if (code === '23505') return 'Diesen Eintrag gibt es schon.'
   if (code === '23514') return 'Eine Angabe passt nicht. Bitte prüfen.'
-  if (code === 'demo') return msg
+  // Meldungen, die schon für Menschen geschrieben sind (Demo, Dienst „google-verbinden“)
+  if (code === 'demo' || code === 'meldung') return msg
   return 'Das hat nicht geklappt. Bitte gleich noch einmal versuchen.'
 }
 
@@ -125,8 +126,8 @@ export function closeDialog() {
   state.dialog = null
   emit()
 }
-export function confirmDialog({ title, text, confirmLabel = 'OK', danger = false }) {
-  return new Promise((resolve) => openDialog({ kind: 'confirm', title, text, confirmLabel, danger, resolve }))
+export function confirmDialog({ title, text, confirmLabel = 'OK', cancelLabel = 'Abbrechen', danger = false }) {
+  return new Promise((resolve) => openDialog({ kind: 'confirm', title, text, confirmLabel, cancelLabel, danger, resolve }))
 }
 export function promptDialog({ title, label, value = '', confirmLabel = 'Speichern' }) {
   return new Promise((resolve) => openDialog({ kind: 'prompt', title, label, value, confirmLabel, resolve }))
@@ -439,6 +440,41 @@ export async function ensureFull(table, id) {
   }
 }
 export const searchMeetingSummaries = (q) => api.searchMeetingSummaries(q)
+
+// ------------------------------------------------------------
+// Postfächer und Kalender (10_postfaecher.sql)
+// ------------------------------------------------------------
+// Startet die Anmeldung bei Google. Google schickt danach zurück nach #/einstellungen?postfach=…
+export async function connectMailbox() {
+  try {
+    const url = await api.connectMailbox()
+    // Im Demo-Modus ändert sich nur der Teil hinter #, deshalb vorher neu laden
+    if (isDemo) await reload()
+    location.href = url
+  } catch (err) {
+    toast(errorText(err), { error: true })
+  }
+}
+
+// Trennen, auf Wunsch mit den bisherigen Mails und Terminen aus diesem Postfach
+export async function disconnectMailbox(box, deleteData = false) {
+  try {
+    await api.disconnectMailbox(box.id, deleteData)
+    toast(deleteData ? `${box.address} ist getrennt, Mails und Termine daraus sind gelöscht.` : `${box.address} ist getrennt.`)
+  } catch (err) {
+    toast(errorText(err), { error: true })
+  }
+  await reload()
+}
+
+// Wie viele Mails und Termine im CRM aus diesem Postfach stammen
+export function mailboxDataCounts(address) {
+  const a = norm(address)
+  return {
+    mails: state.db.emails.filter((m) => norm(m.mailbox) === a).length,
+    events: state.db.events.filter((e) => norm(e.calendar_id) === a).length,
+  }
+}
 
 export async function signIn(email, password) {
   await api.signIn(email, password)

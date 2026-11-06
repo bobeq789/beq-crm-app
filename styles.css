@@ -871,6 +871,7 @@ input[type='time'] { min-width: 0; }
 .sales-team-fields { display: inline-flex; align-items: center; gap: 8px; }
 .sales-team-fields input:not([type]) , .sales-team-fields input[list] { width: 150px; min-height: 36px; padding: 4px 8px; }
 .check-label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; white-space: nowrap; }
+.check-label input { accent-color: var(--green); }
 .product-list li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); }
 .product-list li.inactive { opacity: 0.55; }
 .product-list .team-who { flex: 1; min-width: 0; }
@@ -915,3 +916,15 @@ input[type='time'] { min-width: 0; }
 .sales-table .block { display: block; }
 .sales-table .nowrap { white-space: nowrap; }
 @media (max-width: 759px) { .revenue-table td, .revenue-table th { font-size: 13px; } }
+
+/* Postfächer und Kalender (Einstellungen) */
+.mailbox-list li { grid-template-columns: minmax(0, 1fr) auto auto; }
+.mailbox-switches { display: flex; gap: 14px; }
+.mailbox-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.mailbox-hint { margin-top: 12px; }
+@media (max-width: 599px) {
+  .mailbox-list li { grid-template-columns: minmax(0, 1fr) auto; }
+  .mailbox-list li .mailbox-switches { grid-column: 1; grid-row: 2; }
+  .mailbox-list li .mailbox-actions { grid-column: 2; grid-row: 1 / span 2; flex-direction: column; }
+  .mailbox-list li .btn { grid-column: auto; grid-row: auto; }
+}

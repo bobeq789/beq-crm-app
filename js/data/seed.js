@@ -521,5 +521,27 @@ export function buildSeed() {
     db.card_events.push({ id: uid(), card_id: card.id, at: hoursAgo(h), actor: A, kind: 'zustaendig', detail: M })
   })
 
+  // Verbundene Postfächer (erfunden): Anna und Jonas je ihr eigenes, dazu ein Sammelpostfach,
+  // bei dem Google den Zugang beendet hat (zeigt „Bitte neu verbinden“)
+  const mailbox = (address, owner, extra = {}) => ({
+    id: uid(),
+    address,
+    owner,
+    provider: 'google',
+    sync_mail: true,
+    sync_calendar: true,
+    status: 'aktiv',
+    last_sync_at: new Date(Date.now() - 12 * 60000).toISOString(),
+    last_error: null,
+    created_at: created,
+    updated_at: created,
+    ...extra,
+  })
+  db.mailboxes = [
+    mailbox(A, A),
+    mailbox(J, J),
+    mailbox('vertrieb@example.com', J, { sync_calendar: false, status: 'fehler', last_sync_at: daysAgo(3), last_error: 'Zugang widerrufen' }),
+  ]
+
   return db
 }

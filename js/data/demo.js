@@ -53,6 +53,11 @@ export function createDemoApi({ asGuest = false } = {}) {
   const notAllowed = () => dbError('42501', 'permission denied')
   // Sales wie die Regeln in 08_sales.sql: Katalog ändern nur Admins, Deals nur, wer die Zahlen sehen darf
   const SALES = new Set(['products', 'deals', 'deal_items'])
+  // Postfächer wie 10_postfaecher.sql: anlegen nur über Google, Schalter nur Besitzer oder Admin
+  const canManageMailbox = (box) => {
+    const self = db.team_members.find((t) => t.email === me && t.active)
+    return !!self && self.role !== 'gast' && (box.owner === me || self.role === 'admin')
+  }
   const checkSales = (table, row) => {
     if (!SALES.has(table)) return
     const self = db.team_members.find((t) => t.email === me)
@@ -105,6 +110,7 @@ export function createDemoApi({ asGuest = false } = {}) {
     },
 
     async insert(table, row) {
+      if (table === 'mailboxes') throw notAllowed()
       const r = prepareInsert(table, row, me)
       if (asGuest) {
         if (table === 'cards') checkGuestCardInsert(db, r, me)
@@ -136,6 +142,10 @@ export function createDemoApi({ asGuest = false } = {}) {
     async update(table, id, patch) {
       const old = find(table, id)
       if (!old) throw dbError('PGRST116', 'not found')
+      if (table === 'mailboxes') {
+        if (asGuest || !canManageMailbox(old)) throw notAllowed()
+        patch = Object.fromEntries(Object.entries(patch).filter(([k]) => k === 'sync_mail' || k === 'sync_calendar'))
+      }
       if (asGuest) {
         if (table === 'cards' && sharedWithMe(id)) checkGuestCardUpdate(db, old, patch, me)
         else if (table === 'notes' && old.author === me && !old.internal && sharedWithMe(old.card_id)) patch = { content: patch.content ?? old.content, mentions: patch.mentions ?? old.mentions }
@@ -159,7 +169,7 @@ export function createDemoApi({ asGuest = false } = {}) {
     },
 
     async remove(table, id) {
-      if (asGuest) throw notAllowed()
+      if (asGuest || table === 'mailboxes') throw notAllowed()
       checkDelete(db, table, id)
       const old = find(table, id)
       if (old) checkSales(table, old)
@@ -211,6 +221,36 @@ export function createDemoApi({ asGuest = false } = {}) {
     async logFile(cardId, name) {
       if (asGuest && !sharedWithMe(cardId)) throw notAllowed()
       db.card_events.push({ id: crypto.randomUUID(), card_id: cardId, at: new Date().toISOString(), actor: me, kind: 'datei', detail: name })
+      save()
+    },
+
+    // Postfach verbinden: Google gibt es in der Demo nicht. Die Demo legt ein erfundenes
+    // Postfach an und springt zurück wie nach der Zustimmung bei Google.
+    async connectMailbox() {
+      if (asGuest) throw dbError('meldung', 'Postfächer verbinden dürfen nur Teammitglieder.')
+      const taken = new Set(db.mailboxes.filter((b) => b.status !== 'getrennt').map((b) => b.address))
+      let n = 2
+      while (taken.has(`postfach${n}@example.com`)) n++
+      const address = `postfach${n}@example.com`
+      const now = new Date().toISOString()
+      const old = db.mailboxes.find((b) => b.address === address)
+      const row = { id: old ? old.id : crypto.randomUUID(), address, owner: me, provider: 'google', sync_mail: true, sync_calendar: true, status: 'aktiv', last_sync_at: null, last_error: null, created_at: old ? old.created_at : now, updated_at: now }
+      db.mailboxes = [...db.mailboxes.filter((b) => b.address !== address), row]
+      save()
+      return `${location.pathname}${location.search}#/einstellungen?postfach=ok&adresse=${encodeURIComponent(address)}&mail=1&kalender=1`
+    },
+    async disconnectMailbox(id, deleteData) {
+      const box = find('mailboxes', id)
+      if (!box || asGuest || !canManageMailbox(box)) throw notAllowed()
+      db.mailboxes = db.mailboxes.map((b) => (b.id === id ? { ...b, status: 'getrennt', last_error: null, updated_at: new Date().toISOString() } : b))
+      if (deleteData) {
+        const mails = new Set(db.emails.filter((m) => m.mailbox.toLowerCase() === box.address).map((m) => m.id))
+        const events = new Set(db.events.filter((e) => e.calendar_id.toLowerCase() === box.address).map((e) => e.id))
+        db.emails = db.emails.filter((m) => !mails.has(m.id))
+        db.email_persons = db.email_persons.filter((x) => !mails.has(x.email_id))
+        db.events = db.events.filter((e) => !events.has(e.id))
+        db.event_persons = db.event_persons.filter((x) => !events.has(x.event_id))
+      }
       save()
     },
 
