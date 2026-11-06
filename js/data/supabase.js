@@ -30,10 +30,19 @@ function readLinkInfo() {
 // Lange Texte lädt die App erst beim Öffnen. Diese Spalten kommen beim Start ohne sie.
 const LIST_COLUMNS = {
   meetings: 'id,title,held_at,duration_min,project_id,action_items,extra_names,source,external_id,created_by,created_at,updated_at',
-  emails: 'id,message_id,thread_id,mailbox,provider_id,direction,from_email,from_name,to_emails,cc_emails,subject,sent_at,attachments,created_at',
+  emails: 'id,message_id,thread_id,mailbox,provider_id,direction,from_email,from_name,to_emails,cc_emails,subject,sent_at,attachments,created_at,snippet,labels,attachment_list,mailboxes',
 }
 // Diese Tabellen sieht ein Gast ohnehin nicht, also gar nicht erst fragen
 const TEAM_ONLY = new Set(['meetings', 'meeting_persons', 'events', 'event_persons', 'emails', 'email_persons'])
+
+// Meldung eines Dienstes als Fehler für errorText() (schon für Menschen geschrieben)
+function functionError(res, body) {
+  const e = new Error(
+    body.error || (res.status === 404 ? 'Dieser Dienst ist in Supabase noch nicht eingerichtet. Bitte melde dich beim Admin.' : 'Google ist gerade nicht erreichbar. Bitte gleich noch einmal versuchen.')
+  )
+  e.code = 'meldung'
+  return e
+}
 
 export async function createSupabaseApi(config) {
   const link = readLinkInfo()
@@ -41,6 +50,21 @@ export async function createSupabaseApi(config) {
   const client = window.supabase.createClient(config.supabaseUrl, config.supabaseKey, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'beqcrm-auth' },
   })
+
+  // Edge Function mit der Anmeldung der Person aufrufen
+  async function callFunction(name, payload) {
+    const { data } = await client.auth.getSession()
+    if (!data.session) throw new Error('JWT expired')
+    try {
+      return await fetch(config.supabaseUrl + '/functions/v1/' + name, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + data.session.access_token, apikey: config.supabaseKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+    } catch {
+      throw new Error('Failed to fetch')
+    }
+  }
 
   const check = ({ data, error }) => {
     if (error) throw error
@@ -241,6 +265,27 @@ export async function createSupabaseApi(config) {
       )
       e.code = 'meldung'
       throw e
+    },
+    // Dienst „google-mail“: senden, löschen (JSON) und Anhänge (Datei)
+    async mailAction(action, payload) {
+      const res = await callFunction('google-mail', { action, ...payload })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw functionError(res, body)
+      return body
+    },
+    async mailAttachment(emailId, part) {
+      const res = await callFunction('google-mail', { action: 'anhang', email_id: emailId, part })
+      if (!res.ok) throw functionError(res, await res.json().catch(() => ({})))
+      const disp = res.headers.get('Content-Disposition') || ''
+      const m = disp.match(/filename\*=UTF-8''([^;]+)/i)
+      return { blob: await res.blob(), name: m ? decodeURIComponent(m[1]) : 'Anhang' }
+    },
+    // Dienst „google-abgleich“ für die eigenen Postfächer sofort starten
+    async syncNow() {
+      const res = await callFunction('google-abgleich', { quelle: 'app' })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw functionError(res, body)
+      return body
     },
     async disconnectMailbox(id, deleteData) {
       check(await client.rpc('disconnect_mailbox', { target: id, delete_data: !!deleteData }))

@@ -5,7 +5,8 @@ import { html, useEffect } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { fmtRelative, norm } from '../lib/util.js'
 import { useRoute } from '../router.js'
-import { state, isAdmin, myEmail, memberName, update, toast, confirmDialog, connectMailbox, disconnectMailbox, mailboxDataCounts } from '../store.js'
+import { state, isAdmin, myEmail, memberName, update, toast, confirmDialog, connectMailbox, disconnectMailbox, mailboxDataCounts, syncNow } from '../store.js'
+import { useState } from '../lib/preact.js'
 import { Tile } from './common.js'
 
 // Gründe, die „google-verbinden“ bei einem Fehler mitschickt
@@ -109,6 +110,22 @@ function MailboxRow({ box }) {
   </li>`
 }
 
+function SyncButton() {
+  const [busy, setBusy] = useState(false)
+  return html`<button
+    type="button"
+    class="btn"
+    disabled=${busy}
+    onClick=${async () => {
+      setBusy(true)
+      await syncNow()
+      setBusy(false)
+    }}
+  >
+    <${Icon} name="sync" size=${18} /> ${busy ? 'Gleicht ab …' : 'Jetzt abgleichen'}
+  </button>`
+}
+
 export function MailboxTile() {
   useConnectResult()
   const me = norm(myEmail())
@@ -123,6 +140,7 @@ export function MailboxTile() {
     ${list.length > 0 && html`<ul class="team-list mailbox-list">${list.map((b) => html`<${MailboxRow} key=${b.id} box=${b} />`)}</ul>`}
     <div class="settings-actions">
       <button type="button" class="btn btn-primary" onClick=${connectMailbox}><${Icon} name="plus" size=${18} /> Postfach verbinden</button>
+      ${list.some((b) => b.owner === me && b.status === 'aktiv') && html`<${SyncButton} />`}
     </div>
     <p class="muted small mailbox-hint">Google fragt jedes Mal, welches Konto. Für ein weiteres Postfach meldest du dich dort mit diesem Postfach an.</p>
   <//>`

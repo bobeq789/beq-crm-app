@@ -254,6 +254,53 @@ export function createDemoApi({ asGuest = false } = {}) {
       save()
     },
 
+    // Postfach in der Demo: Senden legt eine Mail an, Löschen entfernt sie, Anhänge haben keinen Inhalt
+    async mailAction(action, payload) {
+      if (asGuest) throw notAllowed()
+      if (action === 'senden') {
+        const box = db.mailboxes.find((b) => b.address === payload.von && b.owner === me && b.status === 'aktiv')
+        if (!box) throw dbError('meldung', 'Senden geht nur aus deinen eigenen Postfächern.')
+        const to = [].concat(payload.an || []).map((a) => String(a).trim().toLowerCase()).filter(Boolean)
+        if (!to.length) throw dbError('meldung', 'Bitte mindestens eine Adresse eintragen.')
+        const orig = payload.antwort_auf ? db.emails.find((m) => m.id === payload.antwort_auf) : null
+        const self = db.team_members.find((t) => t.email === me)
+        const id = crypto.randomUUID()
+        const now = new Date().toISOString()
+        const files = (payload.dateien || []).map((f, i) => ({ name: f.name, mime: f.mime, size: Math.floor((f.data || '').length * 0.75), part: String(i + 1) }))
+        db.emails.push({
+          id, message_id: `<demo-${id}@example.com>`, thread_id: orig ? orig.thread_id : id, mailbox: box.address, provider_id: 'demo-' + id,
+          direction: 'out', from_email: box.address, from_name: self ? self.name : box.address, to_emails: to,
+          cc_emails: [].concat(payload.cc || []).map((a) => String(a).trim().toLowerCase()).filter(Boolean),
+          subject: payload.betreff || '', sent_at: now, body: payload.text || '', attachments: files.map((f) => f.name),
+          attachment_list: files, snippet: String(payload.text || '').slice(0, 140), labels: ['SENT'], mailboxes: [box.address], created_at: now,
+        })
+        for (const addr of to) {
+          const person = db.persons.find((p) => (p.emails || []).map((e) => e.toLowerCase()).includes(addr))
+          if (person) db.email_persons.push({ id: crypto.randomUUID(), email_id: id, person_id: person.id })
+        }
+        save()
+        return { ok: true, id }
+      }
+      if (action === 'loeschen') {
+        const mail = db.emails.find((m) => m.id === payload.email_id)
+        if (!mail) return { ok: true }
+        const box = db.mailboxes.find((b) => b.address === mail.mailbox && b.status === 'aktiv')
+        if (!box || box.owner !== me) throw dbError('meldung', 'Löschen geht nur in deinen eigenen Postfächern.')
+        db.emails = db.emails.filter((m) => m.id !== mail.id)
+        db.email_persons = db.email_persons.filter((x) => x.email_id !== mail.id)
+        save()
+        return { ok: true }
+      }
+      throw dbError('meldung', 'Unbekannte Aktion.')
+    },
+    async mailAttachment() {
+      throw dbError('demo', 'Im Demo-Modus haben Anhänge keinen Inhalt.')
+    },
+    async syncNow() {
+      const own = db.mailboxes.filter((b) => b.owner === me && b.status === 'aktiv')
+      return { ok: true, postfaecher: own.length, ergebnis: own.map((b) => ({ adresse: b.address, termine: 0, mails: 0, mails_fertig: true, fehler: null })) }
+    },
+
     // Gibt es zu dieser Aufgabe einen Deal, und wem gehört er? (ohne Werte)
     async cardDealOwner(cardId) {
       if (asGuest) return null

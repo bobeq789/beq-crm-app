@@ -415,6 +415,10 @@ export function buildSeed() {
       sent_at: daysAgo(ago, 9 + i, 15),
       body,
       attachments,
+      attachment_list: attachments.map((name, k) => ({ name, mime: /\.pdf$/i.test(name) ? 'application/pdf' : 'application/octet-stream', size: 48000 + k * 12000, part: String(k + 1) })),
+      snippet: body.replace(/\s+/g, ' ').slice(0, 140),
+      labels: direction === 'out' ? ['SENT'] : ['INBOX'],
+      mailboxes: [mailbox],
       created_at: daysAgo(ago, 9 + i, 20),
     })
     db.email_persons.push({ id: uid(), email_id: id, person_id: person.id })

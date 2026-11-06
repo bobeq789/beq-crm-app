@@ -221,7 +221,8 @@ export function SettingsPage() {
         <dt>Rolle</dt><dd>${roleLabel(state.role)}</dd>
       </dl>
       <div class="settings-actions">
-        <button type="button" class="btn" onClick=${() => openDialog({ kind: 'change-password' })}><${Icon} name="lock" size=${18} /> Passwort ändern</button>
+        ${!state.sessionGoogle &&
+        html`<button type="button" class="btn" onClick=${() => openDialog({ kind: 'change-password' })}><${Icon} name="lock" size=${18} /> Passwort ändern</button>`}
         <button type="button" class="btn" onClick=${() => openDialog({ kind: 'mfa-reset' })}><${Icon} name="reset" size=${18} /> Zweiten Faktor neu einrichten</button>
         ${!isDemo && html`<button type="button" class="btn" onClick=${signOut}><${Icon} name="logout" size=${18} /> Abmelden</button>`}
       </div>

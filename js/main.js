@@ -14,6 +14,9 @@ import { OrgsList, OrgDetail, OrgForm } from './ui/orgs.js'
 import { SettingsPage } from './ui/prefs.js'
 import { SharedPage } from './ui/shared.js'
 import { SalesPage } from './ui/sales.js'
+import { PostfachPage } from './ui/postfach.js'
+import { Modal, dialogKinds } from './ui/common.js'
+import { openDialog, closeDialog } from './store.js'
 import { Login, SetPassword, NotMember, AuthError, Splash, MfaEnroll, MfaVerify } from './ui/auth.js'
 
 const NAV_TEAM = [
@@ -21,11 +24,29 @@ const NAV_TEAM = [
   { key: 'board', label: 'Board', icon: 'board' },
   { key: 'sales', label: 'Sales', icon: 'sales' },
   { key: 'kalender', label: 'Kalender', icon: 'calendar' },
+  { key: 'postfach', label: 'Postfach', icon: 'mail' },
   { key: 'meetings', label: 'Meetings', icon: 'meetings' },
   { key: 'kontakte', label: 'Kontakte', icon: 'contacts' },
   { key: 'firmen', label: 'Firmen', icon: 'orgs' },
 ]
 const NAV_GUEST = [{ key: 'geteilt', label: 'Geteilt', icon: 'share' }]
+// Am Handy unten nur vier Bereiche und „Mehr“, der Rest steckt hinter „Mehr“
+const MOBILE_MAIN = ['', 'board', 'postfach', 'kalender']
+
+function NavMore() {
+  const more = NAV_TEAM.filter((n) => !MOBILE_MAIN.includes(n.key))
+  return html`<${Modal} title="Mehr" onClose=${closeDialog}>
+    <ul class="nav-more">
+      ${more.map(
+        (n) => html`<li key=${n.key}>
+          <a href=${'#/' + n.key} onClick=${closeDialog}><${Icon} name=${n.icon} size=${22} /> ${n.label}</a>
+        </li>`
+      )}
+      <li><a href="#/einstellungen" onClick=${closeDialog}><${Icon} name="gear" size=${22} /> Einstellungen</a></li>
+    </ul>
+  <//>`
+}
+dialogKinds['nav-more'] = NavMore
 
 function Page({ route }) {
   const [section, id, sub] = route.parts
@@ -40,6 +61,8 @@ function Page({ route }) {
       return html`<${SalesPage} />`
     case 'kalender':
       return html`<${CalendarPage} />`
+    case 'postfach':
+      return html`<${PostfachPage} />`
     case 'meetings':
       if (id === 'neu') return html`<${MeetingNew} />`
       return id ? html`<${MeetingDetail} id=${id} key=${id} />` : html`<${MeetingsList} />`
@@ -95,12 +118,17 @@ function Shell({ route }) {
     </main>
     ${nav.length > 1 &&
     html`<nav class="bottomnav" aria-label="Bereiche">
-      ${nav.map(
+      ${(guest ? nav : nav.filter((n) => MOBILE_MAIN.includes(n.key))).map(
         (n) => html`<a href=${'#/' + n.key} class=${section === n.key ? 'active' : ''} aria-current=${section === n.key ? 'page' : undefined}>
           <${Icon} name=${n.icon} size=${22} />
           <span>${n.label}</span>
         </a>`
       )}
+      ${!guest &&
+      html`<button type="button" class=${'bottomnav-more' + (!MOBILE_MAIN.includes(section) && section !== 'einstellungen' ? ' active' : '')} onClick=${() => openDialog({ kind: 'nav-more' })}>
+        <${Icon} name="more" size=${22} />
+        <span>Mehr</span>
+      </button>`}
     </nav>`}
     ${cardId && html`<${CardPanel} id=${cardId} key=${cardId} />`}
     ${eventId && html`<${EventPanel} id=${eventId} key=${eventId} />`}

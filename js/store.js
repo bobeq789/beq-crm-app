@@ -515,6 +515,83 @@ export async function disconnectMailbox(box, deleteData = false) {
   await reload()
 }
 
+// ------------------------------------------------------------
+// Postfach (14_postfach.sql, Dienste „google-mail“ und „google-abgleich“)
+// ------------------------------------------------------------
+// Eigene, aktiv verbundene Postfächer: nur daraus darf gesendet und gelöscht werden
+export function myActiveMailboxes() {
+  const me = norm(myEmail())
+  return (state.db.mailboxes || []).filter((b) => norm(b.owner) === me && b.status === 'aktiv')
+}
+export const isOwnMailbox = (address) => myActiveMailboxes().some((b) => b.address === norm(address))
+
+// Mail senden. payload: von, an, cc, bcc, betreff, text, antwort_auf, dateien [{ name, mime, data }]
+export async function sendMail(payload) {
+  try {
+    await api.mailAction('senden', payload)
+    toast('Mail gesendet')
+    await reload()
+    return true
+  } catch (err) {
+    toast(errorText(err), { error: true })
+    return false
+  }
+}
+
+// Mail in den Papierkorb von Gmail und aus dem CRM
+export async function deleteMail(mail) {
+  try {
+    await api.mailAction('loeschen', { email_id: mail.id })
+    state.db = { ...state.db, emails: state.db.emails.filter((m) => m.id !== mail.id), email_persons: state.db.email_persons.filter((x) => x.email_id !== mail.id) }
+    emit()
+    toast('Mail gelöscht. Sie liegt 30 Tage im Papierkorb von Gmail.')
+    return true
+  } catch (err) {
+    toast(errorText(err), { error: true })
+    return false
+  }
+}
+
+// Anhang holen: PDF, Bilder und Text im neuen Tab, alles andere herunterladen
+export async function openMailAttachment(mail, attachment) {
+  try {
+    const { blob, name } = await api.mailAttachment(mail.id, attachment.part)
+    const url = URL.createObjectURL(blob)
+    const viewable = /^(application\/pdf|image\/|text\/plain)/.test(blob.type)
+    const win = viewable ? window.open(url, '_blank') : null
+    if (!win) {
+      const a = document.createElement('a')
+      a.href = url
+      a.download = name || attachment.name || 'Anhang'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 120000)
+  } catch (err) {
+    toast(errorText(err), { error: true })
+  }
+}
+
+// Eigene Postfächer sofort abgleichen
+export async function syncNow() {
+  try {
+    const result = await api.syncNow()
+    const list = result.ergebnis || []
+    const errors = list.filter((r) => r.fehler)
+    const mails = list.reduce((n, r) => n + (r.mails || 0), 0)
+    const pending = list.some((r) => r.mails_fertig === false)
+    if (errors.length) toast(`Abgleich für ${errors.map((r) => r.adresse).join(', ')} hat nicht geklappt: ${errors[0].fehler}`, { error: true })
+    else if (!list.length) toast('Du hast noch kein Postfach verbunden.')
+    else toast(`Abgeglichen. ${mails === 1 ? '1 neue Mail' : mails + ' neue Mails'}${pending ? ', weitere folgen mit den nächsten Durchgängen' : ''}.`)
+    await reload()
+    return true
+  } catch (err) {
+    toast(errorText(err), { error: true })
+    return false
+  }
+}
+
 // Wie viele Mails und Termine im CRM aus diesem Postfach stammen
 export function mailboxDataCounts(address) {
   const a = norm(address)

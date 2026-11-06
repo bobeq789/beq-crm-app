@@ -46,6 +46,13 @@ const PATHS = {
   list: 'M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01',
   week: 'M4 5h16v15H4zM4 10h16M9.5 10v10M15 10v10',
   arrowRight: 'M5 12h14M13 6l6 6-6 6',
+  reply: 'M9 15 4 10l5-5M4 10h10a6 6 0 0 1 6 6v3',
+  replyAll: 'M11 15 6 10l5-5M7 15 2 10l5-5M6 10h8a6 6 0 0 1 6 6v3',
+  forward: 'M15 15l5-5-5-5M20 10H10a6 6 0 0 0-6 6v3',
+  send: 'M4 12 20 4l-6 16-3-7-7-1zM11 13l9-9',
+  inbox: 'M4 13h4l2 3h4l2-3h4M4 13l2.5-8h11l2.5 8v6H4z',
+  more: 'M5 12h.01M12 12h.01M19 12h.01',
+  sync: 'M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16M20 20v-4h-4',
 }
 
 export function Icon({ name, size = 20, title, cls = '' }) {
