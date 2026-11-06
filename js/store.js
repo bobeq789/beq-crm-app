@@ -97,6 +97,10 @@ export function errorText(err) {
   const code = err && err.code
   if (/Failed to fetch|NetworkError|Load failed|network/i.test(msg)) return 'Keine Verbindung. Bitte gleich noch einmal versuchen.'
   if (/Invalid login credentials/i.test(msg)) return 'E-Mail oder Passwort stimmt nicht.'
+  if (/beq\.com/i.test(msg)) return 'Konten gibt es nur für Adressen von beq.com. Gäste trägt ein Admin vorher im Team ein.'
+  if (/already registered|already been registered/i.test(msg)) return 'Für diese Adresse gibt es schon ein Konto. Melde dich an oder nutze „Passwort vergessen?“.'
+  if (/signups? not allowed|signup.*disabled/i.test(msg)) return 'Neue Konten sind in Supabase noch abgeschaltet. Bitte melde dich beim Admin.'
+  if (/provider is not enabled|unsupported provider/i.test(msg)) return 'Die Anmeldung mit Google ist in Supabase noch nicht eingeschaltet. Bitte melde dich beim Admin.'
   if (/Email not confirmed/i.test(msg)) return 'Dein Konto ist noch nicht bestätigt. Bitte melde dich beim Admin.'
   if (/rate limit|too many/i.test(msg)) return 'Zu viele Versuche. Bitte warte ein paar Minuten.'
   if (/invalid.*(totp|code)|code.*invalid|otp/i.test(msg)) return 'Der Code stimmt nicht. Bitte nimm den aktuellen Code aus deiner App.'
@@ -155,7 +159,9 @@ export async function boot() {
       }
     })
     if (api.linkError) {
-      state.authMessage = 'Der Link aus der Mail ist abgelaufen oder wurde schon benutzt. Bitte fordere einen neuen an oder melde dich beim Admin.'
+      state.authMessage = linkErrorText(api.linkError, api.linkErrorDescription)
+      // Fehler aus der Adresse entfernen, damit er beim Neuladen nicht wiederkommt
+      history.replaceState(null, '', location.pathname + '#/')
     }
   }
   let session = null
@@ -169,12 +175,27 @@ export async function boot() {
     return emit()
   }
   state.sessionEmail = session.email
+  // Nach Google oder dem Bestätigungslink: Anmeldedaten aus der Adresse entfernen
+  if (api.linkTokens && api.linkType !== 'recovery' && api.linkType !== 'invite') {
+    history.replaceState(null, '', location.pathname + location.search + '#/')
+    window.dispatchEvent(new HashChangeEvent('hashchange'))
+  }
   if (api.linkType === 'recovery' || api.linkType === 'invite') {
     state.auth = 'set-password'
     if (location.hash.includes('access_token')) history.replaceState(null, '', location.pathname + location.search + '#/')
     return emit()
   }
   await afterLogin(session.email)
+}
+
+// Verständliche Meldung, wenn Google oder ein Link aus einer Mail mit Fehler zurückkommt
+function linkErrorText(code, description) {
+  const d = String(description || '').replace(/\+/g, ' ')
+  if (/beq\.com/i.test(d)) return 'Anmelden können sich nur Adressen von beq.com. Gäste trägt ein Admin vorher im Team ein.'
+  if (/signups? not allowed|signup.*disabled/i.test(d)) return 'Neue Konten sind in Supabase noch abgeschaltet. Bitte melde dich beim Admin.'
+  if (code === 'otp_expired' || /email link|expired/i.test(d)) return 'Der Link aus der Mail ist abgelaufen oder wurde schon benutzt. Bitte fordere einen neuen an oder melde dich beim Admin.'
+  if (code === 'access_denied') return 'Du hast die Anmeldung bei Google abgebrochen.'
+  return 'Die Anmeldung hat nicht geklappt. Bitte gleich noch einmal versuchen.'
 }
 
 function fail(err) {
@@ -197,7 +218,9 @@ export async function afterLogin(email) {
   state.auth = 'loading'
   emit()
   try {
-    const role = await api.myRole()
+    let role = await api.myRole()
+    // beq.com-Adresse noch nicht im Team: jetzt beitreten (11_anmeldung_beq.sql)
+    if (!role && /@beq\.com$/i.test(email || '') && api.joinTeam) role = await api.joinTeam()
     if (!role) {
       state.adminName = await api.adminName()
       state.auth = 'not-member'
@@ -488,6 +511,8 @@ export async function signOut() {
   await api.signOut()
 }
 export const resetPassword = (email) => api.resetPassword(email)
+export const signInWithGoogle = () => api.signInWithGoogle()
+export const signUp = (email, password) => api.signUp(email, password)
 export const updatePassword = (pw) => api.updatePassword(pw)
 export function resetDemo() {
   if (api && api.reset) {
@@ -766,6 +791,66 @@ export async function createProject(name) {
     await insert('stages', { project_id: project.id, name: st.name, kind: st.kind, sort: i + 1 })
   }
   return project
+}
+
+// ------------------------------------------------------------
+// Spalten eines Boards: anlegen, verschieben, löschen
+// ------------------------------------------------------------
+// Reihenfolge der Spalten neu durchnummerieren (nur geänderte Zeilen speichern)
+async function saveStageOrder(ids) {
+  for (const [i, id] of ids.entries()) {
+    const s = getStage(id)
+    if (s && s.sort !== i + 1) await update('stages', id, { sort: i + 1 })
+  }
+}
+
+// Neue Spalte, standardmäßig vor „Erledigt“
+export async function addStage(projectId, name) {
+  const list = stagesOf(projectId)
+  const doneIndex = list.findIndex((s) => s.kind === 'done')
+  const at = doneIndex < 0 ? list.length : doneIndex
+  const ids = list.map((s) => s.id)
+  // Platz schaffen: alles ab „Erledigt“ rückt eine Stelle nach hinten (null ist der freie Platz)
+  await saveStageOrder([...ids.slice(0, at), null, ...ids.slice(at)])
+  const stage = await insert('stages', { project_id: projectId, name: name.trim(), kind: 'todo', sort: at + 1 })
+  if (stage) toast(`Spalte „${stage.name}“ angelegt`)
+  return stage
+}
+
+// Spalte eine Stelle nach links (-1) oder rechts (+1)
+export async function moveStage(stageId, dir) {
+  const stage = getStage(stageId)
+  if (!stage) return
+  const ids = stagesOf(stage.project_id).map((s) => s.id)
+  const i = ids.indexOf(stageId)
+  const j = i + dir
+  if (i < 0 || j < 0 || j >= ids.length) return
+  ;[ids[i], ids[j]] = [ids[j], ids[i]]
+  await saveStageOrder(ids)
+}
+
+// Alle Aufgaben einer Spalte, auch die im Archiv
+export const cardsInStage = (stageId) => state.db.cards.filter((c) => c.stage_id === stageId)
+
+// Spalte löschen. Liegen Aufgaben darin, wandern sie vorher in die Zielspalte.
+// „Erledigt“ bleibt immer, weil Übersicht und Sales daran hängen.
+export async function deleteStage(stageId, targetId = null) {
+  const stage = getStage(stageId)
+  if (!stage || stage.kind === 'done') return false
+  const cards = cardsInStage(stageId)
+  if (cards.length) {
+    const target = getStage(targetId)
+    if (!target || target.project_id !== stage.project_id || target.id === stage.id) return false
+    for (const c of cards) {
+      if (!(await update('cards', c.id, { stage_id: target.id }))) return false
+    }
+  }
+  const ok = await remove('stages', stageId)
+  if (ok) {
+    const target = getStage(targetId)
+    toast(cards.length ? `„${stage.name}“ gelöscht. ${cards.length === 1 ? 'Die Aufgabe liegt' : `Die ${cards.length} Aufgaben liegen`} jetzt in „${target.name}“.` : `„${stage.name}“ gelöscht`)
+  }
+  return ok
 }
 
 // Teammitglied zu einem Namen aus einem Action Item („Anna“ oder „Anna Berger“)

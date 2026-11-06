@@ -29,6 +29,11 @@ import {
   activeGuests,
   projectSharesOf,
   dealOf,
+  isGuest,
+  addStage,
+  moveStage,
+  deleteStage,
+  cardsInStage,
 } from '../store.js'
 import { navigate, openCard } from '../router.js'
 import { PageHead, Dot, Avatar, PrioBadge, DueBadge, NewBadge, Modal, Field, Empty, dialogKinds, useIsMobile } from './common.js'
@@ -139,9 +144,21 @@ function Column({ stage, cards, onDropCard, onAdd, draggable }) {
         ${stage.name} <span class="count">${cards.length}</span>
         ${columnValue(cards) > 0 && html`<span class="column-value" title="Summe der Deals in dieser Spalte (netto, ohne verlorene)">${fmtEuro(columnValue(cards))}</span>`}
       </h2>
-      <button type="button" class="icon-btn small" aria-label=${'Neue Aufgabe in „' + stage.name + '“'} onClick=${() => setAdding(true)}>
-        <${Icon} name="plus" size=${18} />
-      </button>
+      <span class="column-actions">
+        ${!isGuest() &&
+        html`<button
+          type="button"
+          class="icon-btn small"
+          aria-label=${'Spalte „' + stage.name + '“ bearbeiten'}
+          title="Spalte bearbeiten"
+          onClick=${() => openDialog({ kind: 'stage-edit', stageId: stage.id })}
+        >
+          <${Icon} name="edit" size=${16} />
+        </button>`}
+        <button type="button" class="icon-btn small" aria-label=${'Neue Aufgabe in „' + stage.name + '“'} onClick=${() => setAdding(true)}>
+          <${Icon} name="plus" size=${18} />
+        </button>
+      </span>
     </div>
     ${adding &&
     html`<${InlineAdd}
@@ -301,6 +318,10 @@ export function Board({ projectId }) {
                 ${s.name} <span class="count">${cardsOf(s).length}</span>
               </button>`
             )}
+            ${!isGuest() &&
+            html`<button type="button" class="tab tab-icon" aria-label="Spalte hinzufügen" title="Spalte hinzufügen" onClick=${() => askAddStage(current.id, setMobileStage)}>
+              <${Icon} name="plus" size=${18} />
+            </button>`}
           </div>
           ${activeStage &&
           html`<div class="board-mobile">
@@ -322,6 +343,10 @@ export function Board({ projectId }) {
           </button>`
       : html`<div class="board">
           ${stages.map((s) => html`<${Column} stage=${s} cards=${cardsOf(s)} onDropCard=${moveCard} onAdd=${addCard} draggable=${true} key=${s.id} />`)}
+          ${!isGuest() &&
+          html`<div class="column-add">
+            <button type="button" class="btn" onClick=${() => askAddStage(current.id)}><${Icon} name="plus" size=${16} /> Spalte</button>
+          </div>`}
         </div>`}
     ${archive && !filtered.length && html`<${Empty}>Im Archiv dieses Projekts liegt nichts.<//>`}
   </div>`
@@ -378,11 +403,9 @@ function StageRow({ stage, index, total, onMove, cardCount }) {
         type="button"
         class="icon-btn small"
         aria-label="Spalte löschen"
-        title=${isDone ? 'Die Spalte „Erledigt“ bleibt immer' : cardCount ? 'Nur leere Spalten lassen sich löschen' : 'Spalte löschen'}
-        disabled=${isDone || cardCount > 0}
-        onClick=${async () => {
-          if (await confirmDialog({ title: `Spalte „${stage.name}“ löschen?`, confirmLabel: 'Löschen', danger: true })) remove('stages', stage.id)
-        }}
+        title=${isDone ? 'Die Spalte „Erledigt“ bleibt immer' : 'Spalte löschen'}
+        disabled=${isDone}
+        onClick=${() => askDeleteStage(stage)}
       >
         <${Icon} name="trash" size=${16} />
       </button>
@@ -398,23 +421,7 @@ function ProjectSettings({ d }) {
   const archived = state.db.projects.filter((p) => p.archived)
   const close = () => closeDialog()
 
-  const move = async (index, dir) => {
-    const a = stages[index]
-    const b = stages[index + dir]
-    if (!a || !b) return
-    // Reihenfolge neu durchnummerieren, dann die beiden tauschen
-    const order = stages.map((s) => s.id)
-    order[index] = b.id
-    order[index + dir] = a.id
-    for (const [i, id] of order.entries()) {
-      const s = stages.find((x) => x.id === id)
-      if (s.sort !== i + 1) await update('stages', id, { sort: i + 1 })
-    }
-  }
-  const addStage = async () => {
-    const sort = Math.max(0, ...stages.map((s) => s.sort)) + 1
-    await insert('stages', { project_id: project.id, name: 'Neue Spalte', kind: 'todo', sort })
-  }
+  const move = (index, dir) => stages[index] && moveStage(stages[index].id, dir)
   const archiveProject = async () => {
     const ok = await confirmDialog({
       title: `Projekt „${project.name}“ archivieren?`,
@@ -469,7 +476,7 @@ function ProjectSettings({ d }) {
           />`
       )}
     </ul>
-    <button type="button" class="btn" onClick=${addStage}><${Icon} name="plus" size=${16} /> Spalte hinzufügen</button>
+    <button type="button" class="btn" onClick=${() => askAddStage(project.id)}><${Icon} name="plus" size=${16} /> Spalte hinzufügen</button>
 
     <div class="settings-foot">
       <button type="button" class="btn" onClick=${archiveProject}><${Icon} name="archive" size=${16} /> Projekt archivieren</button>
@@ -499,6 +506,127 @@ function ProjectSettings({ d }) {
 }
 
 dialogKinds['project-settings'] = ProjectSettings
+
+// ------------------------------------------------------------
+// Spalten direkt im Board: anlegen, bearbeiten, löschen
+// ------------------------------------------------------------
+async function askAddStage(projectId, onCreated) {
+  const name = await promptDialog({ title: 'Neue Spalte', label: 'Name der Spalte', confirmLabel: 'Anlegen' })
+  if (!name || !name.trim()) return
+  const stage = await addStage(projectId, name)
+  if (stage && onCreated) onCreated(stage.id)
+}
+
+// Löschen: leere Spalte mit einfacher Rückfrage, sonst Zielspalte wählen
+async function askDeleteStage(stage) {
+  if (stage.kind === 'done') return
+  const count = cardsInStage(stage.id).length
+  if (!count) {
+    const ok = await confirmDialog({ title: `Spalte „${stage.name}“ löschen?`, text: 'Die Spalte ist leer.', confirmLabel: 'Löschen', danger: true })
+    if (ok) await deleteStage(stage.id)
+    return
+  }
+  openDialog({ kind: 'stage-delete', stageId: stage.id })
+}
+
+function StageEdit({ d }) {
+  const stage = state.db.stages.find((s) => s.id === d.stageId)
+  const [name, setName] = useState(stage ? stage.name : '')
+  const [kind, setKind] = useState(stage ? stage.kind : 'todo')
+  const [prob, setProb] = useState(stage && stage.probability != null ? String(stage.probability) : '')
+  if (!stage) return null
+  const list = stagesOf(stage.project_id)
+  const index = list.findIndex((s) => s.id === stage.id)
+  const isDone = stage.kind === 'done'
+  const count = cardsInStage(stage.id).length
+  const close = () => closeDialog()
+  const save = async (e) => {
+    e && e.preventDefault()
+    const patch = {}
+    if (name.trim() && name.trim() !== stage.name) patch.name = name.trim()
+    if (!isDone && kind !== stage.kind) patch.kind = kind
+    const p = prob.trim() === '' ? null : Math.max(0, Math.min(100, Math.round(Number(prob))))
+    if (Number.isFinite(p) || p === null) {
+      if (p !== (stage.probability ?? null)) patch.probability = p
+    }
+    if (Object.keys(patch).length) await update('stages', stage.id, patch)
+    close()
+  }
+  return html`<${Modal}
+    title="Spalte bearbeiten"
+    onClose=${close}
+    footer=${html`<button type="button" class="btn" onClick=${close}>Abbrechen</button>
+      <button type="submit" form="stage-edit-form" class="btn btn-primary" disabled=${!name.trim()}>Speichern</button>`}
+  >
+    <form id="stage-edit-form" onSubmit=${save}>
+      <${Field} label="Name" htmlFor="stage-name">
+        <input id="stage-name" value=${name} onInput=${(e) => setName(e.target.value)} />
+      <//>
+      <${Field} label="Art" htmlFor="stage-kind">
+        ${isDone
+          ? html`<p class="muted small">Erledigt. Jedes Projekt hat genau eine solche Spalte, sie lässt sich umbenennen, aber nicht löschen.</p>`
+          : html`<select id="stage-kind" value=${kind} onChange=${(e) => setKind(e.target.value)}>
+              ${SETTINGS.stageKinds.filter((k) => k.value !== 'done').map((k) => html`<option value=${k.value}>${k.label}</option>`)}
+            </select>`}
+      <//>
+      <${Field} label="Wahrscheinlichkeit für Deals in Prozent (leer heißt ohne)" htmlFor="stage-prob">
+        <input id="stage-prob" type="number" min="0" max="100" step="5" inputmode="numeric" value=${prob} onInput=${(e) => setProb(e.target.value)} />
+      <//>
+    </form>
+    <div class="stage-edit-actions">
+      <button type="button" class="btn" disabled=${index <= 0} onClick=${() => moveStage(stage.id, -1)}><${Icon} name="back" size=${16} /> Nach links</button>
+      <button type="button" class="btn" disabled=${index >= list.length - 1} onClick=${() => moveStage(stage.id, 1)}>Nach rechts <${Icon} name="chevron" size=${16} /></button>
+      ${!isDone &&
+      html`<button
+        type="button"
+        class="btn btn-danger-text"
+        onClick=${() => {
+          close()
+          askDeleteStage(stage)
+        }}
+      >
+        <${Icon} name="trash" size=${16} /> Spalte löschen${count ? ` (${count} ${count === 1 ? 'Aufgabe' : 'Aufgaben'})` : ''}
+      </button>`}
+    </div>
+  <//>`
+}
+dialogKinds['stage-edit'] = StageEdit
+
+// Spalte mit Aufgaben löschen: erst sagen, wohin die Aufgaben sollen
+function StageDelete({ d }) {
+  const stage = state.db.stages.find((s) => s.id === d.stageId)
+  const others = stage ? stagesOf(stage.project_id).filter((s) => s.id !== stage.id) : []
+  const preferred = others.find((s) => s.kind === stage?.kind) || others.find((s) => s.kind === 'todo') || others[0]
+  const [target, setTarget] = useState(preferred ? preferred.id : '')
+  const [busy, setBusy] = useState(false)
+  if (!stage) return null
+  const cards = cardsInStage(stage.id)
+  const archived = cards.filter((c) => c.archived).length
+  const close = () => closeDialog()
+  const run = async () => {
+    setBusy(true)
+    const ok = await deleteStage(stage.id, target)
+    setBusy(false)
+    if (ok) close()
+  }
+  return html`<${Modal}
+    title=${`Spalte „${stage.name}“ löschen?`}
+    onClose=${close}
+    footer=${html`<button type="button" class="btn" onClick=${close}>Abbrechen</button>
+      <button type="button" class="btn btn-danger" disabled=${!target || busy} onClick=${run}>${busy ? 'Einen Moment …' : 'Verschieben und löschen'}</button>`}
+  >
+    <p>
+      In dieser Spalte ${cards.length === 1 ? 'liegt 1 Aufgabe' : `liegen ${cards.length} Aufgaben`}${archived ? `, davon ${archived} im Archiv` : ''}.
+      Sie bleiben erhalten und kommen in die Spalte, die du hier wählst.
+    </p>
+    <${Field} label="Aufgaben verschieben nach" htmlFor="stage-target">
+      <select id="stage-target" value=${target} onChange=${(e) => setTarget(e.target.value)}>
+        ${others.map((s) => html`<option value=${s.id}>${s.name}</option>`)}
+      </select>
+    <//>
+  <//>`
+}
+dialogKinds['stage-delete'] = StageDelete
 
 // Ganzes Projekt mit Gästen teilen: Gäste als Knöpfe, vor dem Teilen eine Rückfrage.
 // Es gibt nur ein Fenster auf einmal, deshalb geht dieses nach der Rückfrage wieder auf.

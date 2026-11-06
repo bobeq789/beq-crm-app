@@ -8,6 +8,8 @@ import {
   signIn,
   signOut,
   resetPassword,
+  signInWithGoogle,
+  signUp,
   updatePassword,
   afterLogin,
   errorText,
@@ -41,12 +43,29 @@ function AuthShell({ children }) {
   </div>`
 }
 
+// Konto mit Passwort selbst anlegen ist erst an, wenn Supabase Mails verschicken kann (config.js)
+const passwordSignup = !!(window.CRM_CONFIG && window.CRM_CONFIG.passwordSignup)
+
 export function Login() {
+  const [mode, setMode] = useState('login')
   const [email, setEmail] = useState(local.get('beqcrm-last-email', ''))
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(state.authMessage)
   const [info, setInfo] = useState(null)
+
+  const google = async () => {
+    setError(null)
+    setBusy(true)
+    try {
+      await signInWithGoogle()
+      // Der Browser wechselt jetzt zu Google
+    } catch (err) {
+      setError(errorText(err))
+      setBusy(false)
+    }
+  }
+  if (mode === 'signup') return html`<${SignUp} initialEmail=${email} onBack=${() => setMode('login')} />`
 
   const submit = async (e) => {
     e.preventDefault()
@@ -76,6 +95,9 @@ export function Login() {
 
   return html`<${AuthShell}>
     <h1 class="auth-title">Anmelden</h1>
+    <button type="button" class="btn btn-primary btn-block" disabled=${busy} onClick=${google}>Mit Google anmelden</button>
+    <p class="auth-hint auth-hint-top">Mit deinem beQ-Konto bei Google. Beim ersten Mal richtest du danach einmal den Code aus der Authenticator-App ein.</p>
+    <p class="auth-or">oder mit E-Mail und Passwort</p>
     <form onSubmit=${submit}>
       <${Field} label="E-Mail" htmlFor="login-email">
         <input id="login-email" type="email" autocomplete="username" required value=${email} onInput=${(e) => setEmail(e.target.value)} />
@@ -85,10 +107,64 @@ export function Login() {
       <//>
       ${error && html`<p class="auth-error" role="alert">${error}</p>`}
       ${info && html`<p class="auth-info" role="status">${info}</p>`}
-      <button type="submit" class="btn btn-primary btn-block" disabled=${busy}>${busy ? 'Einen Moment …' : 'Anmelden'}</button>
+      <button type="submit" class="btn btn-block" disabled=${busy}>${busy ? 'Einen Moment …' : 'Anmelden'}</button>
     </form>
     <button type="button" class="auth-link" onClick=${forgot}>Passwort vergessen?</button>
-    <p class="auth-hint">Die Mail kommt nur an, wenn in Supabase ein eigener Mailversand eingerichtet ist. Sonst hilft dir der Admin weiter.</p>
+    ${passwordSignup && html`<button type="button" class="auth-link auth-link-tight" onClick=${() => setMode('signup')}>Neu hier? Konto mit Passwort anlegen</button>`}
+    <p class="auth-hint">Mails zum Passwort kommen nur an, wenn in Supabase ein eigener Mailversand eingerichtet ist. Sonst hilft dir der Admin weiter.</p>
+  <//>`
+}
+
+// Konto mit Passwort anlegen (nur beq.com). Supabase schickt eine Mail, erst der Link darin
+// bestätigt, dass die Adresse dir gehört. Danach bist du sofort Mitglied.
+function SignUp({ initialEmail, onBack }) {
+  const [email, setEmail] = useState(/@beq\.com$/i.test(initialEmail || '') ? initialEmail : '')
+  const [pw, setPw] = useState('')
+  const [pw2, setPw2] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+  const [sentTo, setSentTo] = useState(null)
+  const submit = async (e) => {
+    e.preventDefault()
+    const address = email.trim().toLowerCase()
+    if (!/^[^@\s]+@beq\.com$/.test(address)) return setError('Bitte deine Adresse von beq.com eintragen.')
+    if (pw.length < 10) return setError('Bitte mindestens 10 Zeichen.')
+    if (pw !== pw2) return setError('Die beiden Passwörter sind nicht gleich.')
+    setBusy(true)
+    setError(null)
+    try {
+      await signUp(address, pw)
+      local.set('beqcrm-last-email', address)
+      setSentTo(address)
+    } catch (err) {
+      setError(errorText(err))
+    }
+    setBusy(false)
+  }
+  if (sentTo) {
+    return html`<${AuthShell}>
+      <h1 class="auth-title">Fast geschafft</h1>
+      <p class="auth-text">Wir haben dir eine Mail an ${sentTo} geschickt. Tipp auf den Link darin. Danach bist du angemeldet und richtest einmal den Code aus der Authenticator-App ein.</p>
+      <p class="auth-hint">Keine Mail da? Schau im Spam-Ordner nach oder melde dich beim Admin.</p>
+      <button type="button" class="auth-link" onClick=${onBack}>Zurück zur Anmeldung</button>
+    <//>`
+  }
+  return html`<${AuthShell}>
+    <h1 class="auth-title">Konto anlegen</h1>
+    <form onSubmit=${submit}>
+      <${Field} label="E-Mail (beq.com)" htmlFor="signup-email">
+        <input id="signup-email" type="email" autocomplete="username" required placeholder="vorname.nachname@beq.com" value=${email} onInput=${(e) => setEmail(e.target.value)} />
+      <//>
+      <${Field} label="Passwort" htmlFor="signup-pw" hint="Mindestens 10 Zeichen">
+        <input id="signup-pw" type="password" autocomplete="new-password" required value=${pw} onInput=${(e) => setPw(e.target.value)} />
+      <//>
+      <${Field} label="Noch einmal" htmlFor="signup-pw2">
+        <input id="signup-pw2" type="password" autocomplete="new-password" required value=${pw2} onInput=${(e) => setPw2(e.target.value)} />
+      <//>
+      ${error && html`<p class="auth-error" role="alert">${error}</p>`}
+      <button type="submit" class="btn btn-primary btn-block" disabled=${busy}>${busy ? 'Einen Moment …' : 'Konto anlegen'}</button>
+    </form>
+    <button type="button" class="auth-link" onClick=${onBack}>Zurück zur Anmeldung</button>
   <//>`
 }
 

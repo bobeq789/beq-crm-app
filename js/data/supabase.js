@@ -12,12 +12,19 @@ function loadScript(src) {
   })
 }
 
-// Art des Links aus einer Mail (Passwort zurücksetzen, Einladung), bevor Supabase die Adresse aufräumt
+// Art des Links aus einer Mail (Passwort zurücksetzen, Einladung, Bestätigung) oder der
+// Rückkehr von Google, bevor Supabase die Adresse aufräumt. Fehler kommen im Hash oder in ?…
 function readLinkInfo() {
   const raw = location.hash.startsWith('#') ? location.hash.slice(1) : ''
-  if (!raw.includes('access_token') && !raw.includes('error')) return { type: null, error: null }
-  const params = new URLSearchParams(raw)
-  return { type: params.get('type'), error: params.get('error_code') || params.get('error') }
+  const hash = raw.includes('access_token') || raw.includes('error') ? new URLSearchParams(raw) : new URLSearchParams()
+  const query = new URLSearchParams(location.search)
+  const pick = (k) => hash.get(k) || query.get(k)
+  return {
+    type: hash.get('type'),
+    tokens: hash.has('access_token'),
+    error: pick('error_code') || pick('error'),
+    errorDescription: pick('error_description'),
+  }
 }
 
 // Lange Texte lädt die App erst beim Öffnen. Diese Spalten kommen beim Start ohne sie.
@@ -56,7 +63,9 @@ export async function createSupabaseApi(config) {
   return {
     mode: 'supabase',
     linkType: link.type,
+    linkTokens: link.tokens,
     linkError: link.error,
+    linkErrorDescription: link.errorDescription,
 
     // ---------- Anmeldung ----------
     async getSession() {
@@ -71,6 +80,24 @@ export async function createSupabaseApi(config) {
     },
     async signOut() {
       await client.auth.signOut()
+    },
+    // Mit Google anmelden: Weiterleitung zu Google, zurück auf diese Seite (nur Konten der beQ)
+    async signInWithGoogle() {
+      check(
+        await client.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: location.origin + location.pathname, queryParams: { prompt: 'select_account', hd: 'beq.com' } },
+        })
+      )
+    },
+    // Konto mit Passwort anlegen, Supabase schickt eine Bestätigungsmail
+    async signUp(email, password) {
+      return check(await client.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } }))
+    },
+    // beq.com-Adresse nach der Anmeldung ins Team (11_anmeldung_beq.sql), liefert die Rolle
+    async joinTeam() {
+      const { data, error } = await client.rpc('join_beq_team')
+      return error ? null : data
     },
     async resetPassword(email) {
       check(await client.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname }))

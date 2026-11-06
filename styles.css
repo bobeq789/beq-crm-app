@@ -928,3 +928,16 @@ input[type='time'] { min-width: 0; }
   .mailbox-list li .mailbox-actions { grid-column: 2; grid-row: 1 / span 2; flex-direction: column; }
   .mailbox-list li .btn { grid-column: auto; grid-row: auto; }
 }
+
+/* Spalten direkt im Board bearbeiten */
+.column-actions { display: flex; align-items: center; gap: 2px; }
+.column-add { flex: 0 0 auto; padding-top: 2px; }
+.column-add .btn { white-space: nowrap; }
+.stage-edit-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.stage-edit-actions .btn-danger-text { margin-left: auto; }
+@media (max-width: 599px) { .stage-edit-actions .btn-danger-text { margin-left: 0; } }
+
+/* Anmeldung: Google oben, darunter E-Mail und Passwort */
+.auth-hint-top { margin: 10px 0 0; }
+.auth-or { text-align: center; color: var(--grey); font-size: 13px; margin: 22px 0 4px; }
+.auth-link-tight { margin-top: 0; }
