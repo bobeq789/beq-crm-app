@@ -17,6 +17,7 @@ const FAILURES = {
   adresse: () => 'Google hat keine bestätigte E-Mail-Adresse geschickt. Bitte mit einem beQ-Konto anmelden.',
   'keine-rechte': (a) => `Für ${a || 'dieses Postfach'} wurden weder Mails noch Kalender freigegeben. Bitte noch einmal verbinden und alle Häkchen setzen.`,
   speichern: () => 'Der Zugang ließ sich nicht speichern. Bitte gleich noch einmal versuchen.',
+  'anderes-konto': (a) => `Bei Google war ${a || 'ein anderes Konto'} gewählt. Weitere Postfächer verbindest du hier mit „Postfach verbinden“.`,
 }
 
 function resultText(params) {

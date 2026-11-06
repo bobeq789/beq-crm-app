@@ -70,7 +70,10 @@ export async function createSupabaseApi(config) {
     // ---------- Anmeldung ----------
     async getSession() {
       const { data } = await client.auth.getSession()
-      return data.session ? { email: data.session.user.email } : null
+      if (!data.session) return null
+      const meta = data.session.user.app_metadata || {}
+      const providers = meta.providers || (meta.provider ? [meta.provider] : [])
+      return { email: data.session.user.email, google: providers.includes('google') }
     },
     onAuthChange(cb) {
       client.auth.onAuthStateChange((event, session) => cb(event, session ? { email: session.user.email } : null))
@@ -218,7 +221,7 @@ export async function createSupabaseApi(config) {
 
     // ---------- Postfächer (10_postfaecher.sql, Edge Function „google-verbinden“) ----------
     // Liefert die Google-Adresse, bei der sich die Person anmeldet und zustimmt
-    async connectMailbox() {
+    async connectMailbox(opts = {}) {
       const { data } = await client.auth.getSession()
       if (!data.session) throw new Error('JWT expired')
       let res
@@ -226,7 +229,7 @@ export async function createSupabaseApi(config) {
         res = await fetch(config.supabaseUrl + '/functions/v1/google-verbinden', {
           method: 'POST',
           headers: { Authorization: 'Bearer ' + data.session.access_token, apikey: config.supabaseKey, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'start' }),
+          body: JSON.stringify({ action: 'start', login_hint: opts.loginHint || undefined }),
         })
       } catch {
         throw new Error('Failed to fetch')

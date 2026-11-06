@@ -175,6 +175,7 @@ export async function boot() {
     return emit()
   }
   state.sessionEmail = session.email
+  state.sessionGoogle = !!session.google
   // Nach Google oder dem Bestätigungslink: Anmeldedaten aus der Adresse entfernen
   if (api.linkTokens && api.linkType !== 'recovery' && api.linkType !== 'invite') {
     history.replaceState(null, '', location.pathname + location.search + '#/')
@@ -249,6 +250,30 @@ async function enterApp() {
   state.me = state.db.team_members.find((t) => norm(t.email) === email) || { email: state.sessionEmail, name: state.sessionEmail, role: state.role }
   state.auth = 'ready'
   emit()
+  await autoConnectMailbox()
+}
+
+// Erste Anmeldung mit Google (Entscheidung vom 06.11.2026, Variante B): gleich weiter zu
+// Google, um das eigene Postfach zu verbinden. Google hat das Konto schon gewählt, es
+// bleibt nur „Zulassen“. Einmal je Gerät und Adresse, wer ablehnt, wird nicht gedrängt.
+async function autoConnectMailbox() {
+  if (isDemo || !state.sessionGoogle || isGuest() || !api.connectMailbox) return
+  const email = norm(state.sessionEmail)
+  if (!/@beq\.com$/.test(email)) return
+  // Schon verbunden, getrennt oder mit Fehler: nichts tun, das regelt die Kachel in den Einstellungen
+  if ((state.db.mailboxes || []).some((b) => norm(b.address) === email)) return
+  const key = 'beqcrm-postfach-auto-' + email
+  if (local.get(key)) return
+  local.set(key, new Date().toISOString())
+  try {
+    const url = await api.connectMailbox({ loginHint: email })
+    toast('Einen Moment, Google fragt gleich nach deinem Postfach und Kalender.')
+    setTimeout(() => {
+      location.href = url
+    }, 900)
+  } catch {
+    // Google noch nicht eingerichtet oder keine Verbindung: später unter „Postfächer und Kalender“
+  }
 }
 
 // Zweiter Faktor: einrichten, prüfen, neu einrichten
@@ -500,6 +525,7 @@ export function mailboxDataCounts(address) {
 }
 
 export async function signIn(email, password) {
+  state.sessionGoogle = false
   await api.signIn(email, password)
   local.set('beqcrm-last-email', email)
   await afterLogin(email)
