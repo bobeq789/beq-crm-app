@@ -273,12 +273,13 @@ export async function createSupabaseApi(config) {
       if (!res.ok) throw functionError(res, body)
       return body
     },
-    async mailAttachment(emailId, part) {
-      const res = await callFunction('google-mail', { action: 'anhang', email_id: emailId, part })
-      if (!res.ok) throw functionError(res, await res.json().catch(() => ({})))
-      const disp = res.headers.get('Content-Disposition') || ''
-      const m = disp.match(/filename\*=UTF-8''([^;]+)/i)
-      return { blob: await res.blob(), name: m ? decodeURIComponent(m[1]) : 'Anhang' }
+    // Signierter Link zu einem Anhang, 5 Minuten gültig. Den Anhang selbst liefert der Dienst
+    // „google-mail“ beim Öffnen des Links, nie die App (Typ aus der Endung, sichere Kopfzeilen).
+    async mailAttachmentLink(emailId, part) {
+      const res = await callFunction('google-mail', { action: 'anhang-link', email_id: emailId, part })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw functionError(res, body)
+      return body
     },
     // Dienst „google-abgleich“ für die eigenen Postfächer sofort starten
     async syncNow() {

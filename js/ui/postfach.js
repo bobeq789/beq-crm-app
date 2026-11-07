@@ -18,7 +18,6 @@ import {
   isOwnMailbox,
   sendMail,
   deleteMail,
-  openMailAttachment,
   syncNow,
   openDialog,
   closeDialog,
@@ -26,6 +25,7 @@ import {
   toast,
 } from '../store.js'
 import { PageHead, Segmented, Empty, LinkText, Modal, Field, dialogKinds, useIsMobile } from './common.js'
+import { MailAttachments, attachmentsOf } from './emails.js'
 
 const PAGE = 60
 const MAX_FILES = 18 * 1024 * 1024
@@ -38,8 +38,6 @@ function nameFor(address) {
   return p ? p.name : address
 }
 const fromName = (m) => m.from_name || nameFor(m.from_email)
-const attachmentsOf = (m) =>
-  (m.attachment_list && m.attachment_list.length ? m.attachment_list : (m.attachments || []).map((name, i) => ({ name, part: String(i + 1) }))) || []
 
 function shortTime(iso) {
   if (!iso) return ''
@@ -111,21 +109,11 @@ function MailReader({ mail, onBack }) {
       <button type="button" class="btn btn-small" onClick=${() => reply('weiter')}><${Icon} name="forward" size=${16} /> Weiterleiten</button>
       ${own && html`<button type="button" class="btn btn-small btn-danger-text" onClick=${remove}><${Icon} name="trash" size=${16} /> Löschen</button>`}
       ${!isDemo &&
+      own &&
       mail.provider_id &&
       html`<a class="btn btn-small" href=${gmailUrl(mail.mailbox, mail.provider_id)} target="_blank" rel="noopener noreferrer"><${Icon} name="external" size=${16} /> In Gmail</a>`}
     </div>
-    ${files.length > 0 &&
-    html`<ul class="pf-attachments" aria-label="Anhänge">
-      ${files.map(
-        (a) => html`<li key=${a.part + a.name}>
-          <button type="button" class="pf-att" onClick=${() => openMailAttachment(mail, a)} title="Öffnen">
-            <${Icon} name="paperclip" size=${16} />
-            <span class="pf-att-name">${a.name}</span>
-            ${a.size ? html`<span class="muted small">${fmtSize(a.size)}</span>` : null}
-          </button>
-        </li>`
-      )}
-    </ul>`}
+    <${MailAttachments} mail=${mail} cls="pf-attachments" />
     <div class="pf-body">
       ${!loaded
         ? html`<p class="muted">Wird geladen …</p>`

@@ -735,8 +735,20 @@ input[type='time'] { min-width: 0; }
 .mail-clip { color: var(--muted); }
 .mail-body { padding: 0 0 14px 42px; }
 .mail-body .quoted { color: var(--muted); margin-top: 8px; padding: 10px 12px; background: var(--raised); border-radius: 8px; }
-.attachments { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
-.attachments li { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 2px 10px; border-radius: 999px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--border); }
+/* Anhänge als Knöpfe (Kontakt, Firma, Postfach), aus fremden Postfächern nur der Name */
+.attachments { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.attachments li { max-width: 100%; }
+.att-btn {
+  display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-height: 40px;
+  padding: 6px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--raised); color: var(--text);
+  font: inherit; font-size: 14px; text-align: left;
+}
+button.att-btn { cursor: pointer; }
+button.att-btn:hover { background: var(--hover); }
+button.att-btn:disabled { cursor: progress; }
+.att-off { color: var(--muted); }
+.att-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; font-weight: 500; }
+.att-size { color: var(--muted); font-size: 13px; white-space: nowrap; }
 .mail-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
 @media (max-width: 599px) { .mail-body { padding-left: 0; } }
 
@@ -972,13 +984,7 @@ input[type='time'] { min-width: 0; }
 .pf-reader-subject { font-size: 21px; font-weight: 700; margin: 0 0 10px; overflow-wrap: anywhere; }
 .pf-reader-meta { display: flex; flex-direction: column; gap: 3px; margin-bottom: 14px; overflow-wrap: anywhere; }
 .pf-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
-.pf-attachments { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
-.pf-att {
-  display: inline-flex; align-items: center; gap: 8px; max-width: 100%;
-  padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--raised); color: var(--text);
-}
-.pf-att:hover { background: var(--hover); }
-.pf-att-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; font-weight: 500; }
+.pf-attachments { margin: 0 0 14px; }
 .pf-body { border-top: 1px solid var(--border); padding-top: 14px; }
 .pf-body .prose { white-space: pre-wrap; overflow-wrap: anywhere; }
 .pf-persons { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
@@ -990,7 +996,7 @@ input[type='time'] { min-width: 0; }
 @media (max-width: 759px) {
   .pf-reader { padding: 16px; }
   .pf-toolbar select { flex: 1 1 100%; }
-  .pf-att-name { max-width: 200px; }
+  .att-name { max-width: 200px; }
 }
 
 /* Navigation: acht Bereiche oben, am Handy vier und „Mehr“ */

@@ -293,7 +293,7 @@ export function createDemoApi({ asGuest = false } = {}) {
       }
       throw dbError('meldung', 'Unbekannte Aktion.')
     },
-    async mailAttachment() {
+    async mailAttachmentLink() {
       throw dbError('demo', 'Im Demo-Modus haben Anhänge keinen Inhalt.')
     },
     async syncNow() {

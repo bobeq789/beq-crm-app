@@ -553,23 +553,40 @@ export async function deleteMail(mail) {
 }
 
 // Anhang holen: PDF, Bilder und Text im neuen Tab, alles andere herunterladen
+// Anhänge öffnet jede Person nur aus ihren eigenen Postfächern (Frage 13, Entscheidung vom
+// 07.11.2026: Nein). Die Mail muss in einem davon liegen, sonst steht nur der Dateiname da.
+export function canOpenAttachments(mail) {
+  const boxes = mail.mailboxes && mail.mailboxes.length ? mail.mailboxes : [mail.mailbox]
+  return boxes.some((b) => isOwnMailbox(b))
+}
+
+// Im Browser öffnen nur diese Endungen, der Dienst liefert alles andere als Download
+const INLINE_FILE = /\.(pdf|png|jpe?g|gif|webp|txt)$/i
+
 export async function openMailAttachment(mail, attachment) {
+  if (isDemo) {
+    toast('Im Demo-Modus haben Anhänge keinen Inhalt.')
+    return
+  }
+  // Wie openCardFile: Fenster sofort öffnen und den Link danach hineinladen, sonst blockt es das iPhone
+  const win = INLINE_FILE.test(attachment.name || '') ? window.open('', '_blank') : null
   try {
-    const { blob, name } = await api.mailAttachment(mail.id, attachment.part)
-    const url = URL.createObjectURL(blob)
-    const viewable = /^(application\/pdf|image\/|text\/plain)/.test(blob.type)
-    const win = viewable ? window.open(url, '_blank') : null
-    if (!win) {
+    const { url } = await api.mailAttachmentLink(mail.id, attachment.part)
+    if (win) {
+      win.opener = null
+      win.location.href = url
+    } else {
+      // Alles andere über einen kurz eingefügten Link, der Dienst schickt die Datei als Download
       const a = document.createElement('a')
       a.href = url
-      a.download = name || attachment.name || 'Anhang'
+      a.rel = 'noopener noreferrer'
       document.body.appendChild(a)
       a.click()
       a.remove()
     }
-    setTimeout(() => URL.revokeObjectURL(url), 120000)
   } catch (err) {
-    toast(errorText(err), { error: true })
+    if (win) win.close()
+    toast(`Der Anhang ließ sich nicht öffnen. ${errorText(err)}`, { error: true })
   }
 }
 
