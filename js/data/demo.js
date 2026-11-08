@@ -32,6 +32,7 @@ import {
   cardEventsFor,
   noteEventsFor,
   cardFlags,
+  archiveOldDone,
 } from './rules.js'
 
 const KEY = 'beqcrm-demo-v3'
@@ -49,6 +50,8 @@ export function createDemoApi({ asGuest = false } = {}) {
   let db = loadDb()
   const me = asGuest ? DEMO_GUEST : DEMO_ME
   const save = () => local.set(KEY, db)
+  // Was in Supabase nachts der Zeitplan tut (24_archiv.sql), passiert hier beim Laden
+  if (archiveOldDone(db)) save()
   const find = (table, id) => db[table].find((x) => x.id === id)
   // Karte einzeln geteilt oder ihr Projekt ganz geteilt
   const sharedWithMe = (cardId) => {

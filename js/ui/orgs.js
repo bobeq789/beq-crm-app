@@ -23,7 +23,7 @@ import {
 import { ActivitySection } from './activities.js'
 import { navigate, openCard } from '../router.js'
 import { EmailList, emailCount } from './emails.js'
-import { PageHead, Tile, Empty, Labels, TaskRow, Notes, Field, LabelPicker, Avatar } from './common.js'
+import { PageHead, Tile, Empty, Labels, TaskRow, Notes, Field, LabelPicker, Avatar, CallLink } from './common.js'
 
 export function OrgsList() {
   const [query, setQuery] = useState('')
@@ -142,7 +142,10 @@ export function OrgDetail({ id }) {
           ${people.length
             ? html`<ul class="people-mini">
                 ${people.map(
-                  (p) => html`<li key=${p.id}><a href=${'#/kontakte/' + p.id}><${Avatar} name=${p.name} /><span><span class="pm-name">${p.name}</span>${p.position && html`<span class="muted small">${p.position}</span>`}</span></a></li>`
+                  (p) => html`<li key=${p.id} class="row-with-call">
+                    <a href=${'#/kontakte/' + p.id}><${Avatar} name=${p.name} /><span><span class="pm-name">${p.name}</span>${p.position && html`<span class="muted small">${p.position}</span>`}</span></a>
+                    <${CallLink} name=${p.name} phones=${p.phones} />
+                  </li>`
                 )}
               </ul>`
             : html`<${Empty}>Noch keine Kontakte.<//>`}

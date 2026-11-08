@@ -248,6 +248,24 @@ export function afterInsert(db, table, row) {
   touch('organizations', row.org_id)
 }
 
+// Nächtliches Archiv wie archiv_erledigte() in 24_archiv.sql (Frage 21): erledigt, seit 30 Tagen
+// unverändert, ohne offenen Deal und ohne offene Aktivität. updated_at bleibt, der Verlauf
+// bekommt „archiviert“ ohne Person. Die Demo ruft das beim Laden auf. Gibt die Zahl zurück.
+export function archiveOldDone(db, days = 30, now = new Date()) {
+  const limit = new Date(now.getTime() - days * 864e5).toISOString()
+  const doneStages = new Set(db.stages.filter((s) => s.kind === 'done').map((s) => s.id))
+  let n = 0
+  db.cards = db.cards.map((c) => {
+    if (c.archived || !doneStages.has(c.stage_id) || !(String(c.updated_at) < limit)) return c
+    if ((db.deals || []).some((d) => d.card_id === c.id && d.status === 'offen')) return c
+    if ((db.aktivitaeten || []).some((a) => a.card_id === c.id && !a.erledigt_at)) return c
+    n += 1
+    db.card_events.push({ id: uid(), card_id: c.id, actor: null, kind: 'archiv', detail: 'archiviert', at: now.toISOString() })
+    return { ...c, archived: true }
+  })
+  return n
+}
+
 export function afterUpdate(db, table, row) {
   if (table === 'aktivitaeten') touchCard(db, row.card_id, row.updated_at)
 }

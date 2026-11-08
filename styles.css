@@ -1280,3 +1280,36 @@ body.search-sheet-open .topbar { z-index: 70; }
   }
 }
 
+/* ------------------------------------------------------------
+   Anrufen aus Listen und aus der Aufgabe (Nachtrag „Anrufen“, B7, B4)
+   Hörer neben der Zeile, nicht darin (ein Link im Link ist nicht zulässig), Tippfläche 44 px.
+   ------------------------------------------------------------ */
+.row-with-call { display: flex; align-items: center; gap: 4px; }
+.row-with-call > a:first-child { flex: 1; min-width: 0; }
+.call-btn {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border-radius: 999px; color: var(--accent-text);
+}
+.call-btn:hover { background: var(--hover); text-decoration: none; }
+.contact-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.contact-actions .btn { min-height: 44px; }
+
+/* ------------------------------------------------------------
+   Archiv eines Projekts (Nachtrag „Archiv“, B3)
+   Das Archivfenster liegt auf der Ebene der Aufgaben-Fenster (60), damit eine darin geöffnete
+   Aufgabe darüber liegt. Dialoge (70) bleiben über beiden.
+   ------------------------------------------------------------ */
+.backdrop:has(.archive-modal) { z-index: 60; }
+.archive-link {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin-top: 6px;
+  font-size: 14px; font-weight: 500; color: var(--accent-text);
+}
+.archive-hits { margin: -4px 0 14px; }
+.archive-hits a { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; font-weight: 500; color: var(--accent-text); }
+.archive-search { display: block; margin-bottom: 8px; }
+.archive-info { margin: 0 0 8px; }
+.archive-list { padding: 2px 14px; }
+.archive-list .row-link { min-height: 52px; padding: 10px 0; }
+.row-text { display: flex; flex-direction: column; min-width: 0; }
+.row-sub { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+

@@ -24,7 +24,7 @@ import {
 import { navigate, openCard, openEvent } from '../router.js'
 import { EmailList, emailCount } from './emails.js'
 import { ActivitySection } from './activities.js'
-import { PageHead, Tile, Empty, Labels, TaskRow, Notes, Field, ListInput, LabelPicker, EntityPicker, Segmented, Avatar } from './common.js'
+import { PageHead, Tile, Empty, Labels, TaskRow, Notes, Field, ListInput, LabelPicker, EntityPicker, Segmented, Avatar, CallLink } from './common.js'
 
 // Beim Sortieren Titel wie „Dr.“ überspringen
 const sortName = (name) => String(name || '').replace(/^(Dr\.|Prof\.)\s+/i, '')
@@ -71,7 +71,8 @@ export function ContactsList() {
       ? html`<ul class="row-list">
           ${list.map((p) => {
             const org = getOrg(p.org_id)
-            return html`<li key=${p.id}>
+            // Hörer neben der Zeile, nicht darin (kein Link im Link, Nachtrag „Anrufen“)
+            return html`<li key=${p.id} class="row-with-call">
               <a class="row-link" href=${'#/kontakte/' + p.id}>
                 <${Avatar} name=${p.name} size="md" />
                 <span class="row-main">
@@ -83,6 +84,7 @@ export function ContactsList() {
                 </span>
                 <${Icon} name="chevron" size=${18} cls="row-chevron" />
               </a>
+              <${CallLink} name=${p.name} phones=${p.phones} />
             </li>`
           })}
         </ul>`

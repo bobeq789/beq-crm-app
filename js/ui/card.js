@@ -2,7 +2,7 @@
 // Gäste sehen eine schlanke Fassung: nur Spalte, Dringlichkeit und Fälligkeit änderbar, dazu Notizen.
 import { html, useState, useEffect } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
-import { fmtDate, fmtRelative, norm } from '../lib/util.js'
+import { fmtDate, fmtRelative, norm, telHref } from '../lib/util.js'
 import {
   getCard,
   getProject,
@@ -18,6 +18,7 @@ import {
   confirmDialog,
   toast,
   isGuest,
+  myActiveMailboxes,
   activeGuests,
   sharesOf,
   markCardSeen,
@@ -28,12 +29,12 @@ import {
   answerFor,
 } from '../store.js'
 import { closeCard } from '../router.js'
-import { Field, PriorityPicker, ProjectSelect, EntityPicker, Notes, Dot, LinkText, brandSafe, LabelPicker, Labels } from './common.js'
+import { Field, PriorityPicker, ProjectSelect, EntityPicker, Notes, Dot, LinkText, brandSafe, LabelPicker, Labels, useOverlay } from './common.js'
 import { History } from './history.js'
 import { CardFiles } from './files.js'
 import { CardDeal } from './deal.js'
 import { ActivitySection } from './activities.js'
-import { openReply } from './postfach.js'
+import { openReply, openNewMail } from './postfach.js'
 import { wroteWhen } from './overview.js'
 
 // Teilen mit Gästen: antippen teilt, noch einmal antippen nimmt es zurück
@@ -94,6 +95,28 @@ function AssigneePicker({ card }) {
         ${o.label}${o.guest && html`<span class="chip-note">Gast</span>`}
       </button>`
     })}
+  </div>`
+}
+
+// Unter dem Kontakt der Aufgabe (Nachtrag „Anrufen“, B7, B4): „Anrufen“ für bis zu zwei Nummern
+// (bei zwei steht die Nummer selbst auf dem Knopf) und „Mail schreiben“. Mit eigenem Postfach
+// öffnet das Mailfenster, sonst (Gäste, kein Postfach) das Mailprogramm über mailto.
+function ContactActions({ person }) {
+  if (!person) return null
+  const phones = (person.phones || []).filter((x) => telHref(x)).slice(0, 2)
+  const email = (person.emails || [])[0]
+  if (!phones.length && !email) return null
+  const canSend = !isGuest() && myActiveMailboxes().length > 0
+  return html`<div class="contact-actions">
+    ${phones.map(
+      (ph) => html`<a class="btn btn-small" href=${telHref(ph)} key=${ph} aria-label=${person.name + ' anrufen' + (phones.length > 1 ? ', ' + ph : '')}>
+        <${Icon} name="phone" size=${16} /> ${phones.length > 1 ? ph : 'Anrufen'}
+      </a>`
+    )}
+    ${email &&
+    (canSend
+      ? html`<button type="button" class="btn btn-small" onClick=${() => openNewMail(email)}><${Icon} name="mail" size=${16} /> Mail schreiben</button>`
+      : html`<a class="btn btn-small" href=${'mailto:' + email}><${Icon} name="mail" size=${16} /> Mail schreiben</a>`)}
   </div>`
 }
 
@@ -163,7 +186,7 @@ function GuestCard({ card }) {
     <h2 class="panel-title">${card.title}</h2>
     ${card.description && html`<div class="prose"><${LinkText} text=${card.description} /></div>`}
     <dl class="card-facts">
-      ${person && html`<dt>Kontakt</dt><dd>${person.name}</dd>`}
+      ${person && html`<dt>Kontakt</dt><dd>${person.name}<${ContactActions} person=${person} /></dd>`}
       ${org && html`<dt>Firma</dt><dd>${org.name}</dd>`}
       ${(card.labels || []).length > 0 && html`<dt>Labels</dt><dd><${Labels} labels=${card.labels} /></dd>`}
     </dl>
@@ -195,17 +218,8 @@ export function CardPanel({ id }) {
     markCardSeen(id)
   }, [id])
 
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === 'Escape' && !document.querySelector('.modal')) closeCard()
-    }
-    window.addEventListener('keydown', onKey)
-    document.body.classList.add('panel-open')
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      document.body.classList.remove('panel-open')
-    }
-  }, [])
+  // Escape schließt nur das oberste Fenster (B14), zum Beispiel die Aufgabe über dem Archiv
+  useOverlay(closeCard)
 
   if (!card) {
     return html`<${PanelFrame} card=${null} project=${null}><p class="empty">Diese Aufgabe gibt es nicht mehr.</p><//>`
@@ -268,7 +282,11 @@ export function CardPanel({ id }) {
     ></textarea>
     <${AnswerNotice} card=${card} />
     <${ShareRow} card=${card} />
-    ${card.archived && html`<p class="notice">Diese Aufgabe liegt im Archiv.</p>`}
+    ${card.archived &&
+    html`<p class="notice">
+      Diese Aufgabe liegt im Archiv. Du findest sie auf dem Board unter „Erledigt“ über den Link „Archiv“.
+      „Aus dem Archiv holen“ unten holt sie zurück.
+    </p>`}
 
     <${StagePicker} card=${card} />
     <${Field} label="Zuständig"><${AssigneePicker} card=${card} /><//>
@@ -283,6 +301,7 @@ export function CardPanel({ id }) {
       <//>
       <${Field} label="Kontakt" htmlFor="card-person">
         <${EntityPicker} kind="person" inputId="card-person" value=${card.person_id} onChange=${changePerson} placeholder="Kontakt suchen oder neu anlegen" />
+        <${ContactActions} person=${getPerson(card.person_id)} />
       <//>
       <${Field} label="Firma" htmlFor="card-org">
         <${EntityPicker} kind="org" inputId="card-org" value=${card.org_id} onChange=${(v) => set({ org_id: v })} placeholder="Firma suchen oder neu anlegen" />

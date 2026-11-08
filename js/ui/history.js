@@ -37,7 +37,8 @@ export function eventSentence(e, me = myEmail()) {
   const hat = self ? 'hast' : 'hat'
   const d = e.detail || ''
   const person = (address) => (norm(address) === norm(me) ? 'dich' : firstName(memberName(address)) || address)
-  // Ohne Person (Skript, Import) ohne Subjekt formulieren
+  // Ohne Person (Skript, Import, nächtliches Archivieren aus 24_archiv.sql) ohne Subjekt formulieren,
+  // zum Beispiel „Automatisch archiviert“
   if (!e.actor) {
     if (e.kind === 'aktivitaet') {
       const x = actParts(e.kind, d)

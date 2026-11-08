@@ -2,7 +2,7 @@
 import { html, useState, useEffect, useLayoutEffect, useRef } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { SETTINGS } from '../settings.js'
-import { splitLinks, dueInfo, fmtRelative, matches, initials, norm, todayStr, dayDiff, parseYmd, fmtDate } from '../lib/util.js'
+import { splitLinks, dueInfo, fmtRelative, matches, initials, norm, todayStr, dayDiff, parseYmd, fmtDate, telHref } from '../lib/util.js'
 import {
   state,
   memberName,
@@ -65,6 +65,16 @@ export function Tile({ title, count, actions, children, cls = '', drag = null })
     </div>`}
     ${children}
   </section>`
+}
+
+// Hörer neben einem Kontakt (Nachtrag „Anrufen“, B7, B4): normaler tel:-Link über telHref.
+// Kein Knopf, wenn sich keine Nummer sicher wählen lässt. Tippfläche 44 px (B12).
+export function CallLink({ name, phones }) {
+  const phone = (phones || []).find((x) => telHref(x))
+  if (!phone) return null
+  return html`<a class="call-btn" href=${telHref(phone)} aria-label=${(name || 'Kontakt') + ' anrufen'} title=${'Anrufen: ' + phone}>
+    <${Icon} name="phone" size=${20} />
+  </a>`
 }
 
 export function Empty({ children }) {
@@ -235,14 +245,39 @@ export function TaskRow({ card, showSince, sinceText, checkActivity }) {
 // ------------------------------------------------------------
 // Fenster (Dialog) mit dunklem Hintergrund
 // ------------------------------------------------------------
-export function Modal({ title, onClose, children, footer, wide = false }) {
+// Fenster übereinander (B14): Jedes Fenster (Dialog, Aufgabe, Termin, Archiv) meldet sich beim
+// Öffnen hier an. Escape schließt nur das oberste, also das zuletzt geöffnete. Die Seite dahinter
+// bleibt gesperrt (body.panel-open), bis das letzte Fenster zu ist. Felder, die Escape selbst
+// brauchen (Klapplisten, Suche), halten die Taste mit stopPropagation oder preventDefault an.
+const overlayStack = []
+function onOverlayKey(e) {
+  if (e.key !== 'Escape' || e.defaultPrevented || !overlayStack.length) return
+  overlayStack[overlayStack.length - 1].current()
+}
+export function useOverlay(onClose) {
+  const ref = useRef(onClose)
+  ref.current = onClose
   useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && onClose()
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+    overlayStack.push(ref)
+    if (overlayStack.length === 1) {
+      window.addEventListener('keydown', onOverlayKey)
+      document.body.classList.add('panel-open')
+    }
+    return () => {
+      const i = overlayStack.lastIndexOf(ref)
+      if (i >= 0) overlayStack.splice(i, 1)
+      if (!overlayStack.length) {
+        window.removeEventListener('keydown', onOverlayKey)
+        document.body.classList.remove('panel-open')
+      }
+    }
+  }, [])
+}
+
+export function Modal({ title, onClose, children, footer, wide = false, cls = '' }) {
+  useOverlay(onClose)
   return html`<div class="backdrop" onClick=${(e) => e.target === e.currentTarget && onClose()}>
-    <div class=${'modal' + (wide ? ' modal-wide' : '')} role="dialog" aria-modal="true" aria-label=${title}>
+    <div class=${'modal' + (wide ? ' modal-wide' : '') + (cls ? ' ' + cls : '')} role="dialog" aria-modal="true" aria-label=${title}>
       <div class="modal-head">
         <h2 class="modal-title">${title}</h2>
         <button type="button" class="icon-btn" aria-label="Schließen" onClick=${onClose}><${Icon} name="x" /></button>

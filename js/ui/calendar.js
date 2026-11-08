@@ -38,7 +38,7 @@ import {
   toast,
 } from '../store.js'
 import { closeEvent, openEvent, navigate } from '../router.js'
-import { PageHead, Empty, Dot, Field, Modal, LinkText, Segmented, useIsMobile, dialogKinds, brandSafe } from './common.js'
+import { PageHead, Empty, Dot, Field, Modal, LinkText, Segmented, useIsMobile, dialogKinds, brandSafe, useOverlay } from './common.js'
 
 const HOUR_PX = 48
 const VIEW_KEY = 'beqcrm-cal-view'
@@ -395,15 +395,8 @@ export function CalendarPage() {
 // ------------------------------------------------------------
 export function EventPanel({ id }) {
   const ev = getEvent(id)
-  useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && !document.querySelector('.modal') && closeEvent()
-    window.addEventListener('keydown', onKey)
-    document.body.classList.add('panel-open')
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      document.body.classList.remove('panel-open')
-    }
-  }, [])
+  // Escape schließt nur das oberste Fenster (B14)
+  useOverlay(closeEvent)
 
   if (!ev) {
     return html`<div class="backdrop" onClick=${closeEvent}>

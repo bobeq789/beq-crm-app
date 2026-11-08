@@ -2,7 +2,7 @@
 import { html, useState, useEffect, useRef } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { SETTINGS } from '../settings.js'
-import { matches, local, fmtEuro } from '../lib/util.js'
+import { matches, local, fmtEuro, fmtDate } from '../lib/util.js'
 import {
   state,
   activeProjects,
@@ -10,6 +10,8 @@ import {
   getProject,
   getPerson,
   getOrg,
+  getStage,
+  memberName,
   update,
   insert,
   remove,
@@ -268,7 +270,7 @@ function NewStageColumn({ onCreate, onCancel }) {
   </form>`
 }
 
-function Column({ stage, cards, onDropCard, onAdd, draggable, canEdit, renaming, onRename, onRenameDone, onAddAt }) {
+function Column({ stage, cards, onDropCard, onAdd, draggable, canEdit, renaming, onRename, onRenameDone, onAddAt, archiveCount = 0, onArchive }) {
   const [over, setOver] = useState(false)
   const [adding, setAdding] = useState(false)
   const [showAll, setShowAll] = useState(false)
@@ -321,10 +323,100 @@ function Column({ stage, cards, onDropCard, onAdd, draggable, canEdit, renaming,
       ${showAll ? 'Weniger anzeigen' : `Alle ${cards.length} anzeigen`}
     </button>`}
     ${!cards.length && !adding && html`<p class="column-empty">Keine Aufgaben</p>`}
+    ${isDone &&
+    archiveCount > 0 &&
+    html`<a class="archive-link" href=${'#/board/' + stage.project_id + '/archiv'} onClick=${(e) => (e.preventDefault(), onArchive())}>
+      <${Icon} name="archive" size=${16} /> Archiv: ${archiveCount === 1 ? '1 ältere Aufgabe' : archiveCount + ' ältere Aufgaben'}
+    </a>`}
   </section>`
 }
 
-export function Board({ projectId }) {
+// ------------------------------------------------------------
+// Archiv eines Projekts als eigenes Fenster (Nachtrag „Archiv“, B3): #/board/<id>/archiv?q=…
+// Erledigtes kommt nach 30 Tagen ohne Änderung von selbst hierher (24_archiv.sql).
+// Sortiert nach der letzten Änderung, nach Monat gruppiert, die jüngsten zuerst. Eine Aufgabe
+// öffnet sich über dem Archiv, Escape schließt dann nur sie (useOverlay in common.js).
+// ------------------------------------------------------------
+let archiveFromBoard = false
+export function openArchive(projectId, q = '') {
+  archiveFromBoard = true
+  navigate('/board/' + projectId + '/archiv', q ? { q } : null)
+}
+function closeArchive(projectId) {
+  if (archiveFromBoard) {
+    archiveFromBoard = false
+    history.back()
+  } else {
+    location.replace('#/board/' + projectId)
+  }
+}
+
+// Suche in Aufgaben: Titel, Beschreibung, Labels, Kontakt, Firma
+function cardMatches(c, q) {
+  if (!q.trim()) return true
+  const person = getPerson(c.person_id)
+  const org = getOrg(c.org_id)
+  return matches(q, c.title, c.description, c.labels, person && person.name, org && org.name)
+}
+const archivedOf = (projectId) => state.db.cards.filter((c) => c.project_id === projectId && c.archived)
+const monthLabel = (iso) => new Date(iso).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })
+
+function ArchiveWindow({ project, initialQuery }) {
+  const [q, setQ] = useState(initialQuery || '')
+  const mobile = useIsMobile()
+  const inputRef = useRef()
+  useEffect(() => setQ(initialQuery || ''), [initialQuery])
+  useEffect(() => {
+    if (!mobile && inputRef.current) inputRef.current.focus()
+  }, [])
+  const all = archivedOf(project.id)
+  const hits = all.filter((c) => cardMatches(c, q)).sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))
+  const groups = []
+  for (const c of hits) {
+    const label = monthLabel(c.updated_at)
+    if (!groups.length || groups[groups.length - 1].label !== label) groups.push({ label, cards: [] })
+    groups[groups.length - 1].cards.push(c)
+  }
+  const sub = (c) => {
+    const stage = getStage(c.stage_id)
+    const person = getPerson(c.person_id)
+    const org = getOrg(c.org_id)
+    return [stage && stage.name, 'zuletzt geändert ' + fmtDate(c.updated_at), person && person.name, org && org.name, c.assignee && memberName(c.assignee)]
+      .filter(Boolean)
+      .join(' · ')
+  }
+  return html`<${Modal} title=${'Archiv: ' + project.name} onClose=${() => closeArchive(project.id)} wide=${true} cls="archive-modal">
+    <label class="search archive-search">
+      <${Icon} name="search" size=${18} />
+      <input ref=${inputRef} type="search" value=${q} placeholder="Im Archiv suchen: Titel, Kontakt, Firma" aria-label="Archiv durchsuchen" onInput=${(e) => setQ(e.target.value)} />
+    </label>
+    <p class="muted small archive-info">
+      ${all.length === 1 ? '1 Aufgabe' : all.length + ' Aufgaben'} im Archiv. Erledigtes kommt nach 30 Tagen ohne Änderung von selbst hierher,
+      außer mit offenem Deal oder offener Aktivität. Ein Klick öffnet die Aufgabe, dort holt „Aus dem Archiv holen“ sie zurück.
+    </p>
+    ${!all.length && html`<${Empty}>Im Archiv dieses Projekts liegt nichts.<//>`}
+    ${all.length > 0 && !hits.length && html`<${Empty}>Nichts gefunden für „${q.trim()}“.<//>`}
+    ${groups.map(
+      (g) => html`<section class="archive-group" key=${g.label}>
+        <h3 class="group-title">${g.label} <span class="count">${g.cards.length}</span></h3>
+        <ul class="row-list archive-list">
+          ${g.cards.map(
+            (c) => html`<li key=${c.id}>
+              <button type="button" class="row-link" onClick=${() => openCard(c.id)}>
+                <span class="row-text">
+                  <span class="row-title">${c.title}</span>
+                  <span class="row-sub">${sub(c)}</span>
+                </span>
+              </button>
+            </li>`
+          )}
+        </ul>
+      </section>`
+    )}
+  <//>`
+}
+
+export function Board({ projectId, archiveOpen = false, archiveQuery = '' }) {
   const mobile = useIsMobile()
   const projects = activeProjects()
   const remembered = local.get('beqcrm-last-project')
@@ -336,7 +428,6 @@ export function Board({ projectId }) {
   const [query, setQuery] = useState('')
   const [assignee, setAssignee] = useState('')
   const [label, setLabel] = useState('')
-  const [archive, setArchive] = useState(false)
   const [mobileStage, setMobileStage] = useState(null)
   const [renaming, setRenaming] = useState(null)
   const [addingAt, setAddingAt] = useState(null)
@@ -353,7 +444,7 @@ export function Board({ projectId }) {
   const stages = stagesOf(current.id)
   const filtered = state.db.cards.filter((c) => {
     if (c.project_id !== current.id) return false
-    if (archive ? !c.archived : c.archived) return false
+    if (c.archived) return false
     if (assignee === '__none' && c.assignee) return false
     if (assignee && assignee !== '__none' && (c.assignee || '').toLowerCase() !== assignee.toLowerCase()) return false
     if (label) {
@@ -369,6 +460,9 @@ export function Board({ projectId }) {
     }
     return true
   })
+  // Archiv: Zahl für den Link unter „Erledigt“ und Treffer der Board-Suche im Archiv
+  const archived = archivedOf(current.id)
+  const archiveHits = query.trim() ? archived.filter((c) => cardMatches(c, query)).length : 0
   const cardsOf = (stage) =>
     filtered
       .filter((c) => c.stage_id === stage.id)
@@ -391,6 +485,7 @@ export function Board({ projectId }) {
     })
 
   const activeStage = stages.find((s) => s.id === mobileStage) || stages[0]
+  const firstDoneId = (stages.find((s) => s.kind === 'done') || {}).id
   const canEdit = !isGuest()
   const doneIndex = stages.findIndex((s) => s.kind === 'done')
   const beforeDone = doneIndex < 0 ? stages.length : doneIndex
@@ -414,6 +509,9 @@ export function Board({ projectId }) {
       setRenaming(null)
       setAddingAt(i)
     },
+    // Link ins Archiv nur unter der ersten Spalte der Art „Erledigt“
+    archiveCount: s.id === firstDoneId ? archived.length : 0,
+    onArchive: () => openArchive(current.id),
   })
   const placeholder = html`<${NewStageColumn} key="neue-spalte" onCreate=${createStage} onCancel=${() => setAddingAt(null)} />`
   const desktopColumns = []
@@ -477,10 +575,13 @@ export function Board({ projectId }) {
         <option value="">Alle Labels</option>
         ${allLabels().map((l) => html`<option value=${l}>${l}</option>`)}
       </select>
-      <button type="button" class=${'chip-btn' + (archive ? ' active' : '')} aria-pressed=${archive} onClick=${() => setArchive(!archive)}>
-        <${Icon} name="archive" size=${16} /> Archiv
-      </button>
     </div>
+    ${archiveHits > 0 &&
+    html`<p class="archive-hits">
+      <a href=${'#/board/' + current.id + '/archiv'} onClick=${(e) => (e.preventDefault(), openArchive(current.id, query.trim()))}>
+        <${Icon} name="archive" size=${16} /> ${archiveHits === 1 ? '1 weiterer Treffer im Archiv' : archiveHits + ' weitere Treffer im Archiv'}
+      </a>
+    </p>`}
 
     ${mobile
       ? html`<div class="stage-tabs" role="tablist" aria-label="Spalten">
@@ -540,7 +641,7 @@ export function Board({ projectId }) {
             <button type="button" class="btn" onClick=${() => setAddingAt(beforeDone)}><${Icon} name="plus" size=${16} /> Spalte</button>
           </div>`}
         </div>`}
-    ${archive && !filtered.length && html`<${Empty}>Im Archiv dieses Projekts liegt nichts.<//>`}
+    ${archiveOpen && html`<${ArchiveWindow} project=${current} initialQuery=${archiveQuery} />`}
   </div>`
 }
 

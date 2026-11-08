@@ -258,6 +258,12 @@ export function buildSeed() {
     ['Teamtermin für Dezember planen', 'Allgemein', 'todo', M, null, 12, null, null, 20, 'team'],
     ['Bildmaterial für die Website sammeln', 'Allgemein', 'todo', A, null, null, null, null, 11],
     ['Notizen aus dem Partnerforum verteilen', 'Allgemein', 'todo', null, null, 15, null, null, 6],
+    // Alt und erledigt: Die Demo legt sie beim Laden ins Archiv (wie 24_archiv.sql nach 30 Tagen)
+    ['Muster für den Partnervertrag abstimmen', 'Partnervertrieb', 'done', A, null, null, null, null, 45],
+    ['Partnerpräsentation überarbeiten', 'Partnervertrieb', 'done', M, null, null, null, null, 78],
+    ['Datenschutzhinweise für den Pilot prüfen', 'Pilotkunden', 'done', J, null, null, null, 'nordlicht', 62],
+    ['Messeauftritt im Frühjahr auswerten', 'Events', 'done', M, null, null, null, null, 96],
+    ['Visitenkarten nachbestellen', 'Allgemein', 'done', A, null, null, null, null, 130],
   ]
   // Labels an Aufgaben (C7), „Messe“ gibt es nur hier
   const CARD_LABELS = {

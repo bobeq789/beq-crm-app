@@ -57,7 +57,7 @@ function Page({ route }) {
     case undefined:
       return html`<${Overview} />`
     case 'board':
-      return html`<${Board} projectId=${id} />`
+      return html`<${Board} projectId=${id} archiveOpen=${sub === 'archiv'} archiveQuery=${route.params.get('q') || ''} />`
     case 'sales':
       return html`<${SalesPage} />`
     case 'kalender':
