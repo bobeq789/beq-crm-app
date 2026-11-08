@@ -1065,3 +1065,35 @@ button.att-btn:disabled { cursor: progress; }
 .nav-more { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .nav-more a { display: flex; align-items: center; gap: 14px; padding: 12px; border-radius: var(--radius-sm); color: var(--text); font-weight: 500; font-size: 17px; }
 .nav-more a:hover { background: var(--hover); text-decoration: none; }
+
+/* Aktivitäten (Nachtrag vom 08.11.2026): Bereich in der Aufgabe, Kachel bei Kontakt und Firma.
+   Formular als Fläche, im Fenster der Aufgabe in Kartenfarbe, auf Kacheln in Weiß bzw. Navy. */
+.act-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 24px 0 8px; }
+.act-head .section-title { margin: 0; }
+.act-list { list-style: none; margin: 0; padding: 0; }
+.act-item { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--border); }
+.act-item:first-child { border-top: 0; }
+.act-body { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.act-main { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0; border: 0; background: none; color: var(--text); font: inherit; text-align: left; }
+button.act-main:hover .act-title { color: var(--accent-text); }
+.act-title { overflow-wrap: anywhere; }
+.act-context { font-size: 13px; color: var(--accent-text); padding: 0; min-height: 0; text-align: left; }
+.act-done .act-title, .act-done .act-main { color: var(--muted); }
+.act-done .check { pointer-events: none; }
+.act-form { display: flex; flex-direction: column; gap: 10px; padding: 12px; margin-bottom: 10px; border-radius: 10px; background: var(--surface); }
+.tile .act-form { background: var(--raised); }
+.act-form .chips { gap: 6px; }
+.act-when { display: flex; gap: 8px; flex-wrap: wrap; }
+.act-when input[type='date'] { flex: 1 1 170px; }
+.act-when input[type='time'] { flex: 0 1 130px; }
+.act-text { width: 100%; }
+.act-form-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.act-spacer { flex: 1; }
+.act-next { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; margin-bottom: 8px; border-radius: 10px; background: var(--chip-active-bg); font-weight: 500; }
+.act-next span { flex: 1 1 200px; }
+.act-followup { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.act-followup .muted { margin-right: 4px; }
+.act-done-wrap { margin-top: 4px; }
+.act-done-wrap .history-toggle { font-size: 14px; font-weight: 600; }
+.badge.act-badge .icon { flex: none; }
+.task-title.act-loose { display: inline-flex; align-items: center; gap: 6px; }

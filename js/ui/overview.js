@@ -1,7 +1,9 @@
-// Übersicht (Startseite): Schnellerfassung, Zu erledigen, Team, Termine, Warte auf Rückmeldung, Letzte Meetings
+// Übersicht (Startseite): Schnellerfassung, Zu erledigen, Team, Termine, Wiedervorlagen, Letzte Meetings.
+// Jede Aufgabe steht nur einmal: To-dos und „In Arbeit“ in „Zu erledigen“, alle übrigen Arten
+// außer „Erledigt“ in „Wiedervorlagen“ (Nachträge Aktivitäten und Terminlink vom 08.11.2026).
 import { html, useState, useRef } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
-import { todayStr, endOfWeekStr, fmtDateLong, fmtDateTime, fmtTimeRange, firstName, sinceLabel, local, ymd, norm } from '../lib/util.js'
+import { todayStr, endOfWeekStr, addDays, fmtDateLong, fmtDateTime, fmtTimeRange, firstName, sinceLabel, local, ymd, norm } from '../lib/util.js'
 import {
   state,
   myEmail,
@@ -16,21 +18,37 @@ import {
   isMentioned,
   flagOf,
   lastHandover,
+  nextActivity,
+  allActivities,
+  isMyActivity,
+  activityKind,
+  activityText,
+  activitySort,
+  completeActivity,
+  getPerson,
+  getOrg,
 } from '../store.js'
-import { openEvent } from '../router.js'
+import { openEvent, navigate } from '../router.js'
 import { eventsTodayTomorrow } from './calendar.js'
-import { PageHead, Tile, Empty, TaskRow, Segmented, PriorityPicker, ProjectSelect, AssigneeSelect, Dot } from './common.js'
+import { PageHead, Tile, Empty, TaskRow, Segmented, PriorityPicker, ProjectSelect, AssigneeSelect, Dot, activityWhen, useIsMobile } from './common.js'
 
 const PRIO_ORDER = { hoch: 0, mittel: 1, niedrig: 2 }
 
-// Sortierung: Fälligkeit, dann Dringlichkeit, dann zuletzt geändert
+// Früheres Datum aus Frist und nächster offener Aktivität
+function effectiveDate(card) {
+  const next = nextActivity(card.id)
+  const dates = [card.due_date, next && next.faellig].filter(Boolean).sort()
+  return dates[0] || null
+}
+
+// Sortierung: Dringlichkeit, dann das frühere Datum aus Frist und nächster Aktivität, dann zuletzt geändert
 function taskSort(a, b) {
-  const da = a.due_date || '9999-99-99'
-  const dbb = b.due_date || '9999-99-99'
-  if (da !== dbb) return da < dbb ? -1 : 1
   const pa = PRIO_ORDER[a.priority] ?? 3
   const pb = PRIO_ORDER[b.priority] ?? 3
   if (pa !== pb) return pa - pb
+  const da = effectiveDate(a) || '9999-99-99'
+  const dbb = effectiveDate(b) || '9999-99-99'
+  if (da !== dbb) return da < dbb ? -1 : 1
   return String(b.updated_at).localeCompare(String(a.updated_at))
 }
 
@@ -98,11 +116,13 @@ function TodoTile({ cards }) {
   const today = todayStr()
   const weekEnd = endOfWeekStr()
   const groups = { today: [], urgent: [], week: [], rest: [] }
-  // Jede Aufgabe nur in der ersten passenden Gruppe
+  // Jede Aufgabe nur in der ersten passenden Gruppe. Was heute dran ist (Frist oder
+  // Aktivität), steht immer oben und nie hinter „Alle anzeigen“.
   cards.forEach((c) => {
-    if (c.due_date && c.due_date <= today) groups.today.push(c)
+    const date = effectiveDate(c)
+    if (date && date <= today) groups.today.push(c)
     else if (c.priority === 'hoch') groups.urgent.push(c)
-    else if (c.due_date && c.due_date <= weekEnd) groups.week.push(c)
+    else if (date && date <= weekEnd) groups.week.push(c)
     else groups.rest.push(c)
   })
   Object.values(groups).forEach((g) => g.sort(taskSort))
@@ -133,12 +153,68 @@ function TodoTile({ cards }) {
   <//>`
 }
 
-function WaitingTile({ cards }) {
-  const list = [...cards].sort((a, b) => String(a.stage_changed_at).localeCompare(String(b.stage_changed_at)))
-  return html`<${Tile} title="Warte auf Rückmeldung" count=${list.length}>
-    ${list.length
-      ? html`<ul class="task-list">${list.map((c) => html`<${TaskRow} card=${c} key=${c.id} showSince=${true} sinceText=${sinceLabel(c.stage_changed_at)} />`)}</ul>`
-      : html`<${Empty}>Gerade wartest du auf nichts.<//>`}
+// Wiedervorlagen (C8): Fälliges und die nächsten 7 Tage nach dem Datum der nächsten Aktivität
+// (ein altes Datum an der Aufgabe zählt als Rückfall), dazu Aktivitäten ohne Aufgabe.
+// Danach „Wartet auf Antwort“: wartende Aufgaben ohne etwas in den nächsten 7 Tagen.
+export function followUpItems(cards, scope) {
+  const today = todayStr()
+  const in7 = addDays(today, 7)
+  const dated = []
+  const waiting = []
+  cards.forEach((c) => {
+    const act = nextActivity(c.id)
+    const date = act ? act.faellig : c.due_date
+    if (date && date <= in7) dated.push({ key: c.id, date, card: c, act })
+    else if (cardKind(c) === 'waiting') waiting.push(c)
+  })
+  allActivities()
+    .filter((a) => !a.card_id && !a.erledigt_at && a.faellig <= in7 && (scope === 'all' || isMyActivity(a)))
+    .forEach((a) => dated.push({ key: a.id, date: a.faellig, act: a }))
+  dated.sort((x, y) => x.date.localeCompare(y.date) || (x.act && y.act ? activitySort(x.act, y.act) : 0))
+  waiting.sort((a, b) => String(a.stage_changed_at).localeCompare(String(b.stage_changed_at)))
+  return { due: dated.filter((x) => x.date <= today), soon: dated.filter((x) => x.date > today), waiting }
+}
+
+// Aktivität ohne Aufgabe: Symbol, Text, Kontakt und Firma. Ein Klick öffnet den Kontakt.
+function LooseActivityRow({ act }) {
+  const person = getPerson(act.person_id)
+  const org = getOrg(act.org_id) || (person && getOrg(person.org_id))
+  const kind = activityKind(act.art)
+  const when = activityWhen(act)
+  const open = () => (person ? navigate('/kontakte/' + person.id) : org && navigate('/firmen/' + org.id))
+  return html`<li class="task-row">
+    <button type="button" class="check" title="Abhaken" aria-label=${'Abhaken: ' + activityText(act)} onClick=${() => completeActivity(act)}>
+      <${Icon} name="check" size=${16} />
+    </button>
+    <div class="task-main">
+      <button type="button" class="task-title act-loose" onClick=${open}><${Icon} name=${kind.icon} size=${16} /><span>${activityText(act)}</span></button>
+      <div class="task-meta">
+        ${[person && person.name, org && org.name].filter(Boolean).map((t) => html`<span class="meta-item muted">${t}</span>`)}
+        <span class=${'badge due-' + when.tone}>${when.text}</span>
+      </div>
+    </div>
+  </li>`
+}
+
+function FollowUpTile({ groups }) {
+  const { due, soon, waiting } = groups
+  const row = (x) =>
+    x.card
+      ? html`<${TaskRow} card=${x.card} key=${x.key} checkActivity=${x.act} />`
+      : html`<${LooseActivityRow} act=${x.act} key=${x.key} />`
+  const section = (title, list, render) =>
+    list.length
+      ? html`<div class="task-group">
+          <h3 class="group-title">${title} <span class="count">${list.length}</span></h3>
+          <ul class="task-list">${list.map(render)}</ul>
+        </div>`
+      : null
+  const empty = !due.length && !soon.length && !waiting.length
+  return html`<${Tile} title="Wiedervorlagen" count=${due.length} cls="tile-followup">
+    ${empty && html`<${Empty}>Gerade steht nichts zum Nachhaken an.<//>`}
+    ${section('Fällig', due, row)}
+    ${section('Nächste 7 Tage', soon, row)}
+    ${section('Wartet auf Antwort', waiting, (c) => html`<${TaskRow} card=${c} key=${c.id} showSince=${true} sinceText=${sinceLabel(c.stage_changed_at)} />`)}
   <//>`
 }
 
@@ -246,7 +322,18 @@ export function Overview() {
   }
   const visible = state.db.cards.filter((c) => !c.archived && (scope === 'all' || isMine(c)))
   const todo = visible.filter((c) => ['todo', 'doing'].includes(cardKind(c)))
-  const waiting = visible.filter((c) => cardKind(c) === 'waiting')
+  // Wiedervorlagen: alle übrigen Arten außer „Erledigt“. Bei „Meine“ zählt auch, wenn die
+  // nächste Aktivität mir gehört.
+  const followCards = state.db.cards.filter((c) => {
+    if (c.archived || ['todo', 'doing', 'done'].includes(cardKind(c))) return false
+    if (scope === 'all' || isMine(c)) return true
+    const next = nextActivity(c.id)
+    return !!next && isMyActivity(next)
+  })
+  const follow = followUpItems(followCards, scope)
+  const isMobile = useIsMobile()
+  // Am Handy rückt die Kachel nach oben, sobald dort etwas fällig ist (C8 Punkt 5)
+  const followFirst = isMobile && follow.due.length > 0
   const name = state.me ? firstName(state.me.name) : ''
 
   return html`<div class="page">
@@ -265,11 +352,14 @@ export function Overview() {
     />
     <${QuickAdd} />
     <div class="overview-grid">
-      <div class="col-main"><${TodoTile} cards=${todo} /></div>
+      <div class="col-main">
+        ${followFirst && html`<${FollowUpTile} groups=${follow} />`}
+        <${TodoTile} cards=${todo} />
+      </div>
       <div class="col-side">
         <${TeamTile} />
         <${EventsTile} scope=${scope} />
-        <${WaitingTile} cards=${waiting} />
+        ${!followFirst && html`<${FollowUpTile} groups=${follow} />`}
         <${MeetingsTile} />
       </div>
     </div>

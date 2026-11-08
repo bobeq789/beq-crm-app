@@ -24,12 +24,14 @@ import {
   state,
   myEmail,
   assignCard,
+  activitiesOfCard,
 } from '../store.js'
 import { closeCard } from '../router.js'
 import { Field, PriorityPicker, ProjectSelect, EntityPicker, Notes, Dot, LinkText, brandSafe, LabelPicker, Labels } from './common.js'
 import { History } from './history.js'
 import { CardFiles } from './files.js'
 import { CardDeal } from './deal.js'
+import { ActivitySection } from './activities.js'
 
 // Teilen mit Gästen: antippen teilt, noch einmal antippen nimmt es zurück
 function ShareRow({ card }) {
@@ -153,6 +155,7 @@ function GuestCard({ card }) {
       <${DueField} card=${card} />
       <${Field} label="Dringlichkeit"><${PriorityPicker} value=${card.priority} onChange=${(v) => update('cards', card.id, { priority: v })} /><//>
     </div>
+    <${ActivitySection} list=${activitiesOfCard(card.id)} here="card" target=${{ card_id: card.id }} card=${card} />
     <${CardFiles} card=${card} />
     <${History} card=${card} />
     <h3 class="section-title">Notizen</h3>
@@ -287,6 +290,7 @@ export function CardPanel({ id }) {
       <${Icon} name="meetings" size=${16} /> Aus dem Meeting <a href=${'#/meetings/' + meeting.id}>„${meeting.title}“</a> vom ${fmtDate(meeting.held_at)}
     </p>`}
 
+    <${ActivitySection} list=${activitiesOfCard(card.id)} here="card" target=${{ card_id: card.id }} card=${card} />
     <${CardDeal} card=${card} />
     <${CardFiles} card=${card} />
     <${History} card=${card} />

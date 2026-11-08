@@ -291,6 +291,41 @@ export function buildSeed() {
     })
   })
 
+  // Aktivitäten (Nachtrag vom 08.11.2026): alle Arten, mit und ohne Aufgabe, eine erledigt.
+  // [Art, Aufgabe oder null, Kontakt, Firma, in Tagen, Uhrzeit, Text, angelegt von, erledigt vor Tagen]
+  const acts = [
+    ['wiedervorlage', 'Rückmeldung zum Preisblatt von Wohnbau Rheinblick', null, null, -1, null, 'Bei Laura nachfassen', A],
+    ['anruf', 'Rückmeldung zum Preisblatt von Wohnbau Rheinblick', null, null, -4, null, 'Kurz nach dem Vorstandstermin fragen', A, 3],
+    ['wiedervorlage', 'Freigabe der Hausleitung abwarten', null, null, 3, null, null, J],
+    ['anruf', 'Installationstermin Filiale Hafenstraße bestätigen', null, null, 0, '10:30', 'Filialleitung anrufen', A],
+    ['mail', 'Pressemitteilung zum Pilotstart abstimmen', null, null, 9, null, 'Entwurf an Daniel schicken', M],
+    ['termin', 'Schulung für Installationspartner planen', null, null, 10, '14:00', 'Termin mit Brandt abstimmen', J],
+    ['aufgabe', 'Angebot Pilotinstallation an Nordlicht schicken', null, null, 1, null, 'Preisblatt anhängen', A],
+    ['anruf', 'Sensorplan für Station 3 abstimmen', null, null, 0, '14:00', 'Markus wegen der Steckdosen', A],
+    ['mail', null, 'petra', null, 2, null, 'Unterlagen zum Pilot schicken', A],
+    ['anruf', null, null, 'lichtblick', -2, null, 'Rückruf Eventagentur', A],
+    ['termin', null, 'laura', null, 6, '09:30', 'Vor-Ort-Termin vorschlagen', J],
+  ]
+  acts.forEach(([art, cardTitle, personKey, orgKey, inDays, time, titel, by, doneAgo]) => {
+    db.aktivitaeten.push({
+      id: uid(),
+      owner: by,
+      card_id: cardTitle ? K[cardTitle] : null,
+      person_id: personKey ? C[personKey] : null,
+      org_id: orgKey ? O[orgKey] : null,
+      art,
+      titel,
+      faellig: addDays(today, inDays),
+      uhrzeit: time,
+      zustaendig: null,
+      erledigt_at: doneAgo ? daysAgo(doneAgo, 11) : null,
+      erledigt_von: doneAgo ? by : null,
+      created_by: by,
+      created_at: daysAgo(Math.max(1, 3 - inDays), 9),
+      updated_at: daysAgo(Math.max(1, 3 - inDays), 9),
+    })
+  })
+
   // Notizen
   const notes = [
     ['Petra hat die Filialen Hafenstraße und Altona für den Pilot vorgeschlagen. Angebot bitte mit beiden Standorten.', { card_id: K['Angebot Pilotinstallation an Nordlicht schicken'] }, A, 3],

@@ -18,7 +18,9 @@ import {
   promptDialog,
   toast,
   isGuest,
+  activitiesForOrg,
 } from '../store.js'
+import { ActivitySection } from './activities.js'
 import { navigate, openCard } from '../router.js'
 import { EmailList, emailCount } from './emails.js'
 import { PageHead, Tile, Empty, Labels, TaskRow, Notes, Field, LabelPicker, Avatar } from './common.js'
@@ -131,6 +133,7 @@ export function OrgDetail({ id }) {
         <${Tile} title="Offene Aufgaben" count=${cards.length} actions=${html`<button type="button" class="link-btn" onClick=${newTask}><${Icon} name="plus" size=${16} /> Aufgabe</button>`}>
           ${cards.length ? html`<ul class="task-list">${cards.map((c) => html`<${TaskRow} card=${c} key=${c.id} />`)}</ul>` : html`<${Empty}>Keine offenen Aufgaben.<//>`}
         <//>
+        ${!isGuest() && html`<${ActivitySection} list=${activitiesForOrg(o.id)} here="org" target=${{ org_id: o.id }} />`}
         <${Tile} title="Notizen"><${Notes} field="org_id" id=${o.id} /><//>
         <${Tile} title="E-Mails" count=${emailCount(people.map((p) => p.id))}><${EmailList} personIds=${people.map((p) => p.id)} /><//>
       </div>

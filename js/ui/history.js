@@ -6,6 +6,30 @@ import { fetchCardEvents, memberName, myEmail, state } from '../store.js'
 
 const PRIO = { hoch: 'Hoch', mittel: 'Mittel', niedrig: 'Niedrig' }
 
+// Aktivitäten im Verlauf (19_aktivitaeten.sql): detail ist „art|datum|text“ bzw. „art|text“.
+// Artikel je Art für ganze Sätze.
+const ACT = {
+  wiedervorlage: ['eine Wiedervorlage', 'die Wiedervorlage'],
+  anruf: ['einen Anruf', 'den Anruf'],
+  mail: ['eine Mail', 'die Mail'],
+  termin: ['einen Termin', 'den Termin'],
+  aufgabe: ['eine Aufgabe', 'die Aufgabe'],
+}
+function actParts(kind, detail) {
+  const parts = String(detail || '').split('|')
+  const art = ACT[parts[0]] ? parts[0] : 'wiedervorlage'
+  const withDate = kind !== 'aktivitaet_erledigt'
+  const date = withDate ? parts[1] : null
+  const text = (withDate ? parts.slice(2) : parts.slice(1)).join('|')
+  return { a: ACT[art][0], the: ACT[art][1], date: date ? fmtDate(date) : '', text: text ? ` „${text}“` : '' }
+}
+function activitySentence(kind, detail, who, hat) {
+  const x = actParts(kind, detail)
+  if (kind === 'aktivitaet') return `${who} ${hat} ${x.a}${x.text} für ${x.date} geplant`
+  if (kind === 'aktivitaet_erledigt') return `${who} ${hat} ${x.the}${x.text} erledigt`
+  return `${who} ${hat} ${x.the}${x.text} auf ${x.date} verschoben`
+}
+
 // Ein Eintrag als Satz. Eigene Einträge mit „Du“.
 export function eventSentence(e, me = myEmail()) {
   const self = e.actor && norm(e.actor) === norm(me)
@@ -15,6 +39,10 @@ export function eventSentence(e, me = myEmail()) {
   const person = (address) => (norm(address) === norm(me) ? 'dich' : firstName(memberName(address)) || address)
   // Ohne Person (Skript, Import) ohne Subjekt formulieren
   if (!e.actor) {
+    if (e.kind === 'aktivitaet') {
+      const x = actParts(e.kind, d)
+      return `${who} ${x.a}${x.text} für ${x.date} geplant`
+    }
     const passive = {
       angelegt: 'angelegt',
       spalte: `nach „${d}“ verschoben`,
@@ -48,6 +76,10 @@ export function eventSentence(e, me = myEmail()) {
       return `${who} ${hat} ${person(d)} erwähnt`
     case 'datei':
       return `${who} ${hat} „${d}“ hochgeladen`
+    case 'aktivitaet':
+    case 'aktivitaet_erledigt':
+    case 'aktivitaet_verschoben':
+      return activitySentence(e.kind, d, who, hat)
     default:
       return `${who} ${hat} etwas geändert`
   }

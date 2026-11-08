@@ -2,7 +2,7 @@
 import { html, useState, useEffect, useLayoutEffect, useRef } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { SETTINGS } from '../settings.js'
-import { splitLinks, dueInfo, fmtRelative, matches, initials, norm } from '../lib/util.js'
+import { splitLinks, dueInfo, fmtRelative, matches, initials, norm, todayStr, dayDiff, parseYmd, fmtDate } from '../lib/util.js'
 import {
   state,
   memberName,
@@ -25,6 +25,10 @@ import {
   assignedToOther,
   saveNote,
   allLabels,
+  openActivitiesOfCard,
+  activityKind,
+  activityText,
+  completeActivity,
 } from '../store.js'
 import { mentionPeople, parseMentions, NoteText } from './mentions.js'
 import { openCard } from '../router.js'
@@ -75,6 +79,31 @@ export function DueBadge({ due, done }) {
   const info = dueInfo(due)
   if (!info) return null
   return html`<span class=${'badge due-' + (done ? 'later' : info.tone)}><${Icon} name="clock" size=${12} />${info.text}</span>`
+}
+
+// Wann ist eine Aktivität dran? Text und Ton wie bei der Fälligkeit (rot überfällig, Grün hell heute)
+const WD_SHORT = ['So.', 'Mo.', 'Di.', 'Mi.', 'Do.', 'Fr.', 'Sa.']
+export function activityWhen(a) {
+  const diff = dayDiff(todayStr(), a.faellig)
+  const time = a.uhrzeit ? ' ' + String(a.uhrzeit).slice(0, 5) : ''
+  if (diff < 0) return { text: diff === -1 ? 'seit gestern' : `seit ${-diff} Tagen`, tone: 'overdue' }
+  if (diff === 0) return { text: 'heute' + time, tone: 'today' }
+  if (diff === 1) return { text: 'morgen' + time, tone: 'soon' }
+  if (diff < 7) return { text: WD_SHORT[parseYmd(a.faellig).getDay()] + time, tone: 'soon' }
+  return { text: fmtDate(a.faellig) + time, tone: 'later' }
+}
+
+// Marke der nächsten offenen Aktivität einer Aufgabe: Symbol der Art und wann, rot wenn
+// überfällig. Im Tooltip Art, Text und die Zahl weiterer.
+export function ActivityBadge({ cardId }) {
+  const open = openActivitiesOfCard(cardId)
+  if (!open.length) return null
+  const a = open[0]
+  const kind = activityKind(a.art)
+  const when = activityWhen(a)
+  const more = open.length - 1
+  const tip = `Nächste Aktivität: ${kind.label}${a.titel ? ', ' + a.titel : ''}${more ? `, dazu ${more} weitere` : ''}`
+  return html`<span class=${'badge act-badge due-' + when.tone} title=${tip} aria-label=${tip}><${Icon} name=${kind.icon} size=${12} />${when.text}</span>`
 }
 
 // Marke „Neu“: Kollegen haben seit meinem letzten Öffnen etwas geändert
@@ -155,21 +184,32 @@ export function Field({ label, children, hint, htmlFor }) {
 }
 
 // Eine Zeile „Zu erledigen“: Haken, Titel, darunter Projekt, Kontakt, Zuständig und Marken
-export function TaskRow({ card, showSince, sinceText }) {
+// checkActivity: in „Wiedervorlagen“ hakt der Kreis diese Aktivität ab, die Aufgabe bleibt.
+export function TaskRow({ card, showSince, sinceText, checkActivity }) {
   const project = getProject(card.project_id)
   const person = getPerson(card.person_id)
   const org = getOrg(card.org_id)
   const done = cardKind(card) === 'done'
   return html`<li class="task-row">
-    <button
-      type="button"
-      class=${'check' + (done ? ' checked' : '')}
-      title=${done ? 'Erledigt' : 'Abhaken'}
-      aria-label=${'„' + card.title + '“ abhaken'}
-      onClick=${() => !done && completeCard(card)}
-    >
-      <${Icon} name="check" size=${16} />
-    </button>
+    ${checkActivity
+      ? html`<button
+          type="button"
+          class="check"
+          title="Aktivität abhaken, die Aufgabe bleibt"
+          aria-label=${'Aktivität „' + activityText(checkActivity) + '“ abhaken, die Aufgabe bleibt'}
+          onClick=${() => completeActivity(checkActivity)}
+        >
+          <${Icon} name="check" size=${16} />
+        </button>`
+      : html`<button
+          type="button"
+          class=${'check' + (done ? ' checked' : '')}
+          title=${done ? 'Erledigt' : 'Abhaken'}
+          aria-label=${'„' + card.title + '“ abhaken'}
+          onClick=${() => !done && completeCard(card)}
+        >
+          <${Icon} name="check" size=${16} />
+        </button>`}
     <div class="task-main">
       <button type="button" class="task-title" onClick=${() => openCard(card.id)}>${card.title}</button>
       <div class="task-meta">
@@ -179,6 +219,7 @@ export function TaskRow({ card, showSince, sinceText }) {
         ${assignedToOther(card) && html`<${Avatar} email=${card.assignee} />`}
         <${PrioBadge} priority=${card.priority} />
         ${!done && html`<${DueBadge} due=${card.due_date} />`}
+        ${!done && html`<${ActivityBadge} cardId=${card.id} />`}
         ${showSince && html`<span class="badge due-later">${sinceText}</span>`}
       </div>
     </div>

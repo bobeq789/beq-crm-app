@@ -19,9 +19,11 @@ import {
   eventsOfPerson,
   openDialog,
   isGuest,
+  activitiesForPerson,
 } from '../store.js'
 import { navigate, openCard, openEvent } from '../router.js'
 import { EmailList, emailCount } from './emails.js'
+import { ActivitySection } from './activities.js'
 import { PageHead, Tile, Empty, Labels, TaskRow, Notes, Field, ListInput, LabelPicker, EntityPicker, Segmented, Avatar } from './common.js'
 
 // Beim Sortieren Titel wie „Dr.“ überspringen
@@ -166,6 +168,7 @@ export function ContactDetail({ id }) {
         <${Tile} title="Offene Aufgaben" count=${cards.length} actions=${html`<button type="button" class="link-btn" onClick=${newTask}><${Icon} name="plus" size=${16} /> Aufgabe</button>`}>
           ${cards.length ? html`<ul class="task-list">${cards.map((c) => html`<${TaskRow} card=${c} key=${c.id} />`)}</ul>` : html`<${Empty}>Keine offenen Aufgaben.<//>`}
         <//>
+        ${!isGuest() && html`<${ActivitySection} list=${activitiesForPerson(p.id)} here="person" target=${{ person_id: p.id }} />`}
         <${Tile} title="Notizen"><${Notes} field="person_id" id=${p.id} /><//>
         <${Tile} title="E-Mails" count=${emailCount([p.id])}><${EmailList} personIds=${[p.id]} /><//>
       </div>

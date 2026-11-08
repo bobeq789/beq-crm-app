@@ -16,6 +16,9 @@ import {
   recalcDeal,
   canSeeSales,
   afterInsert,
+  afterUpdate,
+  activityEventsFor,
+  waitingFollowUpFor,
   cascadeDelete,
   guestView,
   dbError,
@@ -51,6 +54,15 @@ export function createDemoApi({ asGuest = false } = {}) {
     return !!card && db.project_shares.some((s) => s.project_id === card.project_id && s.email === me)
   }
   const notAllowed = () => dbError('42501', 'permission denied')
+  const isAdmin = () => db.team_members.some((t) => t.email === me && t.active && t.role === 'admin')
+  // Wartespalte: Wiedervorlage wie tg_cards_wiedervorlage() in 19_aktivitaeten.sql
+  const waitingFollowUp = (oldCard, card) => {
+    const act = waitingFollowUpFor(db, oldCard, card, me)
+    if (!act) return
+    db.aktivitaeten = [...db.aktivitaeten, act]
+    afterInsert(db, 'aktivitaeten', act)
+    db.card_events.push(...activityEventsFor(act, me))
+  }
   // Sales wie die Regeln in 08_sales.sql: Katalog ändern nur Admins, Deals nur, wer die Zahlen sehen darf
   const SALES = new Set(['products', 'deals', 'deal_items'])
   // Postfächer wie 10_postfaecher.sql: anlegen nur über Google, Schalter nur Besitzer oder Admin
@@ -114,7 +126,10 @@ export function createDemoApi({ asGuest = false } = {}) {
       const r = prepareInsert(table, row, me)
       if (asGuest) {
         if (table === 'cards') checkGuestCardInsert(db, r, me)
-        else {
+        else if (table === 'aktivitaeten') {
+          // Gäste nur an Aufgaben, die sie sehen, nie ohne Aufgabe (19_aktivitaeten.sql)
+          if (!r.card_id || r.person_id || r.org_id || !sharedWithMe(r.card_id)) throw notAllowed()
+        } else {
           const ok = table === 'notes' && r.card_id && !r.internal && !r.person_id && !r.org_id && !r.meeting_id && sharedWithMe(r.card_id)
           if (!ok) throw notAllowed()
         }
@@ -128,6 +143,8 @@ export function createDemoApi({ asGuest = false } = {}) {
       afterInsert(db, table, r)
       // Verlauf wie die Trigger in der Datenbank
       if (table === 'cards') db.card_events.push(...cardEventsFor(db, 'insert', null, r, me))
+      if (table === 'aktivitaeten') db.card_events.push(...activityEventsFor(r, me))
+      if (table === 'cards') waitingFollowUp(null, r)
       // Teammitglied weist einem Gast zu: automatisch teilen
       const share = table === 'cards' && !asGuest && autoShareFor(db, null, r)
       if (share) db.card_shares.push(share)
@@ -148,6 +165,9 @@ export function createDemoApi({ asGuest = false } = {}) {
       }
       if (asGuest) {
         if (table === 'cards' && sharedWithMe(id)) checkGuestCardUpdate(db, old, patch, me)
+        else if (table === 'aktivitaeten' && old.card_id && sharedWithMe(old.card_id)) {
+          if (['card_id', 'person_id', 'org_id'].some((k) => k in patch && patch[k] !== old[k])) throw notAllowed()
+        }
         else if (table === 'notes' && old.author === me && !old.internal && sharedWithMe(old.card_id)) patch = { content: patch.content ?? old.content, mentions: patch.mentions ?? old.mentions }
         else throw notAllowed()
       }
@@ -162,6 +182,11 @@ export function createDemoApi({ asGuest = false } = {}) {
         if (!asGuest) db.card_shares.push(...mentionSharesFor(db, r, old).map((s) => ({ ...s, created_by: me })))
       }
       if (table === 'cards') db.card_events.push(...cardEventsFor(db, 'update', old, r, me))
+      if (table === 'aktivitaeten') {
+        afterUpdate(db, table, r)
+        db.card_events.push(...activityEventsFor(r, me, old))
+      }
+      if (table === 'cards') waitingFollowUp(old, r)
       const share = table === 'cards' && !asGuest && autoShareFor(db, old, r)
       if (share) db.card_shares.push(share)
       save()
@@ -183,11 +208,19 @@ export function createDemoApi({ asGuest = false } = {}) {
       if (asGuest || table === 'mailboxes') throw notAllowed()
       checkDelete(db, table, id)
       const old = find(table, id)
+      // Aktivitäten löschen nur die eigenen oder Admins (19_aktivitaeten.sql)
+      if (table === 'aktivitaeten' && old && old.owner !== me && !isAdmin()) throw notAllowed()
       if (old) checkSales(table, old)
       db[table] = db[table].filter((x) => x.id !== id)
       cascadeDelete(db, table, id)
       if (table === 'deal_items' && old) recalcDeal(db, old.deal_id)
       save()
+    },
+
+    // Aktivitäten einer Aufgabe (nach dem Verschieben, die Datenbank kann eine anlegen)
+    async fetchActivities(cardId) {
+      if (asGuest && !sharedWithMe(cardId)) return []
+      return clone(db.aktivitaeten.filter((a) => a.card_id === cardId))
     },
 
     // Verlauf einer Karte, neueste oben (Gäste nur bei geteilten Karten)

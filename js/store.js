@@ -3,8 +3,8 @@
 // Geht das Speichern schief, kommt eine Meldung und die Daten werden neu geladen.
 import { useState, useEffect } from './lib/preact.js'
 import { SETTINGS } from './settings.js'
-import { uid, local, todayStr, firstName, initials, norm, safeFileName } from './lib/util.js'
-import { prepareInsert, prepareUpdate, afterInsert, cascadeDelete, emptyDb, recalcDeal } from './data/rules.js'
+import { uid, local, todayStr, addDays, fmtDate, firstName, initials, norm, safeFileName } from './lib/util.js'
+import { prepareInsert, prepareUpdate, afterInsert, afterUpdate, cascadeDelete, emptyDb, recalcDeal } from './data/rules.js'
 import { createDemoApi } from './data/demo.js'
 import { createSupabaseApi } from './data/supabase.js'
 
@@ -686,6 +686,8 @@ export async function insert(table, row) {
     const saved = await api.insert(table, r)
     replaceRow(table, saved)
     emit()
+    // Neue Aufgabe direkt in einer Wartespalte: die Datenbank legt eine Wiedervorlage an
+    if (table === 'cards' && cardKind(saved) === 'waiting') refreshCardActivities(saved.id)
     return saved
   } catch (err) {
     await failed(err)
@@ -697,12 +699,15 @@ export async function update(table, id, patch) {
   const old = state.db[table].find((x) => x.id === id)
   if (!old) return null
   replaceRow(table, prepareUpdate(table, old, patch))
+  if (table === 'aktivitaeten') afterUpdate(state.db, table, state.db[table].find((x) => x.id === id))
   state.db = { ...state.db }
   emit()
   try {
     const saved = await api.update(table, id, patch)
     replaceRow(table, saved)
     emit()
+    // Nach dem Verschieben die Aktivitäten nachladen, die Datenbank kann eine anlegen
+    if (table === 'cards' && 'stage_id' in patch && patch.stage_id !== old.stage_id) refreshCardActivities(id)
     return saved
   } catch (err) {
     await failed(err)
@@ -908,6 +913,74 @@ export async function completeCard(card) {
   toast(`„${card.title}“ erledigt`, {
     action: { label: 'Rückgängig', run: () => update('cards', card.id, { stage_id: before }) },
   })
+}
+
+// ------------------------------------------------------------
+// Aktivitäten (19_aktivitaeten.sql): geplante Schritte mit Datum an Aufgabe, Kontakt oder Firma.
+// Wiedervorlagen sind Aktivitäten. Die Fälligkeit einer Aufgabe bleibt ihre Frist.
+// ------------------------------------------------------------
+export const ACTIVITY_KINDS = [
+  { value: 'wiedervorlage', label: 'Wiedervorlage', icon: 'bell' },
+  { value: 'anruf', label: 'Anruf', icon: 'phone' },
+  { value: 'mail', label: 'Mail', icon: 'mail' },
+  { value: 'termin', label: 'Termin', icon: 'calendar' },
+  { value: 'aufgabe', label: 'Aufgabe', icon: 'check' },
+]
+export const activityKind = (art) => ACTIVITY_KINDS.find((k) => k.value === art) || ACTIVITY_KINDS[0]
+export const activityText = (a) => a.titel || activityKind(a.art).label
+// Früheste zuerst, ohne Uhrzeit nach denen mit Uhrzeit
+export const activitySort = (a, b) =>
+  a.faellig.localeCompare(b.faellig) || String(a.uhrzeit || '99').localeCompare(String(b.uhrzeit || '99')) || String(a.created_at).localeCompare(String(b.created_at))
+export const allActivities = () => state.db.aktivitaeten || []
+export const activitiesOfCard = (cardId) => allActivities().filter((a) => a.card_id === cardId)
+export const openActivitiesOfCard = (cardId) => activitiesOfCard(cardId).filter((a) => !a.erledigt_at).sort(activitySort)
+export const nextActivity = (cardId) => openActivitiesOfCard(cardId)[0] || null
+// Kontakt: eigene und die seiner Aufgaben. Firma: eigene, die ihrer Aufgaben und ihrer Kontakte.
+export function activitiesForPerson(personId) {
+  const cards = new Set(state.db.cards.filter((c) => c.person_id === personId).map((c) => c.id))
+  return allActivities().filter((a) => a.person_id === personId || (a.card_id && cards.has(a.card_id)))
+}
+export function activitiesForOrg(orgId) {
+  const cards = new Set(state.db.cards.filter((c) => c.org_id === orgId).map((c) => c.id))
+  const people = new Set(state.db.persons.filter((p) => p.org_id === orgId).map((p) => p.id))
+  return allActivities().filter((a) => a.org_id === orgId || (a.card_id && cards.has(a.card_id)) || (a.person_id && people.has(a.person_id)))
+}
+// „Meine“: ich bin zuständig, oder niemand ist es und ich bin bei der Aufgabe zuständig (ohne
+// Zuständige wie bei „Meine“ für Aufgaben: angelegt), ohne Aufgabe: ich habe sie angelegt
+export function isMyActivity(a) {
+  const me = norm(myEmail())
+  if (a.zustaendig) return norm(a.zustaendig) === me
+  const card = a.card_id ? getCard(a.card_id) : null
+  if (card) return card.assignee ? norm(card.assignee) === me : norm(card.created_by || '') === me
+  return norm(a.owner || '') === me
+}
+export const canDeleteActivity = (a) => !isGuest() && (isAdmin() || norm(a.owner || '') === norm(myEmail()))
+export const createActivity = (fields) => insert('aktivitaeten', fields)
+export async function completeActivity(a) {
+  const saved = await update('aktivitaeten', a.id, { erledigt_at: new Date().toISOString(), erledigt_von: myEmail() })
+  if (saved) toast(`${activityKind(a.art).label} erledigt`, { action: { label: 'Rückgängig', run: () => reopenActivity(a) } })
+  return saved
+}
+export const reopenActivity = (a) => update('aktivitaeten', a.id, { erledigt_at: null })
+export async function deleteActivity(a) {
+  const ok = await confirmDialog({ title: 'Aktivität löschen?', text: `„${activityText(a)}“ ist danach weg. Erledigtes besser abhaken.`, confirmLabel: 'Löschen', danger: true })
+  if (!ok) return false
+  return remove('aktivitaeten', a.id)
+}
+// „Wieder vorlegen“: die offene Wiedervorlage der Aufgabe verschieben oder eine anlegen
+export async function followUpIn(card, days) {
+  const date = addDays(todayStr(), days)
+  const open = openActivitiesOfCard(card.id).find((a) => a.art === 'wiedervorlage')
+  const saved = open ? await update('aktivitaeten', open.id, { faellig: date }) : await createActivity({ card_id: card.id, art: 'wiedervorlage', faellig: date })
+  if (saved) toast(`Wiedervorlage am ${fmtDate(date)}`)
+  return saved
+}
+// Aktivitäten einer Aufgabe neu laden (die Datenbank legt in der Wartespalte selbst eine an)
+export async function refreshCardActivities(cardId) {
+  const rows = await api.fetchActivities(cardId)
+  if (!rows) return
+  state.db = { ...state.db, aktivitaeten: [...allActivities().filter((a) => a.card_id !== cardId), ...rows] }
+  emit()
 }
 
 export async function createCard(fields) {

@@ -197,6 +197,14 @@ export async function createSupabaseApi(config) {
       const data = check(await client.from('meetings').select('id').ilike('summary', pattern).limit(300))
       return data.map((r) => r.id)
     },
+    // Aktivitäten einer Aufgabe (nach dem Verschieben, die Datenbank kann eine anlegen)
+    async fetchActivities(cardId) {
+      try {
+        return check(await client.from('aktivitaeten').select('*').eq('card_id', cardId))
+      } catch {
+        return null
+      }
+    },
     // Verlauf einer Karte, neueste oben
     async cardEvents(cardId) {
       return check(await client.from('card_events').select('*').eq('card_id', cardId).order('at', { ascending: false }).limit(200))

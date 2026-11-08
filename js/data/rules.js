@@ -24,13 +24,13 @@ export const EXTRA_TABLES = ['card_events', 'card_seen']
 
 // Beim Start geladen, aber verzichtbar: fehlt die Tabelle (SQL-Datei noch nicht
 // ausgeführt), bleibt die Liste einfach leer
-export const OPTIONAL_TABLES = ['project_shares', 'products', 'deals', 'deal_items', 'mailboxes']
+export const OPTIONAL_TABLES = ['project_shares', 'products', 'deals', 'deal_items', 'mailboxes', 'aktivitaeten']
 
 // Nur im Demo-Modus: Dateien an Aufgaben (in Supabase liegen sie im Storage, nicht in einer Tabelle)
 export const DEMO_TABLES = ['files']
 
-const WITH_UPDATED_AT = new Set(['projects', 'organizations', 'persons', 'meetings', 'cards', 'notes', 'events', 'products', 'deals'])
-const WITH_CREATED_AT = new Set(['team_members', 'projects', 'stages', 'organizations', 'persons', 'meetings', 'cards', 'card_shares', 'project_shares', 'notes', 'emails', 'products', 'deals', 'deal_items'])
+const WITH_UPDATED_AT = new Set(['projects', 'organizations', 'persons', 'meetings', 'cards', 'notes', 'events', 'products', 'deals', 'aktivitaeten'])
+const WITH_CREATED_AT = new Set(['team_members', 'projects', 'stages', 'organizations', 'persons', 'meetings', 'cards', 'card_shares', 'project_shares', 'notes', 'emails', 'products', 'deals', 'deal_items', 'aktivitaeten'])
 
 const DEFAULTS = {
   team_members: { role: 'mitglied', active: true, sales_team: null, team_lead: false },
@@ -72,6 +72,7 @@ const DEFAULTS = {
   event_persons: {},
   emails: { to_emails: [], cc_emails: [], attachments: [] },
   email_persons: {},
+  aktivitaeten: { owner: null, card_id: null, person_id: null, org_id: null, art: 'wiedervorlage', titel: null, uhrzeit: null, zustaendig: null, erledigt_at: null, erledigt_von: null, created_by: null },
 }
 
 // Neuer Datensatz mit allem, was die Datenbank selbst ergänzt
@@ -85,6 +86,13 @@ export function prepareInsert(table, row, me) {
   if (table === 'deals') dealDates(r)
   if (table === 'cards' && !r.stage_changed_at) r.stage_changed_at = now
   if (table === 'notes' && me) r.author = me
+  // Aktivitäten wie tg_aktivitaeten_before() in 19_aktivitaeten.sql
+  if (table === 'aktivitaeten') {
+    if (me) r.owner = r.created_by = me
+    r.titel = String(r.titel || '').trim() || null
+    r.zustaendig = String(r.zustaendig || '').trim().toLowerCase() || null
+    if (r.erledigt_at && me) r.erledigt_von = me
+  }
   // Wer geteilt hat (Standardwert in 05_projekte_teilen.sql)
   if ((table === 'card_shares' || table === 'project_shares') && me && !r.created_by) r.created_by = me
   return r
@@ -98,6 +106,12 @@ export function prepareUpdate(table, old, patch) {
   if ('created_by' in old) r.created_by = old.created_by
   if (table === 'notes') r.author = old.author
   if (table === 'deals') dealDates(r)
+  if (table === 'aktivitaeten') {
+    r.owner = old.owner
+    if ('titel' in patch) r.titel = String(patch.titel || '').trim() || null
+    if ('zustaendig' in patch) r.zustaendig = String(patch.zustaendig || '').trim().toLowerCase() || null
+    if (!r.erledigt_at) r.erledigt_von = null
+  }
   return r
 }
 
@@ -145,6 +159,9 @@ export function checkInsert(db, table, row) {
   }
   if (table === 'notes' && !row.card_id && !row.person_id && !row.org_id && !row.meeting_id) {
     throw dbError('23514', 'notes_has_parent')
+  }
+  if (table === 'aktivitaeten' && !row.card_id && !row.person_id && !row.org_id) {
+    throw dbError('23514', 'Eine Aktivität braucht eine Aufgabe, einen Kontakt oder eine Firma.')
   }
   const pairs = { meeting_persons: ['meeting_id', 'person_id'], event_persons: ['event_id', 'person_id'], email_persons: ['email_id', 'person_id'] }
   if (pairs[table]) {
@@ -216,8 +233,10 @@ export function lastHandovers(db) {
   return [...map.values()]
 }
 
-// Eine neue Notiz schiebt Aufgabe, Kontakt und Firma nach oben
+// Eine neue Notiz schiebt Aufgabe, Kontakt und Firma nach oben. Eine Aktivität an einer
+// Aufgabe gilt wie eine Notiz als Änderung der Aufgabe (tg_aktivitaeten_card()).
 export function afterInsert(db, table, row) {
+  if (table === 'aktivitaeten') return touchCard(db, row.card_id, row.updated_at)
   if (table !== 'notes') return
   const now = row.created_at || nowIso()
   const touch = (t, id) => {
@@ -227,6 +246,14 @@ export function afterInsert(db, table, row) {
   touch('cards', row.card_id)
   touch('persons', row.person_id)
   touch('organizations', row.org_id)
+}
+
+export function afterUpdate(db, table, row) {
+  if (table === 'aktivitaeten') touchCard(db, row.card_id, row.updated_at)
+}
+function touchCard(db, cardId, at) {
+  if (!cardId) return
+  db.cards = db.cards.map((c) => (c.id === cardId ? { ...c, updated_at: at || nowIso() } : c))
 }
 
 // Was beim Löschen mit abhängigen Einträgen passiert (wie in 01_schema.sql)
@@ -248,6 +275,7 @@ export function cascadeDelete(db, table, id) {
     if (db.card_events) drop('card_events', 'card_id')
     if (db.card_seen) drop('card_seen', 'card_id')
     if (db.files) drop('files', 'card_id')
+    if (db.aktivitaeten) drop('aktivitaeten', 'card_id')
     if (db.deals) {
       const gone = new Set(db.deals.filter((d) => d.card_id === id).map((d) => d.id))
       db.deals = db.deals.filter((d) => d.card_id !== id)
@@ -262,11 +290,19 @@ export function cascadeDelete(db, table, id) {
     drop('event_persons', 'person_id')
     drop('email_persons', 'person_id')
     unset('cards', 'person_id')
+    if (db.aktivitaeten) {
+      unset('aktivitaeten', 'person_id')
+      dropOrphanActivities(db)
+    }
   }
   if (table === 'organizations') {
     drop('notes', 'org_id')
     unset('persons', 'org_id')
     unset('cards', 'org_id')
+    if (db.aktivitaeten) {
+      unset('aktivitaeten', 'org_id')
+      dropOrphanActivities(db)
+    }
   }
   if (table === 'meetings') {
     drop('notes', 'meeting_id')
@@ -275,6 +311,11 @@ export function cascadeDelete(db, table, id) {
   }
   if (table === 'events') drop('event_persons', 'event_id')
   if (table === 'emails') drop('email_persons', 'email_id')
+}
+
+// Aktivitäten ohne Aufgabe, Kontakt und Firma verschwinden (tg_aktivitaeten_waisen())
+function dropOrphanActivities(db) {
+  db.aktivitaeten = db.aktivitaeten.filter((a) => a.card_id || a.person_id || a.org_id)
 }
 
 export function emptyDb() {
@@ -311,6 +352,35 @@ export function noteEventsFor(note, actor, old = null) {
   const before = old && !old.internal ? new Set(old.mentions || []) : new Set()
   ;(note.mentions || []).filter((m) => !before.has(m)).forEach((m) => list.push(event(note.card_id, actor, 'erwaehnung', m)))
   return list
+}
+
+// Aktivität an einer Aufgabe (wie tg_aktivitaeten_card() in 19_aktivitaeten.sql)
+export function activityEventsFor(act, actor, old = null) {
+  if (!act.card_id) return []
+  const text = act.titel || ''
+  if (!old) return [event(act.card_id, actor, 'aktivitaet', `${act.art}|${act.faellig}|${text}`)]
+  if (act.erledigt_at && !old.erledigt_at) return [event(act.card_id, actor, 'aktivitaet_erledigt', `${act.art}|${text}`)]
+  if (!act.erledigt_at && act.faellig !== old.faellig) return [event(act.card_id, actor, 'aktivitaet_verschoben', `${act.art}|${act.faellig}|${text}`)]
+  return []
+}
+
+// Wartespalte: Wiedervorlage in 7 Tagen, wenn die Aufgabe keine offene Aktivität und keine
+// Fälligkeit hat (wie tg_cards_wiedervorlage() in 19_aktivitaeten.sql). Gibt die neue
+// Aktivität zurück oder null.
+export function waitingFollowUpFor(db, oldCard, card, me) {
+  if (oldCard && oldCard.stage_id === card.stage_id) return null
+  if (card.archived || card.due_date) return null
+  const stage = db.stages.find((s) => s.id === card.stage_id)
+  if (!stage || stage.kind !== 'waiting') return null
+  if ((db.aktivitaeten || []).some((a) => a.card_id === card.id && !a.erledigt_at)) return null
+  return prepareInsert('aktivitaeten', { card_id: card.id, art: 'wiedervorlage', faellig: berlinDatePlus(7) }, me)
+}
+// Heute in Berlin plus n Tage, als JJJJ-MM-TT
+export function berlinDatePlus(n) {
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+  const d = new Date(today + 'T12:00:00Z')
+  d.setUTCDate(d.getUTCDate() + n)
+  return d.toISOString().slice(0, 10)
 }
 
 // Erwähnungen bereinigen (wie tg_notes_mentions() in 06_erwaehnungen.sql): klein, ohne
@@ -384,5 +454,6 @@ export function guestView(db, email) {
   view.card_events = (db.card_events || []).filter((e) => shared.has(e.card_id))
   view.card_seen = (db.card_seen || []).filter((x) => x.email === me)
   view.files = (db.files || []).filter((f) => shared.has(f.card_id))
+  view.aktivitaeten = (db.aktivitaeten || []).filter((a) => a.card_id && shared.has(a.card_id))
   return view
 }

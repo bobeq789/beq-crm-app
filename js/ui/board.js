@@ -38,7 +38,7 @@ import {
   lastOfKindHint,
 } from '../store.js'
 import { navigate, openCard } from '../router.js'
-import { PageHead, Dot, Avatar, PrioBadge, DueBadge, NewBadge, Modal, Field, Empty, Labels, dialogKinds, useIsMobile } from './common.js'
+import { PageHead, Dot, Avatar, PrioBadge, DueBadge, NewBadge, Modal, Field, Empty, Labels, ActivityBadge, dialogKinds, useIsMobile } from './common.js'
 
 const DONE_LIMIT = 15
 
@@ -69,6 +69,7 @@ function BoardCard({ card, draggable }) {
         ${sharesOf(card.id).length > 0 && html`<span class="bc-notes" title="Mit einem Gast geteilt"><${Icon} name="share" size=${14} /></span>`}
         ${noteCount > 0 && html`<span class="bc-notes" title=${noteCount + (noteCount === 1 ? ' Notiz' : ' Notizen')}><${Icon} name="note" size=${14} />${noteCount}</span>`}
         ${card.archived && html`<span class="badge">Archiv</span>`}
+        ${!isDone && html`<${ActivityBadge} cardId=${card.id} />`}
         <${DealBadge} card=${card} />
       </span>
     </button>
