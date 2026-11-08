@@ -234,6 +234,18 @@ export async function createSupabaseApi(config) {
     async undismissThread(mailbox, verlauf) {
       check(await client.from('nachfass_aus').delete().eq('mailbox', mailbox).eq('verlauf', verlauf))
     },
+    // ---------- Persönliche Einstellungen (21_nutzer_einstellungen.sql), eine Zeile je Person ----------
+    async loadPrefs() {
+      try {
+        const row = check(await client.from('nutzer_einstellungen').select('werte').maybeSingle())
+        return (row && row.werte) || {}
+      } catch {
+        return {}
+      }
+    },
+    async savePrefs(email, werte) {
+      check(await client.from('nutzer_einstellungen').upsert({ person: String(email).toLowerCase(), werte }, { onConflict: 'person' }))
+    },
     // Mails still nachladen (Postfach offen und Neues da)
     async reloadEmails() {
       return fetchAll('emails')

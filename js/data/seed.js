@@ -586,8 +586,9 @@ export function buildSeed() {
     updated_at: created,
     ...extra,
   })
-  // Anna hat zuletzt vor gut einem Tag ins Postfach geschaut, die Mail von Petra von gestern ist neu
-  db.nutzer_gesehen.push({ person: A, bereich: 'postfach', at: new Date(Date.now() - 30 * 3600000).toISOString() })
+  // Anna hat zuletzt kurz vor der Mail von Petra von gestern ins Postfach geschaut, die ist also neu
+  const fresh = db.emails.find((m) => m.subject === 'Standorte für den Pilot')
+  db.nutzer_gesehen.push({ person: A, bereich: 'postfach', at: new Date(new Date(fresh.created_at).getTime() - 3600000).toISOString() })
   db.mailboxes = [
     mailbox(A, A),
     mailbox(J, J),

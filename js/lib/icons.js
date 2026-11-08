@@ -15,6 +15,8 @@ const PATHS = {
   check: 'M5 12.5l4.5 4.5L19 7.5',
   // Glocke: Wiedervorlage
   bell: 'M6 16v-5a6 6 0 1 1 12 0v5l2 2H4zM10 20.5a2 2 0 0 0 4 0',
+  // Griff zum Ziehen: sechs Punkte (runde Linienenden)
+  grip: 'M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01',
   x: 'M6 6l12 12M18 6 6 18',
   phone: 'M5 4h3l2 5-2.5 1.5a11 11 0 0 0 5 5L14 13l5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2',
   mail: 'M4 6h16v12H4zM4 7l8 6 8-6',

@@ -1,4 +1,4 @@
-// Einstellungen (Zahnrad): Farbschema pro Gerät, Konto, Postfächer und Kalender, Team (nur Admins), Produkte (Sales), Demo zurücksetzen
+// Einstellungen (Zahnrad): Farbschema pro Gerät, Konto, Postfächer und Kalender, Terminlink, Team (nur Admins), Produkte (Sales), Demo zurücksetzen
 import { html, useState } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { norm, fmtEuro } from '../lib/util.js'
@@ -17,6 +17,11 @@ import {
   confirmDialog,
   resetDemo,
   toast,
+  savePrefs,
+  terminSatz,
+  normalizeLink,
+  myActiveMailboxes,
+  DEFAULT_TERMINSATZ,
 } from '../store.js'
 import { PageHead, Tile, Segmented, Field } from './common.js'
 import { MailboxTile } from './mailboxes.js'
@@ -194,6 +199,65 @@ function ProductCatalog() {
   <//>`
 }
 
+// Terminlink (B11): Standard-Link, Satz davor, aufklappbar ein anderer Link je eigenem Postfach.
+// Gespeichert je Person auf allen Geräten (nutzer_einstellungen). Gäste haben das nicht.
+function TerminlinkTile() {
+  const boxes = myActiveMailboxes()
+  const saved = state.prefs.terminlinks || {}
+  const [link, setLink] = useState(state.prefs.terminlink || '')
+  const [satz, setSatz] = useState(terminSatz())
+  const [per, setPer] = useState(() => Object.fromEntries(boxes.map((b) => [b.address, saved[b.address] || ''])))
+  const [showPer, setShowPer] = useState(Object.values(saved).some(Boolean))
+  const [error, setError] = useState(null)
+  const save = async (e) => {
+    e.preventDefault()
+    const main = normalizeLink(link)
+    if (main === null) return setError('Der Standard-Link sieht nicht wie ein Link aus. Bitte prüfen, zum Beispiel https://calendly.com/dein-name.')
+    const links = {}
+    for (const [address, value] of Object.entries(per)) {
+      const n = normalizeLink(value)
+      if (n === null) return setError(`Der Link für ${address} sieht nicht wie ein Link aus. Bitte prüfen.`)
+      if (n) links[address] = n
+    }
+    setError(null)
+    if (await savePrefs({ terminlink: main, terminsatz: satz.trim(), terminlinks: links })) {
+      setLink(main)
+      setPer({ ...per, ...links })
+      toast('Terminlink gespeichert')
+    }
+  }
+  return html`<${Tile} title="Terminlink">
+    <form class="terminlink-settings" onSubmit=${save}>
+      <p class="muted small">Dein eigener Buchungslink, zum Beispiel von Calendly. Im Mailfenster fügt der Knopf „Terminlink“ den Satz und den Link an der Cursorstelle ein. Gilt auf allen deinen Geräten.</p>
+      <${Field} label="Standard-Link" htmlFor="pref-terminlink">
+        <input id="pref-terminlink" value=${link} placeholder="https://calendly.com/dein-name" inputmode="url" autocomplete="off" onInput=${(e) => setLink(e.target.value)} />
+      <//>
+      <${Field} label="Satz davor" htmlFor="pref-terminsatz" hint="Leer heißt nur der Link.">
+        <input id="pref-terminsatz" value=${satz} placeholder=${DEFAULT_TERMINSATZ} onInput=${(e) => setSatz(e.target.value)} />
+      <//>
+      ${boxes.length > 0 &&
+      html`<button type="button" class="history-toggle" aria-expanded=${showPer} onClick=${() => setShowPer(!showPer)}>
+        <${Icon} name="chevron" size=${16} /> Je Postfach ein anderer Link
+      </button>`}
+      ${showPer &&
+      boxes.map(
+        (b) => html`<${Field} label=${b.address} htmlFor=${'pref-terminlink-' + b.address} key=${b.address}>
+          <input
+            id=${'pref-terminlink-' + b.address}
+            value=${per[b.address] || ''}
+            placeholder="leer heißt Standard-Link"
+            inputmode="url"
+            autocomplete="off"
+            onInput=${(e) => setPer({ ...per, [b.address]: e.target.value })}
+          />
+        <//>`
+      )}
+      ${error && html`<p class="form-error" role="alert">${error}</p>`}
+      <div class="settings-actions"><button type="submit" class="btn btn-primary">Speichern</button></div>
+    </form>
+  <//>`
+}
+
 export function SettingsPage() {
   const me = state.me || {}
   const theme = getTheme()
@@ -229,6 +293,7 @@ export function SettingsPage() {
     <//>
 
     ${!isGuest() && html`<${MailboxTile} />`}
+    ${!isGuest() && html`<${TerminlinkTile} key=${state.prefsLoaded ? 'geladen' : 'leer'} />`}
     ${isAdmin() && html`<${TeamAdmin} />`}
     ${!isGuest() && html`<${ProductCatalog} />`}
 

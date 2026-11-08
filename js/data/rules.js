@@ -27,7 +27,7 @@ export const EXTRA_TABLES = ['card_events', 'card_seen']
 export const OPTIONAL_TABLES = ['project_shares', 'products', 'deals', 'deal_items', 'mailboxes', 'aktivitaeten']
 
 // Nur im Demo-Modus: Dateien an Aufgaben (in Supabase liegen sie im Storage, nicht in einer Tabelle)
-export const DEMO_TABLES = ['files', 'nachfass_aus', 'nutzer_gesehen']
+export const DEMO_TABLES = ['files', 'nachfass_aus', 'nutzer_gesehen', 'nutzer_einstellungen']
 
 const WITH_UPDATED_AT = new Set(['projects', 'organizations', 'persons', 'meetings', 'cards', 'notes', 'events', 'products', 'deals', 'aktivitaeten'])
 const WITH_CREATED_AT = new Set(['team_members', 'projects', 'stages', 'organizations', 'persons', 'meetings', 'cards', 'card_shares', 'project_shares', 'notes', 'emails', 'products', 'deals', 'deal_items', 'aktivitaeten'])

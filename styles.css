@@ -1128,3 +1128,66 @@ button.act-main:hover .act-title { color: var(--accent-text); }
 .pf-noreply-actions { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 12px 12px; }
 .pf-noreply .pf-subject .badge { margin-right: 4px; }
 .pf-loading { padding: 12px; }
+
+/* Terminlink (D4, B11): kleines Feld im Mailfenster, Abschnitt in den Einstellungen */
+.terminlink-field { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 10px; background: var(--surface); }
+.terminlink-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.terminlink-row input { flex: 1 1 240px; min-width: 0; }
+.terminlink-settings { display: flex; flex-direction: column; gap: 12px; }
+.terminlink-settings .history-toggle { align-self: flex-start; font-size: 15px; }
+
+/* Kacheln der Übersicht anordnen und direkt ziehen (B2). Der weiche Schatten beim Ziehen ist eine
+   bewusste Ausnahme vom Hub-Design: er zeigt, dass die Kachel schwebt. */
+.tile-slot { position: relative; }
+.tile-slot + .tile-slot { margin-top: var(--gap); }
+.overview-grid.ov-one { grid-template-columns: minmax(0, 1fr); }
+.ov-col { min-width: 0; min-height: 60px; }
+.ov-head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.ov-head-actions .btn.active { background: var(--chip-active-bg); box-shadow: inset 0 0 0 1px var(--green); }
+.tile-head-drag .tile-title { margin-right: auto; }
+.tile-grip {
+  display: inline-flex; align-items: center; justify-content: center; flex: none; width: 28px; height: 32px; margin: -6px -2px -6px -10px;
+  border-radius: 6px; color: var(--muted); opacity: 0.45; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.tile-grip .icon, .arrange-grip .icon { stroke-width: 3; }
+.tile:hover .tile-grip, .tile-grip:hover { opacity: 1; }
+@media (hover: none) { .tile-grip { opacity: 0.7; } }
+@media (hover: hover) and (pointer: fine) {
+  .tile-head-drag { cursor: grab; user-select: none; }
+  .tile-head-drag button, .tile-head-drag a { cursor: pointer; }
+}
+.tile-slot.tile-dragging { z-index: 40; opacity: 0.88; border-radius: var(--radius); box-shadow: 0 16px 40px rgba(13, 24, 34, 0.28); }
+.tiles-dragging, .tiles-dragging * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
+.tile-slot.drop-before::before, .tile-slot.drop-after::after {
+  content: ''; position: absolute; left: 0; right: 0; height: 4px; border-radius: 2px; background: var(--green);
+}
+.tile-slot.drop-before::before { top: calc(var(--gap) / -2 - 2px); }
+.tile-slot.drop-after::after { bottom: calc(var(--gap) / -2 - 2px); }
+.ov-col.drop-end::after { content: ''; display: block; height: 4px; margin-top: calc(var(--gap) / 2); border-radius: 2px; background: var(--green); }
+.ov-drop-hint {
+  display: flex; align-items: center; justify-content: center; min-height: 120px; border: 2px dashed var(--faint);
+  border-radius: var(--radius); color: var(--muted); font-weight: 500;
+}
+.tile-slot + .ov-drop-hint { margin-top: var(--gap); }
+
+.arrange-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.arrange-head p { margin: 0; }
+.arrange-actions { display: flex; gap: 8px; }
+.arrange-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: var(--gap); align-items: start; }
+.arrange-col {
+  list-style: none; margin: 0; padding: 8px; min-height: 120px; display: flex; flex-direction: column; gap: 10px;
+  border-radius: var(--radius); border: 1.5px dashed var(--border);
+}
+.arrange-bar { position: relative; display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 4px 6px 4px 12px; border-radius: 10px; background: var(--surface); }
+.arrange-bar[draggable='true'] { cursor: grab; }
+.arrange-grip { display: inline-flex; color: var(--muted); }
+.arrange-name { flex: 1; min-width: 0; font-weight: 600; }
+.arrange-arrows { display: flex; gap: 2px; }
+.arrange-empty { padding: 28px 8px; text-align: center; color: var(--muted); }
+.arrange-bar.drop-before::before, .arrange-bar.drop-after::after, .arrange-col.drop-end::after {
+  content: ''; height: 4px; border-radius: 2px; background: var(--green);
+}
+.arrange-bar.drop-before::before, .arrange-bar.drop-after::after { position: absolute; left: 0; right: 0; }
+.arrange-bar.drop-before::before { top: -7px; }
+.arrange-bar.drop-after::after { bottom: -7px; }
+@media (max-width: 759px) { .arrange-grid { grid-template-columns: minmax(0, 1fr); } }

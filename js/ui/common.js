@@ -50,10 +50,16 @@ export function PageHead({ kicker, title, actions, back }) {
   </header>`
 }
 
-export function Tile({ title, count, actions, children, cls = '' }) {
+// drag (nur Übersicht): { onPointerDown } macht den Kopf zum Griff zum Verschieben der Kachel
+export function Tile({ title, count, actions, children, cls = '', drag = null }) {
   return html`<section class=${'tile ' + cls}>
     ${(title || actions) &&
-    html`<div class="tile-head">
+    html`<div
+      class=${'tile-head' + (drag ? ' tile-head-drag' : '')}
+      onPointerDown=${drag ? drag.onPointerDown : undefined}
+      onDragStart=${drag ? (e) => e.preventDefault() : undefined}
+    >
+      ${drag && html`<span class="tile-grip" title="Ziehen zum Verschieben" aria-hidden="true"><${Icon} name="grip" size=${18} /></span>`}
       <h2 class="tile-title">${title}${count !== undefined && html` <span class="count">${count}</span>`}</h2>
       ${actions}
     </div>`}

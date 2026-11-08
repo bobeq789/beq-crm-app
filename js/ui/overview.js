@@ -30,7 +30,10 @@ import {
   answerFor,
   followUpIn,
   isGuest,
+  activeMembers,
+  savePrefs,
 } from '../store.js'
+import { TILE_DEFAULT, tileLayout, moveTile, ArrangeView, useTileDrag } from './tiles.js'
 import { openEvent, openCard, navigate } from '../router.js'
 import { eventsTodayTomorrow } from './calendar.js'
 import { PageHead, Tile, Empty, TaskRow, Segmented, PriorityPicker, ProjectSelect, AssigneeSelect, Dot, activityWhen, useIsMobile } from './common.js'
@@ -114,7 +117,7 @@ function QuickAdd() {
   </form>`
 }
 
-function TodoTile({ cards }) {
+function TodoTile({ cards, drag }) {
   const [showAll, setShowAll] = useState(false)
   const today = todayStr()
   const weekEnd = endOfWeekStr()
@@ -138,7 +141,7 @@ function TodoTile({ cards }) {
           ${extra}
         </div>`
       : null
-  return html`<${Tile} title="Zu erledigen" count=${cards.length} cls="tile-todo">
+  return html`<${Tile} title="Zu erledigen" count=${cards.length} cls="tile-todo" drag=${drag}>
     ${cards.length === 0 && html`<${Empty}>Nichts offen. Schön.<//>`}
     ${section('Überfällig und heute', groups.today)}
     ${section('Dringend', groups.urgent)}
@@ -253,7 +256,7 @@ function LooseActivityRow({ act }) {
   </li>`
 }
 
-function FollowUpTile({ groups }) {
+function FollowUpTile({ groups, drag }) {
   const { answers, due, soon, waiting } = groups
   const row = (x) =>
     x.card
@@ -267,7 +270,7 @@ function FollowUpTile({ groups }) {
         </div>`
       : null
   const empty = !answers.length && !due.length && !soon.length && !waiting.length
-  return html`<${Tile} title="Wiedervorlagen" count=${answers.length + due.length} cls="tile-followup">
+  return html`<${Tile} title="Wiedervorlagen" count=${answers.length + due.length} cls="tile-followup" drag=${drag}>
     ${empty && html`<${Empty}>Gerade steht nichts zum Nachhaken an.<//>`}
     ${section('Antwort da', answers, (x) => html`<${AnswerRow} key=${x.key} card=${x.card} answer=${x.answer} />`)}
     ${section('Fällig', due, row)}
@@ -277,7 +280,7 @@ function FollowUpTile({ groups }) {
 }
 
 // Kachel „Team“: was Kollegen geändert haben und was bei anderen liegt
-function TeamTile() {
+function TeamTile({ drag }) {
   const me = norm(myEmail())
   const open = state.db.cards.filter(isOpen)
   const lastChange = (c) => String((flagOf(c.id) || {}).last_change || '')
@@ -299,7 +302,7 @@ function TeamTile() {
       return { card: c, since: h && norm(h.assignee || '') === norm(c.assignee) ? h.at : c.created_at }
     })
     .sort((a, b) => String(a.since).localeCompare(String(b.since)))
-  return html`<${Tile} title="Team">
+  return html`<${Tile} title="Team" drag=${drag}>
     <div class="task-group">
       <h3 class="group-title">Neu seit deinem letzten Blick ${fresh.length > 0 && html`<span class="count">${fresh.length}</span>`}</h3>
       ${fresh.length
@@ -317,14 +320,14 @@ function TeamTile() {
   <//>`
 }
 
-function EventsTile({ scope }) {
+function EventsTile({ scope, drag }) {
   const list = eventsTodayTomorrow(scope === 'mine', isMyEvent)
   const today = todayStr()
   const groups = [
     { label: 'Heute', items: list.filter((e) => ymd(new Date(e.start_at)) <= today) },
     { label: 'Morgen', items: list.filter((e) => ymd(new Date(e.start_at)) > today) },
   ].filter((g) => g.items.length)
-  return html`<${Tile} title="Termine heute und morgen" count=${list.length}>
+  return html`<${Tile} title="Termine heute und morgen" count=${list.length} drag=${drag}>
     ${!state.db.events.length
       ? html`<${Empty}>Noch kein Kalender angebunden.<//>`
       : !list.length
@@ -348,9 +351,9 @@ function EventsTile({ scope }) {
   <//>`
 }
 
-function MeetingsTile() {
+function MeetingsTile({ drag }) {
   const list = [...state.db.meetings].sort((a, b) => b.held_at.localeCompare(a.held_at)).slice(0, 6)
-  return html`<${Tile} title="Letzte Meetings">
+  return html`<${Tile} title="Letzte Meetings" drag=${drag}>
     ${list.length
       ? html`<ul class="meeting-mini">
           ${list.map((m) => {
@@ -390,36 +393,85 @@ export function Overview() {
   })
   const follow = followUpItems(followCards, scope)
   const isMobile = useIsMobile()
-  // Am Handy rückt die Kachel nach oben, sobald dort etwas fällig ist (C8 Punkt 5)
-  const followFirst = isMobile && follow.due.length + follow.answers.length > 0
   const name = state.me ? firstName(state.me.name) : ''
+
+  // Kacheln (B2): Anordnung je Person aus nutzer_einstellungen. „Team“ gilt erst ab zwei Personen
+  // im Team und taucht sonst auch beim Anordnen nicht auf.
+  const [arranging, setArranging] = useState(false)
+  const available = TILE_DEFAULT.reihe.filter((id) => id !== 'team' || activeMembers().length > 1)
+  const saved = state.prefs.kacheln
+  const custom = !!(saved && Array.isArray(saved.reihe))
+  const layout = tileLayout(saved, available)
+  // Am Handy eine Reihe. Ohne eigene Anordnung rückt „Wiedervorlagen“ nach oben, sobald dort
+  // etwas ansteht (C8 Punkt 5). Mit eigener Anordnung gilt nur die eigene Reihenfolge. Die
+  // Reihenfolge kommt aus dem Code, nicht aus einer CSS-Regel.
+  const followFirst = isMobile && !custom && follow.due.length + follow.answers.length > 0
+  const mobileOrder = followFirst ? ['wiedervorlagen', ...layout.reihe.filter((id) => id !== 'wiedervorlagen')] : layout.reihe
+  const saveLayout = (next) => savePrefs({ kacheln: next })
+  // Ablegen beim direkten Ziehen. Am Handy gilt für die Berechnung die Reihenfolge, die gerade
+  // zu sehen ist, und „breit“ bleibt, wie es ist.
+  const drag = useTileDrag((id, target) => {
+    const base = isMobile ? { reihe: mobileOrder, breit: layout.breit } : layout
+    saveLayout(moveTile(base, id, target, isMobile))
+  })
+  const names = { aufgaben: 'Zu erledigen', team: 'Team', termine: 'Termine heute und morgen', wiedervorlagen: 'Wiedervorlagen', meetings: 'Letzte Meetings' }
+  const tileFor = (id) => {
+    const d = { onPointerDown: (e) => drag.start(id, e) }
+    if (id === 'aufgaben') return html`<${TodoTile} cards=${todo} drag=${d} />`
+    if (id === 'team') return html`<${TeamTile} drag=${d} />`
+    if (id === 'termine') return html`<${EventsTile} scope=${scope} drag=${d} />`
+    if (id === 'wiedervorlagen') return html`<${FollowUpTile} groups=${follow} drag=${d} />`
+    return html`<${MeetingsTile} drag=${d} />`
+  }
+  const t = drag.target
+  const slot = (id) => {
+    const mark = t && t.id === id ? (t.before ? ' drop-before' : ' drop-after') : ''
+    return html`<div class=${'tile-slot' + mark} data-tile=${id} key=${id}>${tileFor(id)}</div>`
+  }
+  // Eine Spalte. Während des Ziehens ist sie auch leer zu sehen, mit „Hierher ziehen“.
+  const column = (col, ids, cls) =>
+    html`<div class=${'ov-col ' + cls + (t && t.col === col ? ' drop-end' : '')} data-col=${col}>
+      ${ids.map(slot)}
+      ${drag.dragging && !ids.filter((x) => x !== drag.dragging).length && html`<div class="ov-drop-hint">Hierher ziehen</div>`}
+    </div>`
+  const wide = layout.reihe.filter((id) => layout.breit.includes(id))
+  const narrow = layout.reihe.filter((id) => !layout.breit.includes(id))
+  const oneSided = !drag.dragging && (!wide.length || !narrow.length)
 
   return html`<div class="page">
     <${PageHead}
       kicker=${fmtDateLong()}
       title=${name ? `Hallo ${name}` : 'Übersicht'}
-      actions=${html`<${Segmented}
-        label="Welche Aufgaben"
-        value=${scope}
-        onChange=${changeScope}
-        options=${[
-          { value: 'mine', label: 'Meine' },
-          { value: 'all', label: 'Alle' },
-        ]}
-      />`}
+      actions=${html`<div class="ov-head-actions">
+        <${Segmented}
+          label="Welche Aufgaben"
+          value=${scope}
+          onChange=${changeScope}
+          options=${[
+            { value: 'mine', label: 'Meine' },
+            { value: 'all', label: 'Alle' },
+          ]}
+        />
+        <button type="button" class=${'btn btn-small' + (arranging ? ' active' : '')} aria-pressed=${arranging} onClick=${() => setArranging(!arranging)}>
+          <${Icon} name="grip" size=${16} /> Anordnen
+        </button>
+      </div>`}
     />
-    <${QuickAdd} />
-    <div class="overview-grid">
-      <div class="col-main">
-        ${followFirst && html`<${FollowUpTile} groups=${follow} />`}
-        <${TodoTile} cards=${todo} />
-      </div>
-      <div class="col-side">
-        <${TeamTile} />
-        <${EventsTile} scope=${scope} />
-        ${!followFirst && html`<${FollowUpTile} groups=${follow} />`}
-        <${MeetingsTile} />
-      </div>
-    </div>
+    ${arranging
+      ? html`<${ArrangeView}
+          layout=${isMobile ? { reihe: mobileOrder, breit: layout.breit } : layout}
+          names=${names}
+          oneColumn=${isMobile}
+          custom=${custom}
+          onChange=${saveLayout}
+          onReset=${() => saveLayout(null)}
+          onDone=${() => setArranging(false)}
+        />`
+      : html`<${QuickAdd} />
+          ${isMobile
+            ? html`<div class="overview-grid ov-one">${column('alle', mobileOrder, 'col-main')}</div>`
+            : oneSided
+            ? html`<div class="overview-grid ov-one">${column(wide.length ? 'breit' : 'schmal', layout.reihe, 'col-main')}</div>`
+            : html`<div class="overview-grid">${column('breit', wide, 'col-main')}${column('schmal', narrow, 'col-side')}</div>`}`}
   </div>`
 }

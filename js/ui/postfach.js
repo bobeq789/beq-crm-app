@@ -3,7 +3,7 @@
 // Anhängen. „Neue Mail“, „Antworten“, „Allen antworten“, „Weiterleiten“ öffnen das
 // Fenster zum Schreiben. Senden und Löschen nur aus eigenen Postfächern.
 // Mailtext wird nie als HTML eingesetzt, sondern als Text (htmlToText).
-import { html, useState, useEffect, useRef } from '../lib/preact.js'
+import { html, useState, useEffect, useLayoutEffect, useRef } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { fmtDate, fmtTime, fmtDateTime, fmtSize, htmlToText, splitQuoted, gmailUrl, matches, norm, todayStr } from '../lib/util.js'
 import { useRoute, setParam } from '../router.js'
@@ -29,6 +29,10 @@ import {
   isNewMail,
   loadNoReply,
   dismissNoReply,
+  terminLinkFor,
+  terminSatz,
+  normalizeLink,
+  savePrefs,
 } from '../store.js'
 import { PageHead, Segmented, Empty, LinkText, Modal, Field, dialogKinds, useIsMobile } from './common.js'
 import { MailAttachments, attachmentsOf } from './emails.js'
@@ -337,6 +341,18 @@ function MailCompose({ d }) {
   const [sig, setSig] = useState({ status: 'laden', text: '' })
   const [withSig, setWithSig] = useState(true)
   const fileInput = useRef()
+  // Terminlink (D4): Cursorstelle im Mailtext merken, solange das Feld den Fokus hat
+  const textRef = useRef()
+  const caret = useRef(null)
+  const linkRef = useRef()
+  const [linkField, setLinkField] = useState(null)
+  const rememberCaret = (e) => {
+    caret.current = { start: e.target.selectionStart, end: e.target.selectionEnd }
+  }
+  // Das Feld „Dein Terminlink“ erscheint erst nach dem Klick, autofocus greift dort nicht
+  useLayoutEffect(() => {
+    if (linkField && linkField.focus && linkRef.current) linkRef.current.focus()
+  }, [linkField && linkField.focus])
   // Signatur aus Gmail für das gewählte Postfach (nur Text, die App zeigt kein fremdes HTML)
   useEffect(() => {
     let current = true
@@ -348,6 +364,42 @@ function MailCompose({ d }) {
   }, [form.von])
   const set = (patch) => setForm({ ...form, ...patch })
   const total = files.reduce((n, f) => n + f.size, 0)
+
+  // Satz und Link an der Cursorstelle einfügen. Markierter Text wird ersetzt. Steht direkt davor
+  // kein Leerzeichen oder Zeilenumbruch, kommt eines dazu. Danach steht der Cursor hinter dem
+  // Link (erst nach dem Neuzeichnen, der Mailtext ist ein gesteuertes Feld).
+  const insertLink = (link) => {
+    const value = form.text
+    const pos = caret.current || { start: 0, end: 0 }
+    const start = Math.min(pos.start, value.length)
+    const end = Math.min(Math.max(pos.end, start), value.length)
+    const before = value.slice(0, start)
+    const satz = terminSatz()
+    const piece = (satz ? satz + ' ' : '') + link
+    const gap = before && !/\s$/.test(before) ? ' ' : ''
+    const cursor = (before + gap + piece).length
+    set({ text: before + gap + piece + value.slice(end) })
+    caret.current = { start: cursor, end: cursor }
+    requestAnimationFrame(() => {
+      const ta = textRef.current
+      if (!ta) return
+      ta.focus()
+      ta.setSelectionRange(cursor, cursor)
+    })
+  }
+  const onTerminlink = () => {
+    const link = terminLinkFor(form.von)
+    if (link) insertLink(link)
+    else setLinkField({ value: '', error: null, focus: true })
+  }
+  const saveTerminlink = async () => {
+    const link = normalizeLink(linkField.value)
+    if (link === '') return setLinkField({ ...linkField, error: 'Bitte deinen Terminlink eintragen.' })
+    if (link === null) return setLinkField({ ...linkField, error: 'Das sieht nicht wie ein Link aus. Bitte prüfen, zum Beispiel https://calendly.com/dein-name.' })
+    setLinkField(null)
+    insertLink(link)
+    await savePrefs({ terminlink: link })
+  }
   const close = () => closeDialog()
   const title = { neu: 'Neue Mail', antworten: 'Antworten', allen: 'Allen antworten', weiter: 'Weiterleiten' }[d.mode] || 'Neue Mail'
   const addresses = [...new Set([...state.db.persons.flatMap((p) => p.emails || []), ...state.db.team_members.map((t) => t.email)].map(norm))].sort()
@@ -425,7 +477,19 @@ function MailCompose({ d }) {
         : html`<button type="button" class="link-btn pf-cc" onClick=${() => setShowCc(true)}>Kopie (Cc) hinzufügen</button>`}
       <${Field} label="Betreff" htmlFor="mc-betreff"><input id="mc-betreff" value=${form.betreff} onInput=${(e) => set({ betreff: e.target.value })} /><//>
       <${Field} label="Nachricht" htmlFor="mc-text">
-        <textarea id="mc-text" rows="12" value=${form.text} onInput=${(e) => set({ text: e.target.value })}></textarea>
+        <textarea
+          id="mc-text"
+          ref=${textRef}
+          rows="12"
+          value=${form.text}
+          onInput=${(e) => {
+            set({ text: e.target.value })
+            rememberCaret(e)
+          }}
+          onSelect=${rememberCaret}
+          onKeyUp=${rememberCaret}
+          onClick=${rememberCaret}
+        ></textarea>
       <//>
       <div class="pf-signature">
         <label class="check-label">
@@ -455,8 +519,38 @@ function MailCompose({ d }) {
           e.target.value = ''
         }} />
         <button type="button" class="btn btn-small" onClick=${() => fileInput.current.click()}><${Icon} name="paperclip" size=${16} /> Datei anhängen</button>
+        <button type="button" class="btn btn-small" onClick=${onTerminlink}><${Icon} name="calendar" size=${16} /> Terminlink</button>
         ${files.length > 0 && html`<span class="muted small">zusammen ${fmtSize(total)} von höchstens 18 MB</span>`}
       </div>
+      ${linkField &&
+      html`<div class="terminlink-field">
+        <label class="field-label" for="mc-terminlink">Dein Terminlink</label>
+        <div class="terminlink-row">
+          <input
+            id="mc-terminlink"
+            ref=${linkRef}
+            value=${linkField.value}
+            placeholder="https://calendly.com/dein-name"
+            autocomplete="off"
+            inputmode="url"
+            onInput=${(e) => setLinkField({ ...linkField, value: e.target.value, error: null, focus: false })}
+            onKeyDown=${(e) => {
+              // Enter speichert und fügt ein, schickt die Mail aber nicht ab. Escape schließt nur dieses Feld.
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                saveTerminlink()
+              } else if (e.key === 'Escape') {
+                e.preventDefault()
+                e.stopPropagation()
+                setLinkField(null)
+              }
+            }}
+          />
+          <button type="button" class="btn btn-small btn-primary" onClick=${saveTerminlink}>Speichern und einfügen</button>
+          <button type="button" class="btn btn-small" onClick=${() => setLinkField(null)}>Abbrechen</button>
+        </div>
+        ${linkField.error ? html`<p class="form-error" role="alert">${linkField.error}</p>` : html`<p class="muted small">Zum Beispiel dein Buchungslink bei Calendly. Ändern kannst du ihn unter Einstellungen, „Terminlink“.</p>`}
+      </div>`}
       ${error && html`<p class="form-error" role="alert">${error}</p>`}
     </form>
   <//>`

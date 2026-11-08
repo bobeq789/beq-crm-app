@@ -38,6 +38,9 @@ export const state = {
   // Posteingang, „Ohne Antwort“ (erst beim Öffnen des Reiters geladen), letzter Blick ins
   // Postfach vor diesem Öffnen (zum Hervorheben neuer Mails), Postfach gerade offen
   followUp: { answers: [], newMail: [], noReply: null, postfachPrev: null, postfachOpen: false },
+  // Persönliche Einstellungen auf allen Geräten (21_nutzer_einstellungen.sql): terminlink,
+  // terminsatz, terminlinks je Postfach, kacheln (Anordnung der Übersicht)
+  prefs: {},
   loadedAt: 0,
   toasts: [],
   dialog: null,
@@ -254,6 +257,7 @@ async function enterApp() {
   state.me = state.db.team_members.find((t) => norm(t.email) === email) || { email: state.sessionEmail, name: state.sessionEmail, role: state.role }
   state.auth = 'ready'
   emit()
+  loadPrefs()
   startFollowUp()
   await autoConnectMailbox()
 }
@@ -367,6 +371,45 @@ export async function dismissNoReply(item) {
       },
     },
   })
+}
+
+// ------------------------------------------------------------
+// Persönliche Einstellungen (Nachträge „Terminlink“ und „Kacheln“): eine Zeile je Person in
+// nutzer_einstellungen, gilt auf allen Geräten. Gespeichert wird immer das ganze JSON.
+// ------------------------------------------------------------
+export async function loadPrefs() {
+  if (isGuest()) return
+  state.prefs = (await api.loadPrefs()) || {}
+  state.prefsLoaded = true
+  emit()
+}
+export async function savePrefs(patch) {
+  const before = state.prefs
+  state.prefs = { ...state.prefs, ...patch }
+  emit()
+  try {
+    await api.savePrefs(myEmail(), state.prefs)
+    return true
+  } catch (err) {
+    state.prefs = before
+    emit()
+    toast('Die Einstellung ließ sich nicht speichern. ' + errorText(err), { error: true })
+    return false
+  }
+}
+// Terminlink für ein Absender-Postfach: eigener Link je Postfach, sonst der Standard
+export const DEFAULT_TERMINSATZ = 'Hier können Sie direkt einen Termin mit mir buchen:'
+export function terminLinkFor(address) {
+  const per = state.prefs.terminlinks || {}
+  return (address && per[norm(address)]) || state.prefs.terminlink || ''
+}
+export const terminSatz = () => (typeof state.prefs.terminsatz === 'string' ? state.prefs.terminsatz : DEFAULT_TERMINSATZ)
+// „https://“ ergänzen, dann eine einfache Prüfung, ob es wie ein Link aussieht. null heißt: kein Link.
+export function normalizeLink(raw) {
+  let s = String(raw || '').trim()
+  if (!s) return ''
+  if (!/^https?:\/\//i.test(s)) s = 'https://' + s.replace(/^\/+/, '')
+  return /^https?:\/\/[^\s/?#.]+(\.[^\s/?#.]+)+([/?#]\S*)?$/i.test(s) ? s : null
 }
 
 // Zweiter Faktor: einrichten, prüfen, neu einrichten

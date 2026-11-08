@@ -250,6 +250,17 @@ export function createDemoApi({ asGuest = false } = {}) {
     async reloadEmails() {
       return clone(db.emails)
     },
+    // Persönliche Einstellungen wie 21_nutzer_einstellungen.sql (Gäste haben keine)
+    async loadPrefs() {
+      if (asGuest) return {}
+      const row = db.nutzer_einstellungen.find((r) => r.person === me)
+      return row ? clone(row.werte) : {}
+    },
+    async savePrefs(email, werte) {
+      if (asGuest) throw notAllowed()
+      db.nutzer_einstellungen = [...db.nutzer_einstellungen.filter((r) => r.person !== me), { person: me, werte: clone(werte), updated_at: new Date().toISOString() }]
+      save()
+    },
 
     // Aktivitäten einer Aufgabe (nach dem Verschieben, die Datenbank kann eine anlegen)
     async fetchActivities(cardId) {
