@@ -448,10 +448,7 @@ select { appearance: auto; }
 /* ------------------------------------------------------------
    Übersicht
    ------------------------------------------------------------ */
-.quick-add { background: var(--surface); border-radius: var(--radius); padding: 16px; margin-bottom: var(--gap); }
-.quick-row { display: flex; gap: 10px; }
-.quick-input { font-size: 18px; min-height: 50px; padding: 10px 16px; background: var(--raised); border-color: transparent; }
-.quick-row .btn { min-height: 50px; }
+/* Optionen im Fenster „Neue Aufgabe“ (ui/search.js), früher das Schnell-Anlegen über der Übersicht */
 .quick-options { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
 .quick-field { display: block; flex: 0 1 auto; }
 .quick-field input, .quick-field select { min-height: 36px; padding: 5px 10px; font-size: 16px; width: auto; max-width: 220px; background: var(--raised); }
@@ -1052,11 +1049,25 @@ button.att-btn:disabled { cursor: progress; }
   .att-name { max-width: 200px; }
 }
 
-/* Navigation: acht Bereiche oben, am Handy vier und „Mehr“ */
-@media (min-width: 760px) and (max-width: 1180px) {
+/* Navigation: acht Bereiche oben, unter 960 px vier und „Mehr“ (wie unten am Handy).
+   Die Stufen mit der Suche stehen unten bei „Suche oben in der Kopfleiste“. */
+@media (min-width: 760px) and (max-width: 1339px) {
   .topnav { gap: 0; overflow-x: auto; scrollbar-width: none; }
-  .topnav a { padding: 8px 9px; font-size: 14.5px; }
+  .topnav a, .topnav-more { padding: 8px 9px; font-size: 14.5px; }
   .topbar { gap: 14px; }
+}
+.topnav-more {
+  display: none; align-items: center; min-height: 40px; border: 0; border-radius: 999px;
+  background: transparent; color: var(--white); font: inherit; font-weight: 500; cursor: pointer;
+}
+.topnav-more:hover { background: var(--navy-2); }
+.topnav-more.active { background: var(--navy-2); color: var(--green); }
+@media (min-width: 760px) and (max-width: 959px) {
+  .topnav .nav-extra { display: none; }
+  .topnav-more { display: flex; }
+}
+@media (min-width: 760px) and (max-width: 819px) {
+  .demo-badge { display: none; }
 }
 .bottomnav-more {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
@@ -1192,3 +1203,80 @@ button.act-main:hover .act-title { color: var(--accent-text); }
 .arrange-bar.drop-before::before { top: -7px; }
 .arrange-bar.drop-after::after { bottom: -7px; }
 @media (max-width: 759px) { .arrange-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* ------------------------------------------------------------
+   Suche oben in der Kopfleiste (ui/search.js)
+   Stufen (gemessen mit Demo-Marke): ab 1340 px Feld 260 px und normale Reiter,
+   1100 bis 1339 px Feld 210 px und engere Reiter, darunter nur die Lupe (Suche als Fläche),
+   760 bis 959 px zusätzlich vier Reiter und „Mehr“, unter 760 px wie am Handy.
+   ------------------------------------------------------------ */
+.topsearch { flex: none; display: flex; align-items: center; }
+/* Eigener Name, „.search“ ist das Suchfeld der Listen-Seiten */
+.gsearch { position: relative; }
+.search-field {
+  display: flex; align-items: center; gap: 8px; height: 40px; width: 260px;
+  padding: 0 10px 0 14px; border-radius: 999px; background: var(--navy-2); color: var(--grey);
+}
+.search-field:focus-within { outline: 2px solid var(--green); outline-offset: 0; }
+.search-field input {
+  flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; border-radius: 0;
+  background: transparent; color: var(--white); font: inherit; font-size: 16px; outline: none;
+}
+.search-field input::placeholder { color: var(--grey); opacity: 1; }
+.search-field input::-webkit-search-cancel-button { -webkit-appearance: none; }
+.search-kbd { font: inherit; font-size: 12px; color: var(--grey); border: 1px solid var(--navy-3); border-radius: 6px; padding: 1px 6px; white-space: nowrap; }
+.search-panel {
+  position: absolute; left: 0; top: calc(100% + 8px); z-index: 50;
+  width: min(520px, calc(100vw - 32px)); max-height: min(70vh, 560px); overflow-y: auto;
+  background: var(--raised); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px;
+}
+.search-list, .search-list ul { list-style: none; margin: 0; padding: 0; }
+.search-group + .search-group { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; }
+.search-group-title { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent-text); padding: 8px 10px 4px; }
+.search-group-title .count { text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 12px; }
+.search-item { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 7px 10px; border-radius: var(--radius-sm); cursor: pointer; }
+.search-item.active { background: var(--chip-active-bg); }
+.search-icon { flex: none; display: flex; color: var(--muted); }
+.search-item.active .search-icon, .search-actions .search-icon { color: var(--accent-text); }
+.search-text { min-width: 0; display: flex; flex-direction: column; }
+.search-title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-sub { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-item.done .search-title { color: var(--muted); }
+.search-hint { padding: 10px; color: var(--muted); font-size: 14px; }
+.search-cancel { flex: none; border: 0; background: transparent; color: var(--accent-text); font: inherit; font-weight: 500; min-height: 44px; padding: 0 4px; cursor: pointer; }
+
+/* Als Fläche über der Seite (schmale Fenster und Handy) */
+.search-backdrop {
+  position: fixed; inset: 0; z-index: 60; display: flex; justify-content: center; align-items: flex-start;
+  padding: calc(var(--safe-top) + 12px) 16px 16px; background: rgba(13, 24, 34, 0.45);
+}
+.search-sheet {
+  display: flex; flex-direction: column; width: min(560px, 100%); max-height: calc(100dvh - var(--safe-top) - 28px);
+  background: var(--raised); color: var(--text); border: 1px solid var(--modal-border); border-radius: var(--radius); padding: 10px;
+}
+.search-sheet .search-field { width: auto; height: 48px; background: var(--surface); color: var(--muted); }
+.search-sheet .search-field input { color: var(--text); font-size: 17px; }
+.search-sheet .search-field input::placeholder { color: var(--muted); }
+.search-sheet .search-panel { position: static; width: auto; max-height: none; flex: 1; min-height: 0; border: 0; padding: 6px 0 0; }
+body.search-sheet-open { overflow: hidden; }
+/* Die Fläche steckt in der Kopfleiste (eigene Ebene), die muss dann über der unteren Leiste liegen */
+body.search-sheet-open .topbar { z-index: 70; }
+
+@media (max-width: 1339px) {
+  .search-field { width: 210px; }
+}
+@media (max-width: 1099px) {
+  /* Lupe rechts neben den Reitern statt zwischen Logo und Reitern */
+  .topnav { order: 1; }
+  .topsearch { order: 2; }
+  .topbar-right { order: 3; margin-left: 0; }
+}
+@media (max-width: 759px) {
+  .topsearch { margin-left: auto; }
+  .search-backdrop { padding: 0; }
+  .search-sheet {
+    width: 100%; height: 100dvh; max-height: none; border: 0; border-radius: 0;
+    padding: calc(var(--safe-top) + 8px) max(12px, env(safe-area-inset-right)) calc(var(--safe-bottom) + 8px) max(12px, env(safe-area-inset-left));
+  }
+}
+

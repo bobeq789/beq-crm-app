@@ -1,15 +1,13 @@
 // Übersicht (Startseite): Schnellerfassung, Zu erledigen, Team, Termine, Wiedervorlagen, Letzte Meetings.
 // Jede Aufgabe steht nur einmal: To-dos und „In Arbeit“ in „Zu erledigen“, alle übrigen Arten
 // außer „Erledigt“ in „Wiedervorlagen“ (Nachträge Aktivitäten und Terminlink vom 08.11.2026).
-import { html, useState, useRef } from '../lib/preact.js'
+import { html, useState } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { todayStr, endOfWeekStr, addDays, fmtDateLong, fmtDateTime, fmtTimeRange, fmtRelative, firstName, sinceLabel, local, ymd, norm } from '../lib/util.js'
 import {
   state,
   myEmail,
   cardKind,
-  createCard,
-  defaultProjectId,
   getProject,
   meetingPersons,
   isMyEvent,
@@ -32,11 +30,12 @@ import {
   isGuest,
   activeMembers,
   savePrefs,
+  openDialog,
 } from '../store.js'
 import { TILE_DEFAULT, tileLayout, moveTile, ArrangeView, useTileDrag } from './tiles.js'
 import { openEvent, openCard, navigate } from '../router.js'
 import { eventsTodayTomorrow } from './calendar.js'
-import { PageHead, Tile, Empty, TaskRow, Segmented, PriorityPicker, ProjectSelect, AssigneeSelect, Dot, activityWhen, useIsMobile } from './common.js'
+import { PageHead, Tile, Empty, TaskRow, Segmented, Dot, activityWhen, useIsMobile } from './common.js'
 
 const PRIO_ORDER = { hoch: 0, mittel: 1, niedrig: 2 }
 
@@ -65,58 +64,6 @@ export function isMine(card) {
   return assignee ? assignee === me : (card.created_by || '').toLowerCase() === me
 }
 
-function QuickAdd() {
-  const [title, setTitle] = useState('')
-  const [priority, setPriority] = useState(null)
-  const [due, setDue] = useState('')
-  const lastProject = local.get('beqcrm-last-quick-project')
-  const validLast = lastProject && getProject(lastProject) && !getProject(lastProject).archived ? lastProject : null
-  const [projectId, setProjectId] = useState(validLast || defaultProjectId())
-  const [assignee, setAssignee] = useState(myEmail())
-  const inputRef = useRef()
-
-  const submit = async (e) => {
-    e.preventDefault()
-    const t = title.trim()
-    if (!t) return
-    local.set('beqcrm-last-quick-project', projectId)
-    setTitle('')
-    setPriority(null)
-    setDue('')
-    await createCard({ title: t, project_id: projectId, kind: 'todo', priority, due_date: due || null, assignee: assignee || null })
-    inputRef.current && inputRef.current.focus()
-  }
-
-  return html`<form class="quick-add" onSubmit=${submit}>
-    <div class="quick-row">
-      <input
-        ref=${inputRef}
-        class="quick-input"
-        value=${title}
-        placeholder="Was steht an?"
-        aria-label="Neue Aufgabe"
-        onInput=${(e) => setTitle(e.target.value)}
-      />
-      <button type="submit" class="btn btn-primary" disabled=${!title.trim()}><${Icon} name="plus" size=${18} /><span class="hide-sm">Anlegen</span></button>
-    </div>
-    <div class="quick-options">
-      <${PriorityPicker} value=${priority} onChange=${setPriority} />
-      <label class="quick-field">
-        <span class="sr-only">Fällig am</span>
-        <input type="date" value=${due} onInput=${(e) => setDue(e.target.value)} aria-label="Fällig am" />
-      </label>
-      <label class="quick-field">
-        <span class="sr-only">Projekt</span>
-        <${ProjectSelect} value=${projectId} onChange=${setProjectId} />
-      </label>
-      <label class="quick-field">
-        <span class="sr-only">Zuständig</span>
-        <${AssigneeSelect} value=${assignee} onChange=${setAssignee} emptyLabel="Niemand zuständig" />
-      </label>
-    </div>
-  </form>`
-}
-
 function TodoTile({ cards, drag }) {
   const [showAll, setShowAll] = useState(false)
   const today = todayStr()
@@ -141,7 +88,8 @@ function TodoTile({ cards, drag }) {
           ${extra}
         </div>`
       : null
-  return html`<${Tile} title="Zu erledigen" count=${cards.length} cls="tile-todo" drag=${drag}>
+  const addTask = html`<button type="button" class="link-btn" onClick=${() => openDialog({ kind: 'new-task', title: '' })}><${Icon} name="plus" size=${16} /> Aufgabe</button>`
+  return html`<${Tile} title="Zu erledigen" count=${cards.length} cls="tile-todo" drag=${drag} actions=${addTask}>
     ${cards.length === 0 && html`<${Empty}>Nichts offen. Schön.<//>`}
     ${section('Überfällig und heute', groups.today)}
     ${section('Dringend', groups.urgent)}
@@ -467,8 +415,7 @@ export function Overview() {
           onReset=${() => saveLayout(null)}
           onDone=${() => setArranging(false)}
         />`
-      : html`<${QuickAdd} />
-          ${isMobile
+      : html`${isMobile
             ? html`<div class="overview-grid ov-one">${column('alle', mobileOrder, 'col-main')}</div>`
             : oneSided
             ? html`<div class="overview-grid ov-one">${column(wide.length ? 'breit' : 'schmal', layout.reihe, 'col-main')}</div>`

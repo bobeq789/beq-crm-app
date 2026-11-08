@@ -15,6 +15,7 @@ import { SettingsPage } from './ui/prefs.js'
 import { SharedPage } from './ui/shared.js'
 import { SalesPage } from './ui/sales.js'
 import { PostfachPage } from './ui/postfach.js'
+import { TopSearch } from './ui/search.js'
 import { Modal, dialogKinds } from './ui/common.js'
 import { openDialog, closeDialog } from './store.js'
 import { Login, SetPassword, NotMember, AuthError, Splash, MfaEnroll, MfaVerify } from './ui/auth.js'
@@ -115,12 +116,21 @@ function Shell({ route }) {
       <a class="brand" href=${home} aria-label="beQ CRM, zur Startseite">
         <img src="img/logo-dunkel.svg" alt="beQ CRM" width="104" height="26" />
       </a>
+      ${!guest && html`<div class="topsearch"><${TopSearch} /></div>`}
       <nav class="topnav" aria-label="Bereiche">
         ${nav.map(
-          (n) => html`<a href=${'#/' + n.key} class=${section === n.key ? 'active' : ''} aria-current=${section === n.key ? 'page' : undefined}>
+          (n) => html`<a
+            href=${'#/' + n.key}
+            class=${[section === n.key ? 'active' : '', !guest && !MOBILE_MAIN.includes(n.key) ? 'nav-extra' : ''].filter(Boolean).join(' ')}
+            aria-current=${section === n.key ? 'page' : undefined}
+          >
             ${n.label}<${NavCount} n=${counts[n.key]} what=${countText[n.key]} />
           </a>`
         )}
+        ${!guest &&
+        html`<button type="button" class=${'topnav-more' + (!MOBILE_MAIN.includes(section) && section !== 'einstellungen' ? ' active' : '')} onClick=${() => openDialog({ kind: 'nav-more' })}>
+          Mehr
+        </button>`}
       </nav>
       <div class="topbar-right">
         ${isDemo && html`<span class="demo-badge" title="Alle Daten sind erfunden und liegen nur in diesem Browser">${guest ? 'Demo · Gast' : 'Demo'}</span>`}

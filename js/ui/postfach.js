@@ -189,9 +189,16 @@ function NoReplyList({ box }) {
 export function PostfachPage() {
   const route = useRoute()
   const mobile = useIsMobile()
-  const [folder, setFolder] = useState('eingang')
+  // Suchbegriff aus der Suche oben (#/postfach?q=…): dann in allen Ordnern suchen
+  const routeQuery = route.params.get('q') || ''
+  const [folder, setFolder] = useState(routeQuery ? 'alle' : 'eingang')
   const [box, setBox] = useState('')
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(routeQuery)
+  useEffect(() => {
+    if (!routeQuery) return
+    setQuery(routeQuery)
+    setFolder('alle')
+  }, [routeQuery])
   const [limit, setLimit] = useState(PAGE)
   const [syncing, setSyncing] = useState(false)
   const selectedId = route.params.get('mail')
