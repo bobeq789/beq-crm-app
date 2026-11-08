@@ -197,6 +197,48 @@ export async function createSupabaseApi(config) {
       const data = check(await client.from('meetings').select('id').ilike('summary', pattern).limit(300))
       return data.map((r) => r.id)
     },
+    // ---------- Follow-up (20_follow_up.sql), nur eigene aktive Postfächer ----------
+    // Fehlt die SQL-Datei noch, kommt einfach nichts (statt einer Fehlermeldung)
+    async antwortenOffen() {
+      try {
+        return check(await client.rpc('antworten_offen')) || []
+      } catch {
+        return []
+      }
+    },
+    async mailsOhneAntwort(days = 60) {
+      try {
+        return check(await client.rpc('mails_ohne_antwort', { p_tage: days })) || []
+      } catch {
+        return null
+      }
+    },
+    async postfachNeu() {
+      try {
+        return (check(await client.rpc('postfach_neu')) || []).map((r) => r.email_id)
+      } catch {
+        return []
+      }
+    },
+    async postfachGesehen() {
+      try {
+        return check(await client.rpc('postfach_gesehen'))
+      } catch {
+        return null
+      }
+    },
+    // „Braucht keine Antwort“ und zurück
+    async dismissThread(mailbox, verlauf) {
+      check(await client.from('nachfass_aus').upsert({ mailbox, verlauf, at: new Date().toISOString() }, { onConflict: 'person,mailbox,verlauf' }))
+    },
+    async undismissThread(mailbox, verlauf) {
+      check(await client.from('nachfass_aus').delete().eq('mailbox', mailbox).eq('verlauf', verlauf))
+    },
+    // Mails still nachladen (Postfach offen und Neues da)
+    async reloadEmails() {
+      return fetchAll('emails')
+    },
+
     // Aktivitäten einer Aufgabe (nach dem Verschieben, die Datenbank kann eine anlegen)
     async fetchActivities(cardId) {
       try {

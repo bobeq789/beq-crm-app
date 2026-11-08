@@ -1,10 +1,10 @@
 // Einstieg der App: Rahmen (Kopfleiste, Navigation), Seitenwahl, Fenster über der Seite, Service Worker
-import { html, render } from './lib/preact.js'
+import { html, render, useEffect } from './lib/preact.js'
 import { Icon } from './lib/icons.js'
-import { useStore, boot, isDemo, isGuest } from './store.js'
+import { useStore, boot, isDemo, isGuest, state } from './store.js'
 import { useRoute } from './router.js'
 import { Dialogs, Toasts } from './ui/common.js'
-import { Overview } from './ui/overview.js'
+import { Overview, overviewCount } from './ui/overview.js'
 import { Board } from './ui/board.js'
 import { CardPanel } from './ui/card.js'
 import { CalendarPage, EventPanel } from './ui/calendar.js'
@@ -81,9 +81,31 @@ function Page({ route }) {
   }
 }
 
+// Zahlen in der Navigation (Nachtrag Follow-up, B1): an „Übersicht“ das Fällige plus „Antwort
+// da“, am „Postfach“ die neuen Mails seit dem letzten Blick. Kreis in Grün mit Navy-Schrift.
+function NavCount({ n, what }) {
+  if (!n) return null
+  return html`<span class="nav-count" title=${n + ' ' + what}><span aria-hidden="true">${n > 99 ? '99+' : n}</span><span class="sr-only">, ${n} ${what}</span></span>`
+}
+
+// Dieselbe Zahl wie an „Übersicht“ am App-Symbol (wo der Browser es kann), in der Hauptansicht
+function useAppBadge(n) {
+  useEffect(() => {
+    try {
+      if (n && navigator.setAppBadge) navigator.setAppBadge(n).catch(() => {})
+      else if (navigator.clearAppBadge) navigator.clearAppBadge().catch(() => {})
+    } catch {
+      // Ohne App-Symbol (zum Beispiel im normalen Browserfenster) nichts tun
+    }
+  }, [n])
+}
+
 function Shell({ route }) {
   const guest = isGuest()
   const nav = guest ? NAV_GUEST : NAV_TEAM
+  const counts = guest ? {} : { '': overviewCount(), postfach: state.followUp.newMail.length }
+  const countText = { '': 'fällig', postfach: 'neu' }
+  useAppBadge(counts[''] || 0)
   const section = route.parts[0] || (guest ? 'geteilt' : '')
   const cardId = route.params.get('karte')
   const eventId = guest ? null : route.params.get('termin')
@@ -96,7 +118,7 @@ function Shell({ route }) {
       <nav class="topnav" aria-label="Bereiche">
         ${nav.map(
           (n) => html`<a href=${'#/' + n.key} class=${section === n.key ? 'active' : ''} aria-current=${section === n.key ? 'page' : undefined}>
-            ${n.label}
+            ${n.label}<${NavCount} n=${counts[n.key]} what=${countText[n.key]} />
           </a>`
         )}
       </nav>
@@ -120,7 +142,7 @@ function Shell({ route }) {
     html`<nav class="bottomnav" aria-label="Bereiche">
       ${(guest ? nav : nav.filter((n) => MOBILE_MAIN.includes(n.key))).map(
         (n) => html`<a href=${'#/' + n.key} class=${section === n.key ? 'active' : ''} aria-current=${section === n.key ? 'page' : undefined}>
-          <${Icon} name=${n.icon} size=${22} />
+          <span class="bottomnav-icon"><${Icon} name=${n.icon} size=${22} /><${NavCount} n=${counts[n.key]} what=${countText[n.key]} /></span>
           <span>${n.label}</span>
         </a>`
       )}

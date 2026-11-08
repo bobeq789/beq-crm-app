@@ -27,7 +27,7 @@ export const EXTRA_TABLES = ['card_events', 'card_seen']
 export const OPTIONAL_TABLES = ['project_shares', 'products', 'deals', 'deal_items', 'mailboxes', 'aktivitaeten']
 
 // Nur im Demo-Modus: Dateien an Aufgaben (in Supabase liegen sie im Storage, nicht in einer Tabelle)
-export const DEMO_TABLES = ['files']
+export const DEMO_TABLES = ['files', 'nachfass_aus', 'nutzer_gesehen']
 
 const WITH_UPDATED_AT = new Set(['projects', 'organizations', 'persons', 'meetings', 'cards', 'notes', 'events', 'products', 'deals', 'aktivitaeten'])
 const WITH_CREATED_AT = new Set(['team_members', 'projects', 'stages', 'organizations', 'persons', 'meetings', 'cards', 'card_shares', 'project_shares', 'notes', 'emails', 'products', 'deals', 'deal_items', 'aktivitaeten'])
@@ -456,4 +456,79 @@ export function guestView(db, email) {
   view.files = (db.files || []).filter((f) => shared.has(f.card_id))
   view.aktivitaeten = (db.aktivitaeten || []).filter((a) => a.card_id && shared.has(a.card_id))
   return view
+}
+
+// ------------------------------------------------------------
+// Follow-up wie 20_follow_up.sql (für den Demo-Modus). Nur eigene aktive Postfächer.
+// ------------------------------------------------------------
+export function myBoxes(db, me) {
+  return (db.mailboxes || []).filter((b) => b.owner === me && b.status === 'aktiv').map((b) => b.address)
+}
+const inBoxes = (m, boxes) => [m.mailbox, ...(m.mailboxes || [])].some((b) => boxes.includes(b))
+const low = (s) => String(s || '').trim().toLowerCase()
+
+// „Antwort da“: wartende Aufgaben, Mail eines Kontakts nach dem letzten Ändern, seitdem keine Antwort
+export function openAnswers(db, me) {
+  const boxes = myBoxes(db, me)
+  if (!boxes.length) return []
+  const waiting = new Set(db.stages.filter((s) => s.kind === 'waiting').map((s) => s.id))
+  const out = []
+  db.cards
+    .filter((c) => waiting.has(c.stage_id) && !c.archived && (c.person_id || c.org_id))
+    .forEach((c) => {
+      const people = c.person_id ? db.persons.filter((p) => p.id === c.person_id) : db.persons.filter((p) => p.org_id === c.org_id)
+      const adr = new Set(people.flatMap((p) => (p.emails || []).map(low)).filter(Boolean))
+      if (!adr.size) return
+      const inbound = db.emails
+        .filter((e) => e.direction === 'in' && adr.has(low(e.from_email)) && e.sent_at > c.updated_at && inBoxes(e, boxes))
+        .sort((a, b) => b.sent_at.localeCompare(a.sent_at))[0]
+      if (!inbound) return
+      const replied = db.emails.some(
+        (o) => o.direction === 'out' && o.sent_at > inbound.sent_at && inBoxes(o, boxes) && [...(o.to_emails || []), ...(o.cc_emails || [])].some((a) => adr.has(low(a)))
+      )
+      if (!replied) out.push({ card_id: c.id, email_id: inbound.id, from_email: inbound.from_email, from_name: inbound.from_name, subject: inbound.subject, sent_at: inbound.sent_at, mailbox: inbound.mailbox })
+    })
+  return out
+}
+
+// „Ohne Antwort“: je Verlauf die letzte Mail, eigene, älter als 3 Tage, an Fremde, ohne Antwort
+export function mailsWithoutReply(db, me, days = 60) {
+  const boxes = myBoxes(db, me)
+  const team = new Set([...db.team_members.map((t) => low(t.email)), ...(db.mailboxes || []).map((m) => m.address)])
+  const since = Date.now() - days * 864e5
+  const threeDays = Date.now() - 3 * 864e5
+  const last = new Map()
+  db.emails.forEach((e) => {
+    if (!e.sent_at || new Date(e.sent_at).getTime() <= since) return
+    const verlauf = e.thread_id || e.message_id
+    ;[...new Set([e.mailbox, ...(e.mailboxes || [])])]
+      .filter((b) => boxes.includes(b))
+      .forEach((box) => {
+        const key = box + '|' + verlauf
+        const cur = last.get(key)
+        if (!cur || e.sent_at > cur.mail.sent_at) last.set(key, { box, verlauf, mail: e })
+      })
+  })
+  const out = []
+  last.forEach(({ box, verlauf, mail }) => {
+    if (mail.direction !== 'out' || new Date(mail.sent_at).getTime() >= threeDays) return
+    const foreign = [...new Set([...(mail.to_emails || []), ...(mail.cc_emails || [])].map(low))].filter((a) => a && !team.has(a))
+    if (!foreign.length) return
+    if (db.emails.some((a) => a.direction === 'in' && a.sent_at > mail.sent_at && foreign.includes(low(a.from_email)))) return
+    if ((db.nachfass_aus || []).some((n) => n.person === me && n.mailbox === box && n.verlauf === verlauf && n.at >= mail.sent_at)) return
+    const days = Math.round((new Date().setHours(12, 0, 0, 0) - new Date(mail.sent_at).setHours(12, 0, 0, 0)) / 864e5)
+    out.push({ email_id: mail.id, mailbox: box, verlauf, sent_at: mail.sent_at, subject: mail.subject, to_emails: mail.to_emails, tage: days })
+  })
+  return out.sort((a, b) => b.sent_at.localeCompare(a.sent_at))
+}
+
+// Postfach: neu seit dem letzten Öffnen (created_at), höchstens einen Tag vorher gesendet
+export function newInboxMails(db, me) {
+  const seen = (db.nutzer_gesehen || []).find((g) => g.person === me && g.bereich === 'postfach')
+  if (!seen) return []
+  const boxes = myBoxes(db, me)
+  const dayBefore = new Date(new Date(seen.at).getTime() - 864e5).toISOString()
+  return db.emails
+    .filter((e) => e.direction === 'in' && (e.labels || []).includes('INBOX') && inBoxes(e, boxes) && e.created_at > seen.at && e.sent_at > dayBefore)
+    .map((e) => e.id)
 }

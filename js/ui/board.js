@@ -36,6 +36,7 @@ import {
   deleteStage,
   countStageCards,
   lastOfKindHint,
+  answerFor,
 } from '../store.js'
 import { navigate, openCard } from '../router.js'
 import { PageHead, Dot, Avatar, PrioBadge, DueBadge, NewBadge, Modal, Field, Empty, Labels, ActivityBadge, dialogKinds, useIsMobile } from './common.js'
@@ -62,6 +63,7 @@ function BoardCard({ card, draggable }) {
       ${(person || org) && html`<span class="bc-sub">${[person && person.name, org && org.name].filter(Boolean).join(' · ')}</span>`}
       ${(card.labels || []).length > 0 && html`<span class="bc-labels"><${Labels} labels=${card.labels} /></span>`}
       <span class="bc-meta">
+        ${answerFor(card.id) && html`<span class="badge badge-new" title="Ein Kontakt hat geantwortet">Antwort da</span>`}
         <${NewBadge} cardId=${card.id} />
         ${assignedToOther(card) && html`<${Avatar} email=${card.assignee} />`}
         <${PrioBadge} priority=${card.priority} />

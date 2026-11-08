@@ -1,5 +1,5 @@
 // Reiter „Postfach“: alle Mails aus den verbundenen Postfächern (14_postfach.sql).
-// Liste mit Filter (Eingang, Gesendet, Alle), Postfach und Suche, daneben die Mail mit
+// Liste mit Filter (Eingang, Gesendet, Alle, Ohne Antwort), Postfach und Suche, daneben die Mail mit
 // Anhängen. „Neue Mail“, „Antworten“, „Allen antworten“, „Weiterleiten“ öffnen das
 // Fenster zum Schreiben. Senden und Löschen nur aus eigenen Postfächern.
 // Mailtext wird nie als HTML eingesetzt, sondern als Text (htmlToText).
@@ -24,6 +24,11 @@ import {
   closeDialog,
   confirmDialog,
   toast,
+  openedPostfach,
+  closedPostfach,
+  isNewMail,
+  loadNoReply,
+  dismissNoReply,
 } from '../store.js'
 import { PageHead, Segmented, Empty, LinkText, Modal, Field, dialogKinds, useIsMobile } from './common.js'
 import { MailAttachments, attachmentsOf } from './emails.js'
@@ -52,14 +57,16 @@ function mailboxesOf(m) {
 // ------------------------------------------------------------
 // Liste
 // ------------------------------------------------------------
+// Neu seit dem letzten Blick: fett mit gefülltem Pfeil, wie ungelesen (Gmail bleibt unberührt)
 function MailItem({ mail, active, onOpen }) {
   const out = mail.direction === 'out'
   const who = out ? 'An ' + (mail.to_emails || []).map(nameFor).join(', ') : fromName(mail)
   const files = attachmentsOf(mail)
+  const fresh = isNewMail(mail)
   return html`<li>
-    <button type="button" class=${'pf-item' + (active ? ' active' : '')} aria-current=${active ? 'true' : undefined} onClick=${() => onOpen(mail.id)}>
+    <button type="button" class=${'pf-item' + (active ? ' active' : '') + (fresh ? ' pf-new' : '')} aria-current=${active ? 'true' : undefined} onClick=${() => onOpen(mail.id)}>
       <span class="pf-line1">
-        <span class="pf-who">${who || '(unbekannt)'}</span>
+        <span class="pf-who">${fresh && html`<span class="pf-new-mark" aria-label="Neu"></span>`}${who || '(unbekannt)'}</span>
         <span class="pf-time">${shortTime(mail.sent_at)}</span>
       </span>
       <span class="pf-subject">
@@ -134,6 +141,45 @@ function MailReader({ mail, onBack }) {
 }
 
 // ------------------------------------------------------------
+// „Ohne Antwort“ (D3): eigene Mails an Fremde, älter als 3 Tage, ohne Antwort. Aufgeklappt
+// „Nachhaken“ (Antwort im selben Verlauf) und „Braucht keine Antwort“ (auch als Haken).
+// ------------------------------------------------------------
+function NoReplyItem({ item, open, onToggle }) {
+  const mail = state.db.emails.find((m) => m.id === item.email_id)
+  const to = (item.to_emails || []).map(nameFor).join(', ')
+  const since = item.tage === 1 ? 'seit 1 Tag' : `seit ${item.tage} Tagen`
+  return html`<li class=${'pf-noreply' + (open ? ' open' : '')}>
+    <div class="pf-noreply-row">
+      <button type="button" class="pf-item" aria-expanded=${open} onClick=${onToggle}>
+        <span class="pf-line1"><span class="pf-who">An ${to || '(unbekannt)'}</span><span class="pf-time">${shortTime(item.sent_at)}</span></span>
+        <span class="pf-subject"><span class="badge due-later">${since}</span> ${item.subject || '(ohne Betreff)'}</span>
+      </button>
+      <button type="button" class="check pf-noreply-check" title="Braucht keine Antwort" aria-label=${'Braucht keine Antwort: ' + (item.subject || 'ohne Betreff')} onClick=${() => dismissNoReply(item)}>
+        <${Icon} name="check" size=${16} />
+      </button>
+    </div>
+    ${open &&
+    html`<div class="pf-noreply-actions">
+      ${mail && html`<button type="button" class="btn btn-small btn-primary" onClick=${() => openReply(mail)}><${Icon} name="reply" size=${16} /> Nachhaken</button>`}
+      <button type="button" class="btn btn-small" onClick=${() => dismissNoReply(item)}><${Icon} name="check" size=${16} /> Braucht keine Antwort</button>
+    </div>`}
+  </li>`
+}
+
+function NoReplyList({ box }) {
+  const [openKey, setOpenKey] = useState(null)
+  const items = (state.followUp.noReply || []).filter((x) => !box || x.mailbox === box)
+  if (state.followUp.noReply === null) return html`<p class="muted pf-loading">Wird geladen …</p>`
+  if (!items.length) return html`<${Empty}>Gerade wartest du auf keine Antwort. Hier stehen eigene Mails an Fremde, auf die nach 3 Tagen niemand geantwortet hat.<//>`
+  return html`<ul class="pf-items">
+    ${items.map((x) => {
+      const key = x.mailbox + '|' + x.verlauf
+      return html`<${NoReplyItem} key=${key} item=${x} open=${openKey === key} onToggle=${() => setOpenKey(openKey === key ? null : key)} />`
+    })}
+  </ul>`
+}
+
+// ------------------------------------------------------------
 // Seite
 // ------------------------------------------------------------
 export function PostfachPage() {
@@ -145,6 +191,14 @@ export function PostfachPage() {
   const [limit, setLimit] = useState(PAGE)
   const [syncing, setSyncing] = useState(false)
   const selectedId = route.params.get('mail')
+  // Öffnen merkt sich den letzten Blick (auf allen Geräten), die Zahl am Postfach geht auf null
+  useEffect(() => {
+    openedPostfach()
+    return closedPostfach
+  }, [])
+  useEffect(() => {
+    if (folder === 'ohne') loadNoReply()
+  }, [folder])
   // Auswahl nur mit eigenen Postfächern, fremde Mails liefert die Datenbank ohnehin nicht (17_mails_privat.sql)
   const boxes = myActiveMailboxes()
   const mine = myActiveMailboxes()
@@ -174,7 +228,9 @@ export function PostfachPage() {
     return html`<div class="page"><${MailReader} mail=${selected} onBack=${back} key=${selected.id} /></div>`
   }
 
-  const listView = html`<section class="pf-list" aria-label="Mails">
+  const listView = folder === 'ohne'
+    ? html`<section class="pf-list" aria-label="Ohne Antwort"><${NoReplyList} box=${box} /></section>`
+    : html`<section class="pf-list" aria-label="Mails">
     ${list.length === 0
       ? html`<${Empty}>${state.db.emails.length ? 'Keine Mails für diese Auswahl.' : boxes.length ? 'Noch keine Mails. Der erste Abgleich läuft in den nächsten Minuten.' : 'Noch kein Postfach verbunden. Unter Einstellungen, „Postfächer und Kalender“ verbindest du deins.'}<//>`
       : html`<ul class="pf-items">${list.slice(0, limit).map((m) => html`<${MailItem} key=${m.id} mail=${m} active=${m.id === selectedId} onOpen=${open} />`)}</ul>
@@ -195,6 +251,7 @@ export function PostfachPage() {
           { value: 'eingang', label: 'Eingang' },
           { value: 'gesendet', label: 'Gesendet' },
           { value: 'alle', label: 'Alle' },
+          { value: 'ohne', label: 'Ohne Antwort' },
         ]}
       />
       ${boxes.length > 1 &&
@@ -227,6 +284,8 @@ async function openCompose({ mode, mail = null }) {
   openDialog({ kind: 'mail-compose', mode, mail: full })
 }
 export const openNewMail = (to = '') => openDialog({ kind: 'mail-compose', mode: 'neu', to })
+// Antwort auf genau diese Mail, im selben Verlauf (auch „Nachhaken“ auf eine eigene Mail)
+export const openReply = (mail, mode = 'antworten') => openCompose({ mode, mail })
 
 // Erste Zeile des zitierten Verlaufs. Beim Senden trennt sie eigenen Text und Zitat, damit die
 // Signatur wie in Gmail dazwischen steht.

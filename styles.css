@@ -1097,3 +1097,34 @@ button.act-main:hover .act-title { color: var(--accent-text); }
 .act-done-wrap .history-toggle { font-size: 14px; font-weight: 600; }
 .badge.act-badge .icon { flex: none; }
 .task-title.act-loose { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Follow-up (Nachtrag „Follow-up“): Zahlen in der Navigation, „Antwort da“, neue Mails,
+   „Ohne Antwort“. Zahlen als Kreis in Grün mit Navy-Schrift (Rot gibt es nur für Überfälliges). */
+.nav-count {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px;
+  margin-left: 6px; border-radius: 999px; background: var(--green); color: var(--navy); font-size: 11px; font-weight: 700; line-height: 1;
+}
+.bottomnav-icon { position: relative; display: inline-flex; }
+.bottomnav-icon .nav-count { position: absolute; top: -6px; right: -12px; margin: 0; }
+.answer-notice {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; margin: 0 0 12px;
+  border-radius: 10px; background: var(--chip-active-bg); color: var(--text);
+}
+.answer-notice > .icon { color: var(--accent-text); flex: none; }
+.answer-notice-text { flex: 1 1 220px; overflow-wrap: anywhere; }
+.answer-icon { flex: none; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; color: var(--accent-text); }
+.answer-line { font-size: 14px; color: var(--text); margin-top: 2px; overflow-wrap: anywhere; }
+.answer-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.pf-new .pf-who, .pf-new .pf-subject { font-weight: 700; color: var(--text); }
+.pf-new-mark {
+  display: inline-block; width: 0; height: 0; margin-right: 6px; vertical-align: 1px;
+  border-left: 7px solid var(--green); border-top: 5px solid transparent; border-bottom: 5px solid transparent;
+}
+.pf-noreply-row { display: flex; align-items: center; gap: 4px; }
+.pf-noreply-row .pf-item { flex: 1; min-width: 0; }
+.pf-noreply-check { opacity: 0; margin-right: 8px; }
+.pf-noreply-row:hover .pf-noreply-check, .pf-noreply-check:focus-visible { opacity: 1; }
+@media (hover: none) { .pf-noreply-check { opacity: 1; } }
+.pf-noreply-actions { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 12px 12px; }
+.pf-noreply .pf-subject .badge { margin-right: 4px; }
+.pf-loading { padding: 12px; }

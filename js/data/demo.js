@@ -1,6 +1,6 @@
 // Demo-Modus: Daten liegen nur in diesem Browser (localStorage). Gleiche Schnittstelle wie supabase.js.
 // Mit ?demo&gast sieht man die App so, wie ein Gast sie sieht.
-import { local, matches } from '../lib/util.js'
+import { local, matches, uid } from '../lib/util.js'
 import { buildSeed, DEMO_ME, DEMO_GUEST, DEMO_TEAM } from './seed.js'
 import {
   prepareInsert,
@@ -19,6 +19,9 @@ import {
   afterUpdate,
   activityEventsFor,
   waitingFollowUpFor,
+  openAnswers,
+  mailsWithoutReply,
+  newInboxMails,
   cascadeDelete,
   guestView,
   dbError,
@@ -215,6 +218,37 @@ export function createDemoApi({ asGuest = false } = {}) {
       cascadeDelete(db, table, id)
       if (table === 'deal_items' && old) recalcDeal(db, old.deal_id)
       save()
+    },
+
+    // ---------- Follow-up wie 20_follow_up.sql (Gäste bekommen nichts) ----------
+    async antwortenOffen() {
+      return asGuest ? [] : clone(openAnswers(db, me))
+    },
+    async mailsOhneAntwort(days = 60) {
+      return asGuest ? [] : clone(mailsWithoutReply(db, me, days))
+    },
+    async postfachNeu() {
+      return asGuest ? [] : newInboxMails(db, me)
+    },
+    async postfachGesehen() {
+      if (asGuest) return null
+      const now = new Date().toISOString()
+      const row = db.nutzer_gesehen.find((g) => g.person === me && g.bereich === 'postfach')
+      const before = row ? row.at : null
+      db.nutzer_gesehen = [...db.nutzer_gesehen.filter((g) => g !== row), { person: me, bereich: 'postfach', at: now }]
+      save()
+      return before
+    },
+    async dismissThread(mailbox, verlauf) {
+      db.nachfass_aus = [...db.nachfass_aus.filter((n) => !(n.person === me && n.mailbox === mailbox && n.verlauf === verlauf)), { id: uid(), person: me, mailbox, verlauf, at: new Date().toISOString() }]
+      save()
+    },
+    async undismissThread(mailbox, verlauf) {
+      db.nachfass_aus = db.nachfass_aus.filter((n) => !(n.person === me && n.mailbox === mailbox && n.verlauf === verlauf))
+      save()
+    },
+    async reloadEmails() {
+      return clone(db.emails)
     },
 
     // Aktivitäten einer Aufgabe (nach dem Verschieben, die Datenbank kann eine anlegen)

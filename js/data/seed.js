@@ -435,6 +435,9 @@ export function buildSeed() {
     ['laura', 'in', A, 2, 'AW: Preisblatt beQ Hub', 'Hallo Frau Berger,\n\nvielen Dank. Wir besprechen das Preisblatt in der nächsten Vorstandssitzung und melden uns danach.\n\nMit freundlichen Grüßen\nLaura Vogt\n\nAm Di., 28. Okt. schrieb Anna Berger:\n> Hallo Frau Vogt,\n> wie vereinbart erhalten Sie unser Preisblatt für die Modernisierung im Bestand.', [], 't3'],
     ['laura', 'out', J, 0, 'Termin morgen', 'Hallo Frau Vogt,\n\nich freue mich auf unseren Termin morgen um 11 Uhr bei Ihnen in Köln.\n\nViele Grüße\nJonas Keller', [], 't4'],
     ['thomas', 'in', J, 7, 'Rahmenvertrag Entwurf', 'Hallo Jonas,\n\nanbei unser Entwurf für den Rahmenvertrag. Wir könnten ab Dezember starten.\n\nGruß\nThomas', ['Rahmenvertrag_Entwurf.docx'], 't5'],
+    ['nina', 'out', A, 5, 'Termin für die Quartiersverwaltung', 'Hallo Frau Albrecht,\n\nkönnten wir in der kommenden Woche einen Termin für die Vorstellung des Piloten finden? Ich richte mich gern nach Ihnen.\n\nViele Grüße\nAnna Berger', [], 't6'],
+    ['katrin', 'out', A, 9, 'Standfläche Fachmesse', 'Hallo Katrin,\n\nhast du schon eine Rückmeldung zur Standfläche?\n\nViele Grüße\nAnna', [], 't7'],
+    ['katrin', 'in', A, 7, 'Standfläche bestätigt', 'Hallo Anna,\n\ndie Standfläche ist bestätigt, die Rechnung kommt separat.\n\nGruß\nKatrin', [], 't8'],
     ['thomas', 'out', J, 3, 'AW: Rahmenvertrag Entwurf', 'Hallo Thomas,\n\ndanke dir. Ich gehe den Entwurf bis Ende der Woche durch und melde mich mit Anmerkungen.\n\nViele Grüße\nJonas\n\nAm Mo., 27. Okt. schrieb Thomas Brandt:\n> Hallo Jonas,\n> anbei unser Entwurf für den Rahmenvertrag.', [], 't5'],
   ]
   mailDefs.forEach(([key, direction, mailbox, ago, subject, body, attachments, thread], i) => {
@@ -583,6 +586,8 @@ export function buildSeed() {
     updated_at: created,
     ...extra,
   })
+  // Anna hat zuletzt vor gut einem Tag ins Postfach geschaut, die Mail von Petra von gestern ist neu
+  db.nutzer_gesehen.push({ person: A, bereich: 'postfach', at: new Date(Date.now() - 30 * 3600000).toISOString() })
   db.mailboxes = [
     mailbox(A, A),
     mailbox(J, J),

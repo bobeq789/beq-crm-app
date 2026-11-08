@@ -3,7 +3,7 @@
 // außer „Erledigt“ in „Wiedervorlagen“ (Nachträge Aktivitäten und Terminlink vom 08.11.2026).
 import { html, useState, useRef } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
-import { todayStr, endOfWeekStr, addDays, fmtDateLong, fmtDateTime, fmtTimeRange, firstName, sinceLabel, local, ymd, norm } from '../lib/util.js'
+import { todayStr, endOfWeekStr, addDays, fmtDateLong, fmtDateTime, fmtTimeRange, fmtRelative, firstName, sinceLabel, local, ymd, norm } from '../lib/util.js'
 import {
   state,
   myEmail,
@@ -27,8 +27,11 @@ import {
   completeActivity,
   getPerson,
   getOrg,
+  answerFor,
+  followUpIn,
+  isGuest,
 } from '../store.js'
-import { openEvent, navigate } from '../router.js'
+import { openEvent, openCard, navigate } from '../router.js'
 import { eventsTodayTomorrow } from './calendar.js'
 import { PageHead, Tile, Empty, TaskRow, Segmented, PriorityPicker, ProjectSelect, AssigneeSelect, Dot, activityWhen, useIsMobile } from './common.js'
 
@@ -161,7 +164,11 @@ export function followUpItems(cards, scope) {
   const in7 = addDays(today, 7)
   const dated = []
   const waiting = []
+  // „Antwort da“ ganz oben, diese Aufgaben stehen nicht noch einmal unter „Fällig“ oder „Wartet“
+  const answers = []
   cards.forEach((c) => {
+    const answer = answerFor(c.id)
+    if (answer) return answers.push({ key: c.id, card: c, answer })
     const act = nextActivity(c.id)
     const date = act ? act.faellig : c.due_date
     if (date && date <= in7) dated.push({ key: c.id, date, card: c, act })
@@ -172,7 +179,57 @@ export function followUpItems(cards, scope) {
     .forEach((a) => dated.push({ key: a.id, date: a.faellig, act: a }))
   dated.sort((x, y) => x.date.localeCompare(y.date) || (x.act && y.act ? activitySort(x.act, y.act) : 0))
   waiting.sort((a, b) => String(a.stage_changed_at).localeCompare(String(b.stage_changed_at)))
-  return { due: dated.filter((x) => x.date <= today), soon: dated.filter((x) => x.date > today), waiting }
+  answers.sort((x, y) => String(y.answer.sent_at).localeCompare(String(x.answer.sent_at)))
+  return { answers, due: dated.filter((x) => x.date <= today), soon: dated.filter((x) => x.date > today), waiting }
+}
+
+// „hat gestern geschrieben“, „hat vor 3 Tagen geschrieben“, „hat am Mo., 3. Nov. geschrieben“
+export function wroteWhen(iso) {
+  const rel = fmtRelative(iso)
+  return /^(vor|gestern|gerade)/.test(rel) ? `hat ${rel} geschrieben` : `hat am ${rel} geschrieben`
+}
+
+// Antwort da: Absender, wann, Betreff, dazu „Wieder in 3 Tagen, 1 Woche, 2 Wochen“. Das
+// Verschieben ändert die Aufgabe, damit ist der Hinweis weg.
+function AnswerRow({ card, answer }) {
+  const who = answer.from_name || (getPerson(card.person_id) || {}).name || answer.from_email
+  return html`<li class="task-row answer-row">
+    <span class="answer-icon" aria-hidden="true"><${Icon} name="mail" size=${16} /></span>
+    <div class="task-main">
+      <button type="button" class="task-title" onClick=${() => openCard(card.id)}>${card.title}</button>
+      <div class="answer-line"><strong>${who}</strong> ${wroteWhen(answer.sent_at)}${answer.subject ? html`: „${answer.subject}“` : ''}</div>
+      <div class="answer-actions">
+        <span class="muted small">Wieder in</span>
+        ${[[3, '3 Tagen'], [7, '1 Woche'], [14, '2 Wochen']].map(
+          ([n, label]) => html`<button type="button" class="chip-btn small" onClick=${() => followUpIn(card, n)}>${label}</button>`
+        )}
+      </div>
+    </div>
+  </li>`
+}
+
+// Zahl an „Übersicht“ und am App-Symbol: „Antwort da“ plus alles Fällige (auch aus „Zu
+// erledigen“), je Aufgabe einmal, plus fällige Aktivitäten ohne Aufgabe. Immer wie „Meine“.
+export function overviewCount() {
+  if (isGuest()) return 0
+  const today = todayStr()
+  const ids = new Set()
+  state.db.cards.forEach((c) => {
+    if (c.archived) return
+    const kind = cardKind(c)
+    if (kind === 'done') return
+    const next = nextActivity(c.id)
+    if (kind === 'todo' || kind === 'doing') {
+      const date = effectiveDate(c)
+      if (isMine(c) && date && date <= today) ids.add(c.id)
+      return
+    }
+    if (!isMine(c) && !(next && isMyActivity(next))) return
+    const date = next ? next.faellig : c.due_date
+    if ((date && date <= today) || answerFor(c.id)) ids.add(c.id)
+  })
+  const loose = allActivities().filter((a) => !a.card_id && !a.erledigt_at && a.faellig <= today && isMyActivity(a)).length
+  return ids.size + loose
 }
 
 // Aktivität ohne Aufgabe: Symbol, Text, Kontakt und Firma. Ein Klick öffnet den Kontakt.
@@ -197,7 +254,7 @@ function LooseActivityRow({ act }) {
 }
 
 function FollowUpTile({ groups }) {
-  const { due, soon, waiting } = groups
+  const { answers, due, soon, waiting } = groups
   const row = (x) =>
     x.card
       ? html`<${TaskRow} card=${x.card} key=${x.key} checkActivity=${x.act} />`
@@ -209,9 +266,10 @@ function FollowUpTile({ groups }) {
           <ul class="task-list">${list.map(render)}</ul>
         </div>`
       : null
-  const empty = !due.length && !soon.length && !waiting.length
-  return html`<${Tile} title="Wiedervorlagen" count=${due.length} cls="tile-followup">
+  const empty = !answers.length && !due.length && !soon.length && !waiting.length
+  return html`<${Tile} title="Wiedervorlagen" count=${answers.length + due.length} cls="tile-followup">
     ${empty && html`<${Empty}>Gerade steht nichts zum Nachhaken an.<//>`}
+    ${section('Antwort da', answers, (x) => html`<${AnswerRow} key=${x.key} card=${x.card} answer=${x.answer} />`)}
     ${section('Fällig', due, row)}
     ${section('Nächste 7 Tage', soon, row)}
     ${section('Wartet auf Antwort', waiting, (c) => html`<${TaskRow} card=${c} key=${c.id} showSince=${true} sinceText=${sinceLabel(c.stage_changed_at)} />`)}
@@ -333,7 +391,7 @@ export function Overview() {
   const follow = followUpItems(followCards, scope)
   const isMobile = useIsMobile()
   // Am Handy rückt die Kachel nach oben, sobald dort etwas fällig ist (C8 Punkt 5)
-  const followFirst = isMobile && follow.due.length > 0
+  const followFirst = isMobile && follow.due.length + follow.answers.length > 0
   const name = state.me ? firstName(state.me.name) : ''
 
   return html`<div class="page">

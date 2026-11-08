@@ -25,6 +25,7 @@ import {
   myEmail,
   assignCard,
   activitiesOfCard,
+  answerFor,
 } from '../store.js'
 import { closeCard } from '../router.js'
 import { Field, PriorityPicker, ProjectSelect, EntityPicker, Notes, Dot, LinkText, brandSafe, LabelPicker, Labels } from './common.js'
@@ -32,6 +33,8 @@ import { History } from './history.js'
 import { CardFiles } from './files.js'
 import { CardDeal } from './deal.js'
 import { ActivitySection } from './activities.js'
+import { openReply } from './postfach.js'
+import { wroteWhen } from './overview.js'
 
 // Teilen mit Gästen: antippen teilt, noch einmal antippen nimmt es zurück
 function ShareRow({ card }) {
@@ -103,6 +106,21 @@ function PanelFrame({ card, project, children }) {
       </div>
       <div class="panel-body">${children}</div>
     </aside>
+  </div>`
+}
+
+// „Antwort da“ (Nachtrag Follow-up): ein Kontakt hat geschrieben, seit die Aufgabe zuletzt
+// geändert wurde. „Antworten“ öffnet die Antwort auf genau diese Mail. Die Mail liegt immer in
+// einem eigenen Postfach (Frage 14), also kann man auch daraus antworten.
+function AnswerNotice({ card }) {
+  const a = answerFor(card.id)
+  if (!a) return null
+  const mail = state.db.emails.find((m) => m.id === a.email_id)
+  const who = a.from_name || (getPerson(card.person_id) || {}).name || a.from_email
+  return html`<div class="answer-notice" role="status">
+    <${Icon} name="mail" size=${18} />
+    <div class="answer-notice-text"><strong>Antwort da:</strong> ${who} ${wroteWhen(a.sent_at)}${a.subject ? html`: „${a.subject}“` : ''}</div>
+    ${mail && html`<button type="button" class="btn btn-small btn-primary" onClick=${() => openReply(mail)}><${Icon} name="reply" size=${16} /> Antworten</button>`}
   </div>`
 }
 
@@ -248,6 +266,7 @@ export function CardPanel({ id }) {
         }
       }}
     ></textarea>
+    <${AnswerNotice} card=${card} />
     <${ShareRow} card=${card} />
     ${card.archived && html`<p class="notice">Diese Aufgabe liegt im Archiv.</p>`}
 

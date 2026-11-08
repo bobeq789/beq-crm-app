@@ -34,6 +34,10 @@ export const state = {
   handovers: new Map(),
   // Zählt hoch, wenn neue Verlaufseinträge ohne Kartenänderung dazukommen (zum Beispiel Dateien)
   historyTick: 0,
+  // Follow-up (20_follow_up.sql), nur eigene Postfächer: „Antwort da“ je Aufgabe, neue Mails im
+  // Posteingang, „Ohne Antwort“ (erst beim Öffnen des Reiters geladen), letzter Blick ins
+  // Postfach vor diesem Öffnen (zum Hervorheben neuer Mails), Postfach gerade offen
+  followUp: { answers: [], newMail: [], noReply: null, postfachPrev: null, postfachOpen: false },
   loadedAt: 0,
   toasts: [],
   dialog: null,
@@ -250,6 +254,7 @@ async function enterApp() {
   state.me = state.db.team_members.find((t) => norm(t.email) === email) || { email: state.sessionEmail, name: state.sessionEmail, role: state.role }
   state.auth = 'ready'
   emit()
+  startFollowUp()
   await autoConnectMailbox()
 }
 
@@ -274,6 +279,94 @@ async function autoConnectMailbox() {
   } catch {
     // Google noch nicht eingerichtet oder keine Verbindung: später unter „Postfächer und Kalender“
   }
+}
+
+// ------------------------------------------------------------
+// Follow-up (Nachtrag „Follow-up“): „Antwort da“, „Ohne Antwort“, Zahlen in der Navigation.
+// Harte Regel: nur Mails aus den eigenen aktiven Postfächern (Frage 14). Die offene App holt
+// die Zahlen und „Antwort da“ alle 5 Minuten nach, ohne alles neu zu laden.
+// ------------------------------------------------------------
+let followUpTimer = null
+function startFollowUp() {
+  refreshFollowUp()
+  if (!followUpTimer) followUpTimer = setInterval(refreshFollowUp, 5 * 60 * 1000)
+}
+export async function refreshFollowUp() {
+  if (state.auth !== 'ready' || isGuest()) return
+  const [answers, newMail] = await Promise.all([api.antwortenOffen(), api.postfachNeu()])
+  state.followUp = { ...state.followUp, answers: answers || [], newMail: newMail || [] }
+  // Postfach gerade offen und Neues da: Liste still nachladen und wieder als gesehen merken.
+  // Hervorgehoben bleibt alles seit dem Öffnen (postfachPrev ändert sich dabei nicht).
+  if (state.followUp.postfachOpen && state.followUp.newMail.length) {
+    await reloadEmailsQuietly()
+    await api.postfachGesehen()
+    state.followUp = { ...state.followUp, newMail: [] }
+  }
+  emit()
+}
+async function reloadEmailsQuietly() {
+  const rows = await api.reloadEmails().catch(() => null)
+  if (!rows) return
+  // Schon geladene lange Texte (body) behalten
+  const old = new Map(state.db.emails.map((m) => [m.id, m]))
+  state.db = { ...state.db, emails: rows.map((r) => (state.full.emails.has(r.id) ? { ...old.get(r.id), ...r } : r)) }
+}
+// Postfach geöffnet: einmal „gesehen“ merken, erst danach auf neue Zahlen reagieren
+export async function openedPostfach() {
+  if (isGuest()) return
+  state.followUp = { ...state.followUp, postfachOpen: true }
+  const prev = await api.postfachGesehen()
+  state.followUp = { ...state.followUp, postfachPrev: prev, newMail: [] }
+  emit()
+}
+export function closedPostfach() {
+  state.followUp = { ...state.followUp, postfachOpen: false }
+}
+// Neu seit dem letzten Blick: im eigenen Posteingang, nach dem letzten Öffnen geholt und
+// höchstens einen Tag davor gesendet (wie postfach_neu())
+export function isNewMail(m) {
+  const prev = state.followUp.postfachPrev
+  if (!prev || m.direction === 'out' || !(m.labels || []).includes('INBOX')) return false
+  if (![m.mailbox, ...(m.mailboxes || [])].some((b) => isOwnMailbox(b))) return false
+  const t = new Date(prev).getTime()
+  return new Date(m.created_at).getTime() > t && new Date(m.sent_at).getTime() > t - 864e5
+}
+// „Antwort da“ einer Aufgabe. Ist die Aufgabe lokal schon neuer als die Antwort (Notiz, Spalte,
+// Wiedervorlage verschoben), ist der Hinweis sofort weg, ohne auf die Datenbank zu warten.
+export function answerFor(cardId) {
+  const a = state.followUp.answers.find((x) => x.card_id === cardId)
+  if (!a) return null
+  const card = getCard(cardId)
+  if (!card || card.archived || cardKind(card) !== 'waiting') return null
+  if (new Date(card.updated_at).getTime() > new Date(a.sent_at).getTime()) return null
+  return a
+}
+// „Ohne Antwort“: erst beim Öffnen des Reiters laden
+export async function loadNoReply() {
+  const rows = await api.mailsOhneAntwort(60)
+  state.followUp = { ...state.followUp, noReply: rows || [] }
+  emit()
+  if (rows === null) toast('„Ohne Antwort“ ließ sich nicht laden. Bitte gleich noch einmal versuchen.', { error: true })
+}
+// „Braucht keine Antwort“: sofort ausblenden, mit „Rückgängig“
+export async function dismissNoReply(item) {
+  state.followUp = { ...state.followUp, noReply: (state.followUp.noReply || []).filter((x) => x !== item) }
+  emit()
+  try {
+    await api.dismissThread(item.mailbox, item.verlauf)
+  } catch (err) {
+    toast(errorText(err), { error: true })
+    return loadNoReply()
+  }
+  toast('Ausgeblendet. Schreibst du in diesem Verlauf wieder, kommt er nach 3 Tagen erneut.', {
+    action: {
+      label: 'Rückgängig',
+      run: async () => {
+        await api.undismissThread(item.mailbox, item.verlauf)
+        loadNoReply()
+      },
+    },
+  })
 }
 
 // Zweiter Faktor: einrichten, prüfen, neu einrichten
@@ -302,6 +395,7 @@ export async function reload(throwErrors = false) {
     }
     state.loadedAt = Date.now()
     emit()
+    if (state.auth === 'ready') refreshFollowUp()
   } catch (err) {
     if (throwErrors) throw err
     toast(errorText(err), { error: true })
