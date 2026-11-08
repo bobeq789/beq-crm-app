@@ -26,7 +26,7 @@ import {
   assignCard,
 } from '../store.js'
 import { closeCard } from '../router.js'
-import { Field, PriorityPicker, ProjectSelect, EntityPicker, Notes, Dot, LinkText, brandSafe } from './common.js'
+import { Field, PriorityPicker, ProjectSelect, EntityPicker, Notes, Dot, LinkText, brandSafe, LabelPicker, Labels } from './common.js'
 import { History } from './history.js'
 import { CardFiles } from './files.js'
 import { CardDeal } from './deal.js'
@@ -145,6 +145,7 @@ function GuestCard({ card }) {
     <dl class="card-facts">
       ${person && html`<dt>Kontakt</dt><dd>${person.name}</dd>`}
       ${org && html`<dt>Firma</dt><dd>${org.name}</dd>`}
+      ${(card.labels || []).length > 0 && html`<dt>Labels</dt><dd><${Labels} labels=${card.labels} /></dd>`}
     </dl>
     <${StagePicker} card=${card} />
     <${Field} label="Zuständig"><${AssigneePicker} card=${card} /><//>
@@ -265,6 +266,10 @@ export function CardPanel({ id }) {
         <${EntityPicker} kind="org" inputId="card-org" value=${card.org_id} onChange=${(v) => set({ org_id: v })} placeholder="Firma suchen oder neu anlegen" />
       <//>
     </div>
+
+    <${Field} label="Labels">
+      <${LabelPicker} value=${card.labels} inputId="card-label" onChange=${(labels) => set({ labels })} />
+    <//>
 
     <${Field} label="Beschreibung" htmlFor="card-desc">
       <textarea

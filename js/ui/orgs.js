@@ -17,10 +17,11 @@ import {
   confirmDialog,
   promptDialog,
   toast,
+  isGuest,
 } from '../store.js'
 import { navigate, openCard } from '../router.js'
 import { EmailList, emailCount } from './emails.js'
-import { PageHead, Tile, Empty, Labels, TaskRow, Notes, Field, LabelInput, Avatar } from './common.js'
+import { PageHead, Tile, Empty, Labels, TaskRow, Notes, Field, LabelPicker, Avatar } from './common.js'
 
 export function OrgsList() {
   const [query, setQuery] = useState('')
@@ -119,7 +120,11 @@ export function OrgDetail({ id }) {
       ${o.industry && html`<span>${o.industry}</span>`}
       ${o.website && html`<a class="meta-item" href=${webHref(o.website)} target="_blank" rel="noopener noreferrer"><${Icon} name="globe" size=${16} /> ${webLabel(o.website)}</a>`}
       ${o.address && html`<a class="meta-item" href=${mapsHref(o.address)} target="_blank" rel="noopener noreferrer"><${Icon} name="pin" size=${16} /> ${o.address}</a>`}
-      <${Labels} labels=${o.labels} />
+    </div>
+    <div class="detail-labels">
+      ${isGuest()
+        ? html`<${Labels} labels=${o.labels} />`
+        : html`<${LabelPicker} value=${o.labels} inputId="org-label-inline" onChange=${(labels) => update('organizations', o.id, { labels })} />`}
     </div>
     <div class="detail-grid">
       <div class="col-main">
@@ -208,7 +213,7 @@ export function OrgForm({ id }) {
         <textarea id="o-address" rows="2" value=${form.address} onInput=${(e) => set({ address: e.target.value })}></textarea>
       <//>
       <${Field} label="Labels">
-        <${LabelInput} value=${form.labels} suggestions=${allLabels()} onChange=${(labels) => set({ labels })} />
+        <${LabelPicker} value=${form.labels} inputId="org-label" onChange=${(labels) => set({ labels })} />
       <//>
       <div class="form-actions">
         <a class="btn" href=${back}>Abbrechen</a>

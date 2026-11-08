@@ -18,10 +18,11 @@ import {
   toast,
   eventsOfPerson,
   openDialog,
+  isGuest,
 } from '../store.js'
 import { navigate, openCard, openEvent } from '../router.js'
 import { EmailList, emailCount } from './emails.js'
-import { PageHead, Tile, Empty, Labels, TaskRow, Notes, Field, ListInput, LabelInput, EntityPicker, Segmented, Avatar } from './common.js'
+import { PageHead, Tile, Empty, Labels, TaskRow, Notes, Field, ListInput, LabelPicker, EntityPicker, Segmented, Avatar } from './common.js'
 
 // Beim Sortieren Titel wie „Dr.“ überspringen
 const sortName = (name) => String(name || '').replace(/^(Dr\.|Prof\.)\s+/i, '')
@@ -148,7 +149,11 @@ export function ContactDetail({ id }) {
     <div class="detail-meta">
       ${p.position && html`<span>${p.position}</span>`}
       ${org && html`<a class="meta-item" href=${'#/firmen/' + org.id}><${Icon} name="orgs" size=${16} /> ${org.name}</a>`}
-      <${Labels} labels=${p.labels} />
+    </div>
+    <div class="detail-labels">
+      ${isGuest()
+        ? html`<${Labels} labels=${p.labels} />`
+        : html`<${LabelPicker} value=${p.labels} inputId="person-label-inline" onChange=${(labels) => update('persons', p.id, { labels })} />`}
     </div>
     <div class="quick-actions">
       ${email && html`<button type="button" class="btn" onClick=${() => openDialog({ kind: 'new-event', guests: [email] })}><${Icon} name="calendar" size=${18} /> Termin einladen</button>`}
@@ -251,7 +256,7 @@ export function ContactForm({ id }) {
         <input id="p-linkedin" type="url" value=${form.linkedin_url} placeholder="https://www.linkedin.com/in/…" onInput=${(e) => set({ linkedin_url: e.target.value })} />
       <//>
       <${Field} label="Labels">
-        <${LabelInput} value=${form.labels} suggestions=${allLabels()} onChange=${(labels) => set({ labels })} />
+        <${LabelPicker} value=${form.labels} inputId="person-label" onChange=${(labels) => set({ labels })} />
       <//>
       <div class="form-actions">
         <a class="btn" href=${back}>Abbrechen</a>

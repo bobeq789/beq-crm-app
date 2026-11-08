@@ -38,7 +38,7 @@ import {
   lastOfKindHint,
 } from '../store.js'
 import { navigate, openCard } from '../router.js'
-import { PageHead, Dot, Avatar, PrioBadge, DueBadge, NewBadge, Modal, Field, Empty, dialogKinds, useIsMobile } from './common.js'
+import { PageHead, Dot, Avatar, PrioBadge, DueBadge, NewBadge, Modal, Field, Empty, Labels, dialogKinds, useIsMobile } from './common.js'
 
 const DONE_LIMIT = 15
 
@@ -60,6 +60,7 @@ function BoardCard({ card, draggable }) {
     <button type="button" class="board-card-btn" onClick=${() => openCard(card.id)}>
       <span class="bc-title">${card.title}</span>
       ${(person || org) && html`<span class="bc-sub">${[person && person.name, org && org.name].filter(Boolean).join(' · ')}</span>`}
+      ${(card.labels || []).length > 0 && html`<span class="bc-labels"><${Labels} labels=${card.labels} /></span>`}
       <span class="bc-meta">
         <${NewBadge} cardId=${card.id} />
         ${assignedToOther(card) && html`<${Avatar} email=${card.assignee} />`}
@@ -355,7 +356,7 @@ export function Board({ projectId }) {
     if (label) {
       const person = getPerson(c.person_id)
       const org = getOrg(c.org_id)
-      const labels = [...((person && person.labels) || []), ...((org && org.labels) || [])]
+      const labels = [...(c.labels || []), ...((person && person.labels) || []), ...((org && org.labels) || [])]
       if (!labels.includes(label)) return false
     }
     if (query.trim()) {

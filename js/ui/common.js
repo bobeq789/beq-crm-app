@@ -1,5 +1,5 @@
 // Bausteine, die mehrere Bereiche nutzen
-import { html, useState, useEffect, useRef } from '../lib/preact.js'
+import { html, useState, useEffect, useLayoutEffect, useRef } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { SETTINGS } from '../settings.js'
 import { splitLinks, dueInfo, fmtRelative, matches, initials, norm } from '../lib/util.js'
@@ -24,6 +24,7 @@ import {
   isMentioned,
   assignedToOther,
   saveNote,
+  allLabels,
 } from '../store.js'
 import { mentionPeople, parseMentions, NoteText } from './mentions.js'
 import { openCard } from '../router.js'
@@ -375,39 +376,158 @@ export function ListInput({ values, onChange, placeholder, type = 'text', addLab
   </div>`
 }
 
-// Labels: Vorschläge antippen oder frei eintippen
-export function LabelInput({ value, onChange, suggestions }) {
-  const [text, setText] = useState('')
+// ------------------------------------------------------------
+// Labels vergeben (Gesamtprompt Fassung 6, B7 und C7): vergebene Labels als Marken mit
+// „entfernen“, „+ Label“ öffnet ein Feld mit eigener Klappliste (keine Vorschlagsliste des
+// Browsers). Gilt bei Kontakt, Firma und Aufgabe, im Formular wie direkt auf der Seite.
+// - Groß- und Kleinschreibung erzeugt kein zweites Label: „kunde“ wählt das vorhandene „Kunde“.
+// - Ohne Tippen ist nichts markiert, ein versehentliches Enter vergibt also nichts.
+// - Escape schließt nur die Liste (beim zweiten Mal das Feld), nie das Fenster dahinter.
+// - Labels, die mit „Aus “ beginnen, vergibt der Abgleich selbst, die Liste bietet sie nicht an.
+// ------------------------------------------------------------
+const labelKey = (s) => String(s || '').trim().toLocaleLowerCase('de')
+export const isAutoLabel = (l) => /^Aus /.test(String(l || ''))
+const MAX_OFFERED = 12
+let labelPickerSeq = 0
+
+export function LabelPicker({ value, onChange, inputId }) {
   const current = value || []
-  const toggle = (l) => onChange(current.includes(l) ? current.filter((x) => x !== l) : [...current, l])
-  const all = [...new Set([...suggestions, ...current])]
-  const add = () => {
-    const l = text.trim()
-    if (l && !current.includes(l)) onChange([...current, l])
+  const [editing, setEditing] = useState(false)
+  const [text, setText] = useState('')
+  const [listOpen, setListOpen] = useState(true)
+  const [active, setActive] = useState(-1)
+  const inputRef = useRef()
+  const addRef = useRef()
+  const backToAdd = useRef(false)
+  // Beim Schließen verschwindet das Feld, der Browser meldet das als „Verlassen“. Das darf
+  // dann keinen getippten Text mehr übernehmen und den Fokus nicht verlieren.
+  const closing = useRef(false)
+  const listId = useRef('label-list-' + ++labelPickerSeq).current
+
+  // Das Feld erscheint erst nach dem Klick, „autofocus“ greift dort nicht. Fokus per ref, im
+  // Layout-Effekt (gleich nach dem Zeichnen), damit sofort Getipptes nicht verloren geht.
+  // Nach Escape springt der Fokus zurück auf „+ Label“.
+  useLayoutEffect(() => {
+    if (editing) closing.current = false
+    if (editing && inputRef.current) inputRef.current.focus()
+    if (!editing && backToAdd.current && addRef.current) {
+      backToAdd.current = false
+      addRef.current.focus()
+    }
+  }, [editing])
+
+  const known = allLabels()
+  const assigned = new Set(current.map(labelKey))
+  const offerable = known.filter((l) => !isAutoLabel(l) && !assigned.has(labelKey(l)))
+  const q = text.trim()
+  const key = labelKey(q)
+  const existing = q ? known.find((l) => labelKey(l) === key) : null
+  // Genau gleich zuerst, dann was so anfängt, dann der Rest
+  const rank = (l) => (labelKey(l) === key ? 0 : labelKey(l).startsWith(key) ? 1 : 2)
+  const items = (q ? offerable.filter((l) => matches(q, l)).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b, 'de')) : offerable)
+    .slice(0, MAX_OFFERED)
+    .map((l) => ({ label: l }))
+  if (q && !existing) items.push({ label: q, isNew: true })
+  const taken = !!q && assigned.has(key)
+  const autoOnly = !!existing && isAutoLabel(existing) && !taken
+
+  const add = (raw) => {
+    const t = String(raw || '').trim()
+    if (!t) return
+    const found = known.find((l) => labelKey(l) === labelKey(t))
+    // Schon hier vergeben, oder ein automatisches Label (die vergibt nur der Abgleich)
+    if (assigned.has(labelKey(t)) || (found && isAutoLabel(found))) return
+    const label = found || t
+    onChange([...current, label])
     setText('')
+    setActive(-1)
+    setListOpen(true)
   }
-  return html`<div class="label-input">
-    <div class="chips">
-      ${all.map(
-        (l) => html`<button type="button" class=${'chip-btn' + (current.includes(l) ? ' active' : '')} aria-pressed=${current.includes(l)} onClick=${() => toggle(l)}>
+  const close = (focusAdd) => {
+    closing.current = true
+    if (focusAdd) backToAdd.current = true
+    setEditing(false)
+    setText('')
+    setActive(-1)
+    setListOpen(true)
+  }
+  const onKeyDown = (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setListOpen(true)
+      setActive((a) => Math.min(a + 1, items.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActive((a) => Math.max(a - 1, -1))
+    } else if (e.key === 'Enter') {
+      // Nie das Formular absenden. Ohne markierten Eintrag passiert nichts.
+      e.preventDefault()
+      if (listOpen && active >= 0 && items[active]) add(items[active].label)
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      e.stopPropagation()
+      if (listOpen) setListOpen(false)
+      else close(true)
+    }
+  }
+  // Verlassen mit getipptem Text übernimmt den Begriff, ohne Text schließt es nur
+  const onBlur = () => {
+    if (closing.current) return
+    if (q) add(q)
+    close(false)
+  }
+
+  return html`<div class="label-picker">
+    ${(current.length > 0 || !editing) &&
+    html`<div class="label-chips">
+      ${current.map(
+        (l) => html`<span class="chip label-chip" key=${l}>
           ${l}
-        </button>`
+          <button type="button" aria-label=${'Label „' + l + '“ entfernen'} onClick=${() => onChange(current.filter((x) => x !== l))}>
+            <${Icon} name="x" size=${14} />
+          </button>
+        </span>`
       )}
-    </div>
-    <div class="inline-add">
+      ${!editing &&
+      html`<button type="button" ref=${addRef} class="label-add" onClick=${() => setEditing(true)}><${Icon} name="plus" size=${14} /> Label</button>`}
+    </div>`}
+    ${editing &&
+    html`<div class="picker label-editor">
       <input
+        ref=${inputRef}
+        id=${inputId}
         value=${text}
-        placeholder="Neues Label"
-        onInput=${(e) => setText(e.target.value)}
-        onKeyDown=${(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault()
-            add()
-          }
+        placeholder="Label suchen oder neu"
+        aria-label="Label suchen oder neu"
+        autocomplete="off"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded=${listOpen}
+        aria-controls=${listId}
+        aria-activedescendant=${listOpen && active >= 0 && items[active] ? listId + '-' + active : undefined}
+        onInput=${(e) => {
+          setText(e.target.value)
+          setListOpen(true)
+          setActive(e.target.value.trim() ? 0 : -1)
         }}
+        onKeyDown=${onKeyDown}
+        onBlur=${onBlur}
       />
-      <button type="button" class="btn" disabled=${!text.trim()} onClick=${add}>Hinzufügen</button>
-    </div>
+      ${listOpen &&
+      html`<ul class="picker-list label-list" id=${listId} role="listbox" aria-label="Labels">
+        ${!q && html`<li class="picker-hint" role="presentation">Neues Label: einfach eintippen</li>`}
+        ${items.map(
+          (it, i) => html`<li role="option" id=${listId + '-' + i} aria-selected=${i === active} key=${(it.isNew ? 'neu:' : '') + it.label}>
+            <button type="button" tabindex="-1" class=${(it.isNew ? 'picker-new' : '') + (i === active ? ' is-active' : '')} onMouseDown=${(e) => e.preventDefault()} onClick=${() => add(it.label)}>
+              ${it.isNew ? html`<${Icon} name="plus" size=${16} /> „${it.label}“ als neues Label anlegen` : html`<span>${it.label}</span>`}
+            </button>
+          </li>`
+        )}
+        ${taken && html`<li class="picker-hint" role="presentation">„${existing}“ ist schon vergeben</li>`}
+        ${autoOnly && html`<li class="picker-hint" role="presentation">„${existing}“ vergibt der Abgleich selbst</li>`}
+        ${!q && !items.length && html`<li class="picker-hint" role="presentation">Alle vorhandenen Labels sind hier schon vergeben.</li>`}
+      </ul>`}
+    </div>`}
   </div>`
 }
 

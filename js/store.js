@@ -804,10 +804,12 @@ export function meetingsOfOrg(orgId) {
 export function isOpen(card) {
   return !card.archived && cardKind(card) !== 'done'
 }
+// Alle Labels: zuerst die aus den Einstellungen, dann die von Kontakten, Firmen und Aufgaben (C7)
 export function allLabels() {
   const set = new Set(SETTINGS.labels)
   state.db.persons.forEach((p) => (p.labels || []).forEach((l) => set.add(l)))
   state.db.organizations.forEach((o) => (o.labels || []).forEach((l) => set.add(l)))
+  state.db.cards.forEach((c) => (c.labels || []).forEach((l) => set.add(l)))
   return [...set]
 }
 // Ganz geteilte Projekte (05_projekte_teilen.sql)

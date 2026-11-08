@@ -426,9 +426,24 @@ select { appearance: auto; }
 
 .list-input { display: flex; flex-direction: column; gap: 6px; }
 .list-input-row { display: flex; gap: 6px; align-items: center; }
-.label-input .chips { margin-bottom: 8px; }
-.inline-add { display: flex; gap: 8px; }
-.inline-add input { flex: 1; }
+/* Labels vergeben (B7, C7): Marken mit „entfernen“, „+ Label“, Feld mit eigener Klappliste.
+   Die Liste ist dieselbe wie bei Kontakt und Firma (.picker-list), mindestens 300 px breit,
+   höchstens 380 px oder 86 Prozent der Bildschirmbreite. */
+.label-picker { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.label-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.label-chip { min-height: 32px; padding: 2px 4px 2px 12px; font-size: 13px; }
+.label-add {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 12px; border-radius: 999px;
+  border: 1.5px dashed var(--faint); background: transparent; color: var(--accent-text); font-size: 13px; font-weight: 600;
+}
+.label-add:hover { border-color: var(--accent-text); }
+.label-editor { width: min(380px, 86vw, 100%); }
+.label-editor input { width: 100%; }
+.label-list { min-width: min(300px, 86vw); max-width: min(380px, 86vw); }
+.picker-hint { padding: 10px; color: var(--muted); font-size: 13px; }
+.picker-list button.is-active { background: var(--chip-active-bg); }
+.detail-labels { margin: -12px 0 20px; }
+.bc-labels { display: block; margin-top: 6px; }
 
 /* ------------------------------------------------------------
    Übersicht

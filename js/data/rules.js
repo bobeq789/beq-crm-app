@@ -60,6 +60,7 @@ const DEFAULTS = {
     meeting_id: null,
     external_id: null,
     created_by: null,
+    labels: [],
   },
   card_shares: { created_by: null },
   project_shares: { created_by: null },

@@ -259,6 +259,12 @@ export function buildSeed() {
     ['Bildmaterial für die Website sammeln', 'Allgemein', 'todo', A, null, null, null, null, 11],
     ['Notizen aus dem Partnerforum verteilen', 'Allgemein', 'todo', null, null, 15, null, null, 6],
   ]
+  // Labels an Aufgaben (C7), „Messe“ gibt es nur hier
+  const CARD_LABELS = {
+    'Angebot Pilotinstallation an Nordlicht schicken': ['Pilotpartner'],
+    'Messestand für die Fachmesse im Frühjahr buchen': ['Messe'],
+    'Pressemitteilung zum Pilotstart abstimmen': ['Presse', 'Messe'],
+  }
   const K = {}
   cards.forEach(([title, project, kind, assignee, priority, due, personKey, orgKey, changedAgo, meetingKey], i) => {
     const id = uid()
@@ -278,6 +284,7 @@ export function buildSeed() {
       meeting_id: meetingKey ? MT[meetingKey] : null,
       stage_changed_at: daysAgo(changedAgo, 9 + (i % 8)),
       external_id: null,
+      labels: CARD_LABELS[title] || [],
       created_by: assignee || A,
       created_at: daysAgo(changedAgo + 2),
       updated_at: daysAgo(Math.max(0, changedAgo - 1), 8 + (i % 9), (i * 7) % 60),
