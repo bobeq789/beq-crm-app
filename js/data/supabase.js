@@ -313,5 +313,19 @@ export async function createSupabaseApi(config) {
     async remove(table, id) {
       check(await client.from(table).delete().eq('id', id))
     },
+
+    // Aufgaben einer Spalte direkt in der Datenbank zählen, auch archivierte (B3)
+    async countStageCards(stageId) {
+      const all = await client.from('cards').select('id', { count: 'exact', head: true }).eq('stage_id', stageId)
+      if (all.error) throw all.error
+      const arch = await client.from('cards').select('id', { count: 'exact', head: true }).eq('stage_id', stageId).eq('archived', true)
+      if (arch.error) throw arch.error
+      return { total: all.count || 0, archived: arch.count || 0 }
+    },
+    // Alle Aufgaben einer Spalte in einem Schritt in eine andere. Verlauf und stage_changed_at setzt die Datenbank.
+    async moveStageCards(fromId, toId) {
+      const rows = check(await client.from('cards').update({ stage_id: toId }).eq('stage_id', fromId).select('id'))
+      return (rows || []).length
+    },
   }
 }

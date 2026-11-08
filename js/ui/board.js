@@ -32,8 +32,10 @@ import {
   isGuest,
   addStage,
   moveStage,
+  canMoveStage,
   deleteStage,
-  cardsInStage,
+  countStageCards,
+  lastOfKindHint,
 } from '../store.js'
 import { navigate, openCard } from '../router.js'
 import { PageHead, Dot, Avatar, PrioBadge, DueBadge, NewBadge, Modal, Field, Empty, dialogKinds, useIsMobile } from './common.js'
@@ -118,7 +120,151 @@ function InlineAdd({ onAdd, onCancel }) {
   </form>`
 }
 
-function Column({ stage, cards, onDropCard, onAdd, draggable }) {
+// ------------------------------------------------------------
+// Spalten direkt im Board (Gesamtprompt Fassung 6, B3)
+// ------------------------------------------------------------
+
+// Name einer Spalte direkt im Kopf ändern. Der Name steht im Zustand, damit ein Neuzeichnen (etwa
+// nach dem Nachladen der Daten) den getippten Text nicht zurücksetzt. Enter speichert sofort,
+// Verlassen des Felds auch, Escape bricht ab, leer speichert nichts. Der Merker verhindert, dass
+// Enter und das danach folgende Verlassen des Felds doppelt speichern.
+function StageNameInput({ stage, onDone }) {
+  const [name, setName] = useState(stage.name)
+  const ref = useRef()
+  const finished = useRef(false)
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.focus()
+      ref.current.select()
+    }
+  }, [])
+  const finish = async (save) => {
+    if (finished.current) return
+    finished.current = true
+    const n = name.trim()
+    onDone()
+    if (save && n && n !== stage.name) await update('stages', stage.id, { name: n })
+  }
+  return html`<input
+    ref=${ref}
+    class="column-rename"
+    value=${name}
+    maxlength="60"
+    aria-label="Name der Spalte"
+    onInput=${(e) => setName(e.target.value)}
+    onKeyDown=${(e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        finish(true)
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        finish(false)
+      }
+    }}
+    onBlur=${() => finish(true)}
+  />`
+}
+
+// Menü je Spalte (drei Punkte, am Handy „Spalte bearbeiten“). Gäste sehen es nie.
+// „Erledigt“ hat nur Umbenennen und „Neue Spalte davor“ und bleibt immer hinten.
+// Das Menü liegt fest über der Seite (am Knopf ausgerichtet), damit der waagrecht scrollbare
+// Bereich der Spalten es nicht abschneidet. Beim Scrollen oder Ändern der Fenstergröße geht es zu.
+const MENU_WIDTH = 240
+function StageMenu({ stage, onRename, onAddAt, label = '' }) {
+  const [pos, setPos] = useState(null)
+  const open = !!pos
+  const ref = useRef()
+  const btn = useRef()
+  const close = () => setPos(null)
+  const toggle = () => {
+    if (open) return close()
+    const r = btn.current.getBoundingClientRect()
+    setPos({ top: Math.round(r.bottom + 4), left: Math.round(Math.max(8, Math.min(r.right - MENU_WIDTH, window.innerWidth - MENU_WIDTH - 8))) })
+  }
+  useEffect(() => {
+    if (!open) return
+    const away = (e) => ref.current && !ref.current.contains(e.target) && close()
+    const esc = (e) => e.key === 'Escape' && close()
+    document.addEventListener('pointerdown', away)
+    document.addEventListener('keydown', esc)
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      document.removeEventListener('pointerdown', away)
+      document.removeEventListener('keydown', esc)
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
+  }, [open])
+  const index = stagesOf(stage.project_id).findIndex((s) => s.id === stage.id)
+  const isDone = stage.kind === 'done'
+  const run = (fn) => () => {
+    close()
+    fn()
+  }
+  return html`<span class="stage-menu-wrap" ref=${ref}>
+    <button
+      type="button"
+      ref=${btn}
+      class=${label ? 'btn btn-small' : 'icon-btn small'}
+      aria-haspopup="menu"
+      aria-expanded=${open}
+      aria-label=${'Spalte „' + stage.name + '“ bearbeiten'}
+      title="Spalte bearbeiten"
+      onClick=${toggle}
+    >
+      ${label ? html`<${Icon} name="edit" size=${16} /> ${label}` : html`<${Icon} name="more" size=${18} />`}
+    </button>
+    ${open &&
+    html`<div class="stage-menu" role="menu" style=${{ top: pos.top + 'px', left: pos.left + 'px', width: MENU_WIDTH + 'px' }}>
+      <button type="button" role="menuitem" onClick=${run(onRename)}><${Icon} name="edit" size=${16} /> Umbenennen</button>
+      ${isDone
+        ? html`<button type="button" role="menuitem" onClick=${run(() => onAddAt(index))}><${Icon} name="plus" size=${16} /> Neue Spalte davor</button>
+            <p class="stage-menu-note">Die Spalte für Erledigtes bleibt immer.</p>`
+        : html`<button type="button" role="menuitem" disabled=${!canMoveStage(stage.id, -1)} onClick=${run(() => moveStage(stage.id, -1))}>
+              <${Icon} name="back" size=${16} /> Nach links
+            </button>
+            <button type="button" role="menuitem" disabled=${!canMoveStage(stage.id, 1)} onClick=${run(() => moveStage(stage.id, 1))}>
+              <${Icon} name="chevron" size=${16} /> Nach rechts
+            </button>
+            <button type="button" role="menuitem" onClick=${run(() => onAddAt(index + 1))}><${Icon} name="plus" size=${16} /> Neue Spalte rechts daneben</button>
+            <button type="button" role="menuitem" class="danger" onClick=${run(() => askDeleteStage(stage))}><${Icon} name="trash" size=${16} /> Spalte löschen</button>`}
+    </div>`}
+  </span>`
+}
+
+// Gestrichelte Spalte an der Stelle, an der die neue Spalte entsteht
+function NewStageColumn({ onCreate, onCancel }) {
+  const [name, setName] = useState('')
+  const [busy, setBusy] = useState(false)
+  const ref = useRef()
+  useEffect(() => ref.current && ref.current.focus(), [])
+  const submit = async (e) => {
+    e.preventDefault()
+    if (!name.trim() || busy) return
+    setBusy(true)
+    await onCreate(name.trim())
+    setBusy(false)
+  }
+  return html`<form class="column column-new" onSubmit=${submit}>
+    <label class="column-new-label" for="new-stage-name">Neue Spalte</label>
+    <input
+      id="new-stage-name"
+      ref=${ref}
+      value=${name}
+      maxlength="60"
+      placeholder="Name der Spalte"
+      onInput=${(e) => setName(e.target.value)}
+      onKeyDown=${(e) => e.key === 'Escape' && onCancel()}
+    />
+    <div class="form-actions">
+      <button type="button" class="btn" onClick=${onCancel}>Abbrechen</button>
+      <button type="submit" class="btn btn-primary" disabled=${!name.trim() || busy}>Anlegen</button>
+    </div>
+  </form>`
+}
+
+function Column({ stage, cards, onDropCard, onAdd, draggable, canEdit, renaming, onRename, onRenameDone, onAddAt }) {
   const [over, setOver] = useState(false)
   const [adding, setAdding] = useState(false)
   const [showAll, setShowAll] = useState(false)
@@ -140,25 +286,19 @@ function Column({ stage, cards, onDropCard, onAdd, draggable }) {
     }}
   >
     <div class="column-head">
-      <h2 class="column-title">
-        ${stage.name} <span class="count">${cards.length}</span>
-        ${columnValue(cards) > 0 && html`<span class="column-value" title="Summe der Deals in dieser Spalte (netto, ohne verlorene)">${fmtEuro(columnValue(cards))}</span>`}
-      </h2>
-      <span class="column-actions">
-        ${!isGuest() &&
-        html`<button
-          type="button"
-          class="icon-btn small"
-          aria-label=${'Spalte „' + stage.name + '“ bearbeiten'}
-          title="Spalte bearbeiten"
-          onClick=${() => openDialog({ kind: 'stage-edit', stageId: stage.id })}
-        >
-          <${Icon} name="edit" size=${16} />
-        </button>`}
-        <button type="button" class="icon-btn small" aria-label=${'Neue Aufgabe in „' + stage.name + '“'} onClick=${() => setAdding(true)}>
-          <${Icon} name="plus" size=${18} />
-        </button>
-      </span>
+      ${renaming
+        ? html`<${StageNameInput} stage=${stage} onDone=${onRenameDone} />`
+        : html`<h2 class="column-title">
+              ${canEdit ? html`<button type="button" class="column-name" title="Klicken zum Umbenennen" onClick=${onRename}>${stage.name}</button>` : stage.name}
+              <span class="count">${cards.length}</span>
+              ${columnValue(cards) > 0 && html`<span class="column-value" title="Summe der Deals in dieser Spalte (netto, ohne verlorene)">${fmtEuro(columnValue(cards))}</span>`}
+            </h2>
+            <span class="column-actions">
+              ${canEdit && html`<${StageMenu} stage=${stage} onRename=${onRename} onAddAt=${onAddAt} />`}
+              <button type="button" class="icon-btn small" aria-label=${'Neue Aufgabe in „' + stage.name + '“'} onClick=${() => setAdding(true)}>
+                <${Icon} name="plus" size=${18} />
+              </button>
+            </span>`}
     </div>
     ${adding &&
     html`<${InlineAdd}
@@ -194,6 +334,8 @@ export function Board({ projectId }) {
   const [label, setLabel] = useState('')
   const [archive, setArchive] = useState(false)
   const [mobileStage, setMobileStage] = useState(null)
+  const [renaming, setRenaming] = useState(null)
+  const [addingAt, setAddingAt] = useState(null)
 
   useEffect(() => {
     if (current) local.set('beqcrm-last-project', current.id)
@@ -245,6 +387,37 @@ export function Board({ projectId }) {
     })
 
   const activeStage = stages.find((s) => s.id === mobileStage) || stages[0]
+  const canEdit = !isGuest()
+  const doneIndex = stages.findIndex((s) => s.kind === 'done')
+  const beforeDone = doneIndex < 0 ? stages.length : doneIndex
+  const createStage = async (name) => {
+    const stage = await addStage(current.id, name, addingAt)
+    if (stage) {
+      setAddingAt(null)
+      if (mobile) setMobileStage(stage.id)
+    }
+  }
+  const columnProps = (s) => ({
+    stage: s,
+    cards: cardsOf(s),
+    onDropCard: moveCard,
+    onAdd: addCard,
+    canEdit,
+    renaming: renaming === s.id,
+    onRename: () => setRenaming(s.id),
+    onRenameDone: () => setRenaming(null),
+    onAddAt: (i) => {
+      setRenaming(null)
+      setAddingAt(i)
+    },
+  })
+  const placeholder = html`<${NewStageColumn} key="neue-spalte" onCreate=${createStage} onCancel=${() => setAddingAt(null)} />`
+  const desktopColumns = []
+  stages.forEach((s, i) => {
+    if (addingAt === i) desktopColumns.push(placeholder)
+    desktopColumns.push(html`<${Column} ...${columnProps(s)} draggable=${true} key=${s.id} />`)
+  })
+  if (addingAt !== null && addingAt >= stages.length) desktopColumns.push(placeholder)
 
   return html`<div class="page page-board">
     <${PageHead} kicker="Board" title=${current.name} />
@@ -313,20 +486,34 @@ export function Board({ projectId }) {
                 role="tab"
                 aria-selected=${s.id === activeStage.id}
                 class=${'tab' + (s.id === activeStage.id ? ' active' : '')}
-                onClick=${() => setMobileStage(s.id)}
+                title=${canEdit && s.id === activeStage.id ? 'Noch einmal antippen zum Umbenennen' : undefined}
+                onClick=${() => {
+                  setAddingAt(null)
+                  // Den gewählten Reiter noch einmal antippen benennt die Spalte um
+                  if (canEdit && s.id === activeStage.id) setRenaming(s.id)
+                  else setMobileStage(s.id)
+                }}
               >
                 ${s.name} <span class="count">${cardsOf(s).length}</span>
               </button>`
             )}
             ${!isGuest() &&
-            html`<button type="button" class="tab tab-icon" aria-label="Spalte hinzufügen" title="Spalte hinzufügen" onClick=${() => askAddStage(current.id, setMobileStage)}>
+            html`<button type="button" class="tab tab-icon" aria-label="Spalte hinzufügen" title="Spalte hinzufügen" onClick=${() => setAddingAt(beforeDone)}>
               <${Icon} name="plus" size=${18} />
             </button>`}
           </div>
-          ${activeStage &&
-          html`<div class="board-mobile">
-            <${Column} stage=${activeStage} cards=${cardsOf(activeStage)} onDropCard=${moveCard} onAdd=${addCard} draggable=${false} key=${activeStage.id} />
+          ${canEdit &&
+          activeStage &&
+          addingAt === null &&
+          html`<div class="stage-tools">
+            <${StageMenu} stage=${activeStage} label="Spalte bearbeiten" onRename=${() => setRenaming(activeStage.id)} onAddAt=${(i) => setAddingAt(i)} />
           </div>`}
+          ${addingAt !== null
+            ? html`<div class="board-mobile">${placeholder}</div>`
+            : activeStage &&
+              html`<div class="board-mobile">
+                <${Column} ...${columnProps(activeStage)} draggable=${false} key=${activeStage.id} />
+              </div>`}
           <button
             type="button"
             class="fab"
@@ -342,10 +529,11 @@ export function Board({ projectId }) {
             <${Icon} name="plus" size=${26} />
           </button>`
       : html`<div class="board">
-          ${stages.map((s) => html`<${Column} stage=${s} cards=${cardsOf(s)} onDropCard=${moveCard} onAdd=${addCard} draggable=${true} key=${s.id} />`)}
-          ${!isGuest() &&
+          ${desktopColumns}
+          ${canEdit &&
+          addingAt === null &&
           html`<div class="column-add">
-            <button type="button" class="btn" onClick=${() => askAddStage(current.id)}><${Icon} name="plus" size=${16} /> Spalte</button>
+            <button type="button" class="btn" onClick=${() => setAddingAt(beforeDone)}><${Icon} name="plus" size=${16} /> Spalte</button>
           </div>`}
         </div>`}
     ${archive && !filtered.length && html`<${Empty}>Im Archiv dieses Projekts liegt nichts.<//>`}
@@ -362,7 +550,7 @@ async function newProject() {
 // ------------------------------------------------------------
 // Projekt-Einstellungen: Name, Farbe, Archiv, Spalten
 // ------------------------------------------------------------
-function StageRow({ stage, index, total, onMove, cardCount }) {
+function StageRow({ stage }) {
   const [name, setName] = useState(stage.name)
   useEffect(() => setName(stage.name), [stage.name])
   const isDone = stage.kind === 'done'
@@ -397,8 +585,8 @@ function StageRow({ stage, index, total, onMove, cardCount }) {
       <span>%</span>
     </label>
     <div class="stage-buttons">
-      <button type="button" class="icon-btn small" aria-label="Nach oben" disabled=${index === 0} onClick=${() => onMove(index, -1)}><${Icon} name="up" size=${16} /></button>
-      <button type="button" class="icon-btn small" aria-label="Nach unten" disabled=${index === total - 1} onClick=${() => onMove(index, 1)}><${Icon} name="down" size=${16} /></button>
+      <button type="button" class="icon-btn small" aria-label="Nach oben" disabled=${!canMoveStage(stage.id, -1)} onClick=${() => moveStage(stage.id, -1)}><${Icon} name="up" size=${16} /></button>
+      <button type="button" class="icon-btn small" aria-label="Nach unten" disabled=${!canMoveStage(stage.id, 1)} onClick=${() => moveStage(stage.id, 1)}><${Icon} name="down" size=${16} /></button>
       <button
         type="button"
         class="icon-btn small"
@@ -421,7 +609,6 @@ function ProjectSettings({ d }) {
   const archived = state.db.projects.filter((p) => p.archived)
   const close = () => closeDialog()
 
-  const move = (index, dir) => stages[index] && moveStage(stages[index].id, dir)
   const archiveProject = async () => {
     const ok = await confirmDialog({
       title: `Projekt „${project.name}“ archivieren?`,
@@ -464,17 +651,7 @@ function ProjectSettings({ d }) {
     <h3 class="section-title">Spalten</h3>
     <p class="muted small">Die Art bestimmt, wo Aufgaben in der Übersicht erscheinen. Namen kannst du frei wählen. Die Prozentzahl ist die Wahrscheinlichkeit für Deals in dieser Spalte (für die gewichtete Pipeline in „Sales“), leer heißt ohne.</p>
     <ul class="stage-list">
-      ${stages.map(
-        (s, i) =>
-          html`<${StageRow}
-            key=${s.id}
-            stage=${s}
-            index=${i}
-            total=${stages.length}
-            onMove=${move}
-            cardCount=${state.db.cards.filter((c) => c.stage_id === s.id).length}
-          />`
-      )}
+      ${stages.map((s) => html`<${StageRow} key=${s.id} stage=${s} />`)}
     </ul>
     <button type="button" class="btn" onClick=${() => askAddStage(project.id)}><${Icon} name="plus" size=${16} /> Spalte hinzufügen</button>
 
@@ -517,82 +694,27 @@ async function askAddStage(projectId, onCreated) {
   if (stage && onCreated) onCreated(stage.id)
 }
 
-// Löschen: leere Spalte mit einfacher Rückfrage, sonst Zielspalte wählen
+// Löschen: Aufgaben direkt in der Datenbank zählen (auch archivierte). Leere Spalte mit
+// einfacher Rückfrage, sonst wählen, wohin die Aufgaben sollen. Ist es die letzte Spalte ihrer
+// Art, steht das in der Rückfrage.
 async function askDeleteStage(stage) {
   if (stage.kind === 'done') return
-  const count = cardsInStage(stage.id).length
-  if (!count) {
-    const ok = await confirmDialog({ title: `Spalte „${stage.name}“ löschen?`, text: 'Die Spalte ist leer.', confirmLabel: 'Löschen', danger: true })
+  const counted = await countStageCards(stage.id)
+  if (!counted) return
+  if (!counted.total) {
+    const ok = await confirmDialog({
+      title: `Spalte „${stage.name}“ löschen?`,
+      text: lastOfKindHint(stage) || 'Die Spalte ist leer.',
+      confirmLabel: 'Löschen',
+      danger: true,
+    })
     if (ok) await deleteStage(stage.id)
     return
   }
-  openDialog({ kind: 'stage-delete', stageId: stage.id })
+  openDialog({ kind: 'stage-delete', stageId: stage.id, total: counted.total, archived: counted.archived })
 }
 
-function StageEdit({ d }) {
-  const stage = state.db.stages.find((s) => s.id === d.stageId)
-  const [name, setName] = useState(stage ? stage.name : '')
-  const [kind, setKind] = useState(stage ? stage.kind : 'todo')
-  const [prob, setProb] = useState(stage && stage.probability != null ? String(stage.probability) : '')
-  if (!stage) return null
-  const list = stagesOf(stage.project_id)
-  const index = list.findIndex((s) => s.id === stage.id)
-  const isDone = stage.kind === 'done'
-  const count = cardsInStage(stage.id).length
-  const close = () => closeDialog()
-  const save = async (e) => {
-    e && e.preventDefault()
-    const patch = {}
-    if (name.trim() && name.trim() !== stage.name) patch.name = name.trim()
-    if (!isDone && kind !== stage.kind) patch.kind = kind
-    const p = prob.trim() === '' ? null : Math.max(0, Math.min(100, Math.round(Number(prob))))
-    if (Number.isFinite(p) || p === null) {
-      if (p !== (stage.probability ?? null)) patch.probability = p
-    }
-    if (Object.keys(patch).length) await update('stages', stage.id, patch)
-    close()
-  }
-  return html`<${Modal}
-    title="Spalte bearbeiten"
-    onClose=${close}
-    footer=${html`<button type="button" class="btn" onClick=${close}>Abbrechen</button>
-      <button type="submit" form="stage-edit-form" class="btn btn-primary" disabled=${!name.trim()}>Speichern</button>`}
-  >
-    <form id="stage-edit-form" onSubmit=${save}>
-      <${Field} label="Name" htmlFor="stage-name">
-        <input id="stage-name" value=${name} onInput=${(e) => setName(e.target.value)} />
-      <//>
-      <${Field} label="Art" htmlFor="stage-kind">
-        ${isDone
-          ? html`<p class="muted small">Erledigt. Jedes Projekt hat genau eine solche Spalte, sie lässt sich umbenennen, aber nicht löschen.</p>`
-          : html`<select id="stage-kind" value=${kind} onChange=${(e) => setKind(e.target.value)}>
-              ${SETTINGS.stageKinds.filter((k) => k.value !== 'done').map((k) => html`<option value=${k.value}>${k.label}</option>`)}
-            </select>`}
-      <//>
-      <${Field} label="Wahrscheinlichkeit für Deals in Prozent (leer heißt ohne)" htmlFor="stage-prob">
-        <input id="stage-prob" type="number" min="0" max="100" step="5" inputmode="numeric" value=${prob} onInput=${(e) => setProb(e.target.value)} />
-      <//>
-    </form>
-    <div class="stage-edit-actions">
-      <button type="button" class="btn" disabled=${index <= 0} onClick=${() => moveStage(stage.id, -1)}><${Icon} name="back" size=${16} /> Nach links</button>
-      <button type="button" class="btn" disabled=${index >= list.length - 1} onClick=${() => moveStage(stage.id, 1)}>Nach rechts <${Icon} name="chevron" size=${16} /></button>
-      ${!isDone &&
-      html`<button
-        type="button"
-        class="btn btn-danger-text"
-        onClick=${() => {
-          close()
-          askDeleteStage(stage)
-        }}
-      >
-        <${Icon} name="trash" size=${16} /> Spalte löschen${count ? ` (${count} ${count === 1 ? 'Aufgabe' : 'Aufgaben'})` : ''}
-      </button>`}
-    </div>
-  <//>`
-}
-dialogKinds['stage-edit'] = StageEdit
-
-// Spalte mit Aufgaben löschen: erst sagen, wohin die Aufgaben sollen
+// Spalte mit Aufgaben löschen: erst sagen, wohin die Aufgaben sollen. Zeigt keine Deal-Werte.
 function StageDelete({ d }) {
   const stage = state.db.stages.find((s) => s.id === d.stageId)
   const others = stage ? stagesOf(stage.project_id).filter((s) => s.id !== stage.id) : []
@@ -600,8 +722,9 @@ function StageDelete({ d }) {
   const [target, setTarget] = useState(preferred ? preferred.id : '')
   const [busy, setBusy] = useState(false)
   if (!stage) return null
-  const cards = cardsInStage(stage.id)
-  const archived = cards.filter((c) => c.archived).length
+  const total = d.total || 0
+  const archived = d.archived || 0
+  const hint = lastOfKindHint(stage)
   const close = () => closeDialog()
   const run = async () => {
     setBusy(true)
@@ -613,13 +736,13 @@ function StageDelete({ d }) {
     title=${`Spalte „${stage.name}“ löschen?`}
     onClose=${close}
     footer=${html`<button type="button" class="btn" onClick=${close}>Abbrechen</button>
-      <button type="button" class="btn btn-danger" disabled=${!target || busy} onClick=${run}>${busy ? 'Einen Moment …' : 'Verschieben und löschen'}</button>`}
+      <button type="button" class="btn btn-danger" disabled=${!target || busy} onClick=${run}>${busy ? 'Einen Moment …' : 'Verschieben und Spalte löschen'}</button>`}
   >
     <p>
-      In dieser Spalte ${cards.length === 1 ? 'liegt 1 Aufgabe' : `liegen ${cards.length} Aufgaben`}${archived ? `, davon ${archived} im Archiv` : ''}.
-      Sie bleiben erhalten und kommen in die Spalte, die du hier wählst.
+      In „${stage.name}“ ${total === 1 ? 'liegt noch 1 Aufgabe' : `liegen noch ${total} Aufgaben`}${archived ? `, davon ${archived} archiviert` : ''}. Wohin sollen sie?
     </p>
-    <${Field} label="Aufgaben verschieben nach" htmlFor="stage-target">
+    ${hint && html`<p class="muted small">${hint}</p>`}
+    <${Field} label="Verschieben nach" htmlFor="stage-target">
       <select id="stage-target" value=${target} onChange=${(e) => setTarget(e.target.value)}>
         ${others.map((s) => html`<option value=${s.id}>${s.name}</option>`)}
       </select>

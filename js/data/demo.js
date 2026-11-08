@@ -168,6 +168,17 @@ export function createDemoApi({ asGuest = false } = {}) {
       return clone(r)
     },
 
+    // Aufgaben einer Spalte zählen, auch archivierte (B3)
+    async countStageCards(stageId) {
+      const list = db.cards.filter((c) => c.stage_id === stageId)
+      return { total: list.length, archived: list.filter((c) => c.archived).length }
+    },
+    // Alle Aufgaben einer Spalte in eine andere, je Aufgabe mit Verlaufseintrag wie in der Datenbank
+    async moveStageCards(fromId, toId) {
+      const ids = db.cards.filter((c) => c.stage_id === fromId).map((c) => c.id)
+      for (const id of ids) await this.update('cards', id, { stage_id: toId })
+      return ids.length
+    },
     async remove(table, id) {
       if (asGuest || table === 'mailboxes') throw notAllowed()
       checkDelete(db, table, id)

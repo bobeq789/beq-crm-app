@@ -924,53 +924,101 @@ async function saveStageOrder(ids) {
   }
 }
 
-// Neue Spalte, standardmäßig vor „Erledigt“
-export async function addStage(projectId, name) {
+// Neue Spalte an Stelle `at` (ab 0), nie hinter „Erledigt“. Ohne Angabe direkt vor „Erledigt“.
+// Art immer „todo“, Wahrscheinlichkeit leer. Beides stellt man in den Projekt-Einstellungen ein.
+export async function addStage(projectId, name, at = null) {
   const list = stagesOf(projectId)
   const doneIndex = list.findIndex((s) => s.kind === 'done')
-  const at = doneIndex < 0 ? list.length : doneIndex
+  const last = doneIndex < 0 ? list.length : doneIndex
+  const pos = at == null ? last : Math.max(0, Math.min(at, last))
   const ids = list.map((s) => s.id)
-  // Platz schaffen: alles ab „Erledigt“ rückt eine Stelle nach hinten (null ist der freie Platz)
-  await saveStageOrder([...ids.slice(0, at), null, ...ids.slice(at)])
-  const stage = await insert('stages', { project_id: projectId, name: name.trim(), kind: 'todo', sort: at + 1 })
+  // Platz schaffen und dabei alle Spalten sauber durchnummerieren (null ist der freie Platz)
+  await saveStageOrder([...ids.slice(0, pos), null, ...ids.slice(pos)])
+  const stage = await insert('stages', { project_id: projectId, name: name.trim(), kind: 'todo', sort: pos + 1 })
   if (stage) toast(`Spalte „${stage.name}“ angelegt`)
   return stage
 }
 
-// Spalte eine Stelle nach links (-1) oder rechts (+1)
-export async function moveStage(stageId, dir) {
+// Darf die Spalte eine Stelle nach links (-1) oder rechts (+1)? „Erledigt“ bleibt immer hinten,
+// keine Spalte lässt sich dahinter schieben.
+export function canMoveStage(stageId, dir) {
   const stage = getStage(stageId)
-  if (!stage) return
+  if (!stage || stage.kind === 'done') return false
+  const list = stagesOf(stage.project_id)
+  const j = list.findIndex((s) => s.id === stageId) + dir
+  return j >= 0 && j < list.length && list[j].kind !== 'done'
+}
+
+// Spalte mit der Nachbarspalte tauschen, danach alle sauber durchnummerieren
+export async function moveStage(stageId, dir) {
+  if (!canMoveStage(stageId, dir)) return
+  const stage = getStage(stageId)
   const ids = stagesOf(stage.project_id).map((s) => s.id)
   const i = ids.indexOf(stageId)
-  const j = i + dir
-  if (i < 0 || j < 0 || j >= ids.length) return
-  ;[ids[i], ids[j]] = [ids[j], ids[i]]
+  ;[ids[i], ids[i + dir]] = [ids[i + dir], ids[i]]
   await saveStageOrder(ids)
 }
 
-// Alle Aufgaben einer Spalte, auch die im Archiv
+// Ist das die einzige Spalte ihrer Art im Projekt? Dann landen Aufgaben, die eine Spalte dieser
+// Art suchen (stageOfKind), danach in der ersten Spalte.
+export function lastOfKindHint(stage) {
+  if (!stage || stage.kind === 'done') return ''
+  if (stagesOf(stage.project_id).filter((s) => s.kind === stage.kind).length > 1) return ''
+  const label = (SETTINGS.stageKinds.find((k) => k.value === stage.kind) || {}).label || stage.kind
+  const why = {
+    todo: 'Neue Aufgaben aus der Schnellerfassung und aus „Aufs Board“ landen danach ohne Hinweis in der ersten Spalte.',
+    waiting: 'Die Übersicht zeigt danach unter „Warte auf Rückmeldung“ nichts mehr aus diesem Projekt.',
+  }[stage.kind] || 'Aufgaben, die aus anderen Projekten mit dieser Art hierher wandern, landen danach in der ersten Spalte.'
+  return `„${stage.name}“ ist die letzte Spalte der Art „${label}“. ${why}`
+}
+
+// Alle Aufgaben einer Spalte, auch die im Archiv (aus den geladenen Daten, nur für Anzeigen)
 export const cardsInStage = (stageId) => state.db.cards.filter((c) => c.stage_id === stageId)
 
-// Spalte löschen. Liegen Aufgaben darin, wandern sie vorher in die Zielspalte.
+// Aufgaben einer Spalte direkt in der Datenbank zählen, auch archivierte
+export async function countStageCards(stageId) {
+  try {
+    return await api.countStageCards(stageId)
+  } catch (err) {
+    toast(`Die Aufgaben in der Spalte ließen sich nicht zählen. ${errorText(err)}`, { error: true })
+    return null
+  }
+}
+
+// Spalte löschen. Liegen Aufgaben darin (auch archivierte), wandern sie vorher in einem Schritt in
+// die Zielspalte, je Aufgabe mit Verlaufseintrag. Schlägt das fehl, bleibt die Spalte stehen.
 // „Erledigt“ bleibt immer, weil Übersicht und Sales daran hängen.
 export async function deleteStage(stageId, targetId = null) {
   const stage = getStage(stageId)
   if (!stage || stage.kind === 'done') return false
-  const cards = cardsInStage(stageId)
-  if (cards.length) {
+  const counted = await countStageCards(stageId)
+  if (!counted) return false
+  let moved = 0
+  if (counted.total) {
     const target = getStage(targetId)
-    if (!target || target.project_id !== stage.project_id || target.id === stage.id) return false
-    for (const c of cards) {
-      if (!(await update('cards', c.id, { stage_id: target.id }))) return false
+    if (!target || target.project_id !== stage.project_id || target.id === stage.id) {
+      toast('Bitte eine Spalte wählen, in die die Aufgaben kommen.', { error: true })
+      return false
+    }
+    try {
+      moved = await api.moveStageCards(stage.id, target.id)
+    } catch (err) {
+      await reload()
+      toast(`Die Aufgaben ließen sich nicht verschieben, die Spalte „${stage.name}“ bleibt stehen. ${errorText(err)}`, { error: true })
+      return false
     }
   }
-  const ok = await remove('stages', stageId)
-  if (ok) {
-    const target = getStage(targetId)
-    toast(cards.length ? `„${stage.name}“ gelöscht. ${cards.length === 1 ? 'Die Aufgabe liegt' : `Die ${cards.length} Aufgaben liegen`} jetzt in „${target.name}“.` : `„${stage.name}“ gelöscht`)
+  try {
+    await api.remove('stages', stage.id)
+  } catch (err) {
+    await reload()
+    const done = moved ? `${moved === 1 ? 'Die Aufgabe ist' : `Die ${moved} Aufgaben sind`} verschoben, aber die Spalte ließ sich nicht löschen.` : 'Die Spalte ließ sich nicht löschen.'
+    toast(`${done} ${errorText(err)}`, { error: true })
+    return false
   }
-  return ok
+  await reload()
+  toast(moved ? `Spalte gelöscht, ${moved === 1 ? '1 Aufgabe' : `${moved} Aufgaben`} verschoben.` : `Spalte „${stage.name}“ gelöscht.`)
+  return true
 }
 
 // Teammitglied zu einem Namen aus einem Action Item („Anna“ oder „Anna Berger“)
