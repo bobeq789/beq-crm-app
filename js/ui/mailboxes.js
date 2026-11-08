@@ -135,7 +135,7 @@ export function MailboxTile() {
   return html`<${Tile} title="Postfächer und Kalender" count=${list.length}>
     <p class="muted small">
       Verbinde deine beQ-Postfächer, gern auch mehrere. Das CRM liest dann Mails und Termine mit. Senden, Einladen und Löschen geht nur, wenn du es im CRM selbst auslöst, und nur in deinen eigenen Postfächern. Gelöschte Mails landen im Papierkorb von Gmail.
-      Was aus einem verbundenen Postfach kommt, sehen alle im Team, Gäste nicht. Verbinde deshalb nur Postfächer, für die du zustimmen darfst.
+      Deine Mails liest nur du. Deine Termine sehen außerdem dein Teamlead und die Admins, Gäste nie. Verbinde nur Postfächer, für die du zustimmen darfst.
     </p>
     ${list.length > 0 && html`<ul class="team-list mailbox-list">${list.map((b) => html`<${MailboxRow} key=${b.id} box=${b} />`)}</ul>`}
     <div class="settings-actions">

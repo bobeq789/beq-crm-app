@@ -528,13 +528,29 @@ export const isOwnMailbox = (address) => myActiveMailboxes().some((b) => b.addre
 // Mail senden. payload: von, an, cc, bcc, betreff, text, antwort_auf, dateien [{ name, mime, data }]
 export async function sendMail(payload) {
   try {
-    await api.mailAction('senden', payload)
-    toast('Mail gesendet')
+    const result = await api.mailAction('senden', payload)
+    toast(result && result.ohne_signatur ? 'Mail gesendet, aber ohne Signatur. Google hat sie gerade nicht geliefert.' : 'Mail gesendet')
     await reload()
     return true
   } catch (err) {
     toast(errorText(err), { error: true })
     return false
+  }
+}
+
+// Signatur aus Gmail je Postfach, einmal je Sitzung geladen. Nur Text für die Vorschau, die
+// Signatur mit Formatierung holt der Dienst beim Senden selbst.
+const signatures = new Map()
+export async function mailSignature(von) {
+  if (!von) return { status: 'keine', text: '' }
+  if (signatures.has(von)) return signatures.get(von)
+  try {
+    const r = await api.mailSignature(von)
+    const value = r && r.vorhanden ? { status: 'da', text: r.text } : { status: 'keine', text: '' }
+    signatures.set(von, value)
+    return value
+  } catch (err) {
+    return { status: 'fehler', text: errorText(err) }
   }
 }
 

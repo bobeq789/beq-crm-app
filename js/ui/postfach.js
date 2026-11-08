@@ -17,6 +17,7 @@ import {
   myActiveMailboxes,
   isOwnMailbox,
   sendMail,
+  mailSignature,
   deleteMail,
   syncNow,
   openDialog,
@@ -144,7 +145,8 @@ export function PostfachPage() {
   const [limit, setLimit] = useState(PAGE)
   const [syncing, setSyncing] = useState(false)
   const selectedId = route.params.get('mail')
-  const boxes = (state.db.mailboxes || []).filter((b) => b.status !== 'getrennt')
+  // Auswahl nur mit eigenen Postfächern, fremde Mails liefert die Datenbank ohnehin nicht (17_mails_privat.sql)
+  const boxes = myActiveMailboxes()
   const mine = myActiveMailboxes()
 
   const list = state.db.emails
@@ -226,29 +228,35 @@ async function openCompose({ mode, mail = null }) {
 }
 export const openNewMail = (to = '') => openDialog({ kind: 'mail-compose', mode: 'neu', to })
 
+// Erste Zeile des zitierten Verlaufs. Beim Senden trennt sie eigenen Text und Zitat, damit die
+// Signatur wie in Gmail dazwischen steht.
+const quoteMarker = (mail) => `Am ${fmtDateTime(mail.sent_at)} schrieb ${fromName(mail)}:`
+const FORWARD_MARKER = 'Weitergeleitete Mail:'
+
 function quote(mail) {
   const text = htmlToText(mail.body || '')
-  return `\n\nAm ${fmtDateTime(mail.sent_at)} schrieb ${fromName(mail)}:\n` + text.split('\n').map((l) => '> ' + l).join('\n')
+  return `\n\n${quoteMarker(mail)}\n` + text.split('\n').map((l) => '> ' + l).join('\n')
 }
 
 function prefill(d, mine) {
   const own = new Set(mine.map((b) => b.address))
   const m = d.mail
   const von = (m && mine.find((b) => mailboxesOf(m).includes(b.address))) || mine[0]
-  const base = { von: von ? von.address : '', an: d.to || '', cc: '', betreff: '', text: '' }
+  const base = { von: von ? von.address : '', an: d.to || '', cc: '', betreff: '', text: '', marker: '' }
   if (!m) return base
   const subject = m.subject || ''
   if (d.mode === 'weiter') {
     return {
       ...base,
       betreff: /^(fwd?|wg):/i.test(subject) ? subject : 'Fwd: ' + subject,
-      text: `\n\nWeitergeleitete Mail:\nVon: ${fromName(m)} <${m.from_email}>\nDatum: ${fmtDateTime(m.sent_at)}\nBetreff: ${subject}\nAn: ${(m.to_emails || []).join(', ')}\n\n${htmlToText(m.body || '')}`,
+      marker: FORWARD_MARKER,
+      text: `\n\n${FORWARD_MARKER}\nVon: ${fromName(m)} <${m.from_email}>\nDatum: ${fmtDateTime(m.sent_at)}\nBetreff: ${subject}\nAn: ${(m.to_emails || []).join(', ')}\n\n${htmlToText(m.body || '')}`,
     }
   }
   const sender = m.direction === 'out' ? m.to_emails || [] : [m.from_email]
   const all = d.mode === 'allen' ? [...sender, ...(m.to_emails || []), ...(m.cc_emails || [])] : sender
   const to = [...new Set(all.map(norm))].filter((a) => a && !own.has(a))
-  return { ...base, an: to.join(', '), betreff: /^(re|aw):/i.test(subject) ? subject : 'Re: ' + subject, text: quote(m) }
+  return { ...base, an: to.join(', '), betreff: /^(re|aw):/i.test(subject) ? subject : 'Re: ' + subject, text: quote(m), marker: quoteMarker(m) }
 }
 
 function readFile(file) {
@@ -267,7 +275,18 @@ function MailCompose({ d }) {
   const [files, setFiles] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  const [sig, setSig] = useState({ status: 'laden', text: '' })
+  const [withSig, setWithSig] = useState(true)
   const fileInput = useRef()
+  // Signatur aus Gmail für das gewählte Postfach (nur Text, die App zeigt kein fremdes HTML)
+  useEffect(() => {
+    let current = true
+    setSig({ status: 'laden', text: '' })
+    mailSignature(form.von).then((value) => current && setSig(value))
+    return () => {
+      current = false
+    }
+  }, [form.von])
   const set = (patch) => setForm({ ...form, ...patch })
   const total = files.reduce((n, f) => n + f.size, 0)
   const close = () => closeDialog()
@@ -296,12 +315,16 @@ function MailCompose({ d }) {
     try {
       const dateien = []
       for (const f of files) dateien.push({ name: f.name, mime: f.type || 'application/octet-stream', data: await readFile(f) })
+      // Eigener Text und zitierter Verlauf getrennt, die Signatur kommt dazwischen
+      const at = form.marker ? form.text.indexOf(form.marker) : -1
       const ok = await sendMail({
         von: form.von,
         an,
         cc,
         betreff: form.betreff,
-        text: form.text,
+        text: at >= 0 ? form.text.slice(0, at) : form.text,
+        zitat: at >= 0 ? form.text.slice(at) : '',
+        signatur: withSig && sig.status === 'da',
         antwort_auf: d.mail && d.mode !== 'weiter' ? d.mail.id : null,
         dateien,
       })
@@ -345,6 +368,21 @@ function MailCompose({ d }) {
       <${Field} label="Nachricht" htmlFor="mc-text">
         <textarea id="mc-text" rows="12" value=${form.text} onInput=${(e) => set({ text: e.target.value })}></textarea>
       <//>
+      <div class="pf-signature">
+        <label class="check-label">
+          <input type="checkbox" checked=${withSig && sig.status === 'da'} disabled=${sig.status !== 'da'} onChange=${(e) => setWithSig(e.target.checked)} />
+          Signatur aus Gmail anhängen
+        </label>
+        ${sig.status === 'laden'
+          ? html`<p class="muted small">Signatur wird geladen …</p>`
+          : sig.status === 'da'
+          ? withSig &&
+            html`<div class="pf-signature-preview" aria-label="Vorschau der Signatur">${sig.text}</div>
+              <p class="muted small">In der Mail steht sie mit Logo und Formatierung wie in Gmail${form.marker ? ', über dem zitierten Verlauf' : ''}.</p>`
+          : sig.status === 'keine'
+          ? html`<p class="muted small">Für ${form.von} ist in Gmail keine Signatur hinterlegt. Du legst sie in Gmail unter „Einstellungen“, „Signatur“ an.</p>`
+          : html`<p class="muted small">Die Signatur ließ sich nicht laden, die Mail geht ohne Signatur raus. ${sig.text}</p>`}
+      </div>
       ${d.mode === 'weiter' && attachmentsOf(d.mail || {}).length > 0 && html`<p class="muted small">Die Anhänge der ursprünglichen Mail sind nicht dabei. Häng sie bei Bedarf neu an.</p>`}
       <div class="pf-files">
         ${files.map(

@@ -266,6 +266,11 @@ export function createDemoApi({ asGuest = false } = {}) {
     },
 
     // Postfach in der Demo: Senden legt eine Mail an, Löschen entfernt sie, Anhänge haben keinen Inhalt
+    // Erfundene Signatur für den Demo-Modus
+    async mailSignature(von) {
+      const self = db.team_members.find((t) => t.email === me)
+      return { vorhanden: true, text: `Viele Grüße\n${self ? self.name : ''}\nbeQ GmbH (Demo)\n${von}` }
+    },
     async mailAction(action, payload) {
       if (asGuest) throw notAllowed()
       if (action === 'senden') {
@@ -278,12 +283,14 @@ export function createDemoApi({ asGuest = false } = {}) {
         const id = crypto.randomUUID()
         const now = new Date().toISOString()
         const files = (payload.dateien || []).map((f, i) => ({ name: f.name, mime: f.mime, size: Math.floor((f.data || '').length * 0.75), part: String(i + 1) }))
+        const sig = payload.signatur ? (await this.mailSignature(payload.von)).text : ''
+        const body = [String(payload.text || '').replace(/\s+$/, ''), sig, String(payload.zitat || '').trim()].filter(Boolean).join('\n\n')
         db.emails.push({
           id, message_id: `<demo-${id}@example.com>`, thread_id: orig ? orig.thread_id : id, mailbox: box.address, provider_id: 'demo-' + id,
           direction: 'out', from_email: box.address, from_name: self ? self.name : box.address, to_emails: to,
           cc_emails: [].concat(payload.cc || []).map((a) => String(a).trim().toLowerCase()).filter(Boolean),
-          subject: payload.betreff || '', sent_at: now, body: payload.text || '', attachments: files.map((f) => f.name),
-          attachment_list: files, snippet: String(payload.text || '').slice(0, 140), labels: ['SENT'], mailboxes: [box.address], created_at: now,
+          subject: payload.betreff || '', sent_at: now, body, attachments: files.map((f) => f.name),
+          attachment_list: files, snippet: body.slice(0, 140), labels: ['SENT'], mailboxes: [box.address], created_at: now,
         })
         for (const addr of to) {
           const person = db.persons.find((p) => (p.emails || []).map((e) => e.toLowerCase()).includes(addr))

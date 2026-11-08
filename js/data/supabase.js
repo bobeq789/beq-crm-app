@@ -273,6 +273,13 @@ export async function createSupabaseApi(config) {
       if (!res.ok) throw functionError(res, body)
       return body
     },
+    // Signatur aus Gmail als Text für die Vorschau (nur eigene Postfächer)
+    async mailSignature(von) {
+      const res = await callFunction('google-mail', { action: 'signatur', von })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw functionError(res, body)
+      return body
+    },
     // Signierter Link zu einem Anhang, 5 Minuten gültig. Den Anhang selbst liefert der Dienst
     // „google-mail“ beim Öffnen des Links, nie die App (Typ aus der Endung, sichere Kopfzeilen).
     async mailAttachmentLink(emailId, part) {

@@ -1026,6 +1026,8 @@ button.att-btn:disabled { cursor: progress; }
 .pf-back { margin-bottom: 10px; }
 .pf-compose textarea { min-height: 220px; font-family: inherit; }
 .pf-cc { margin: -4px 0 10px; }
+.pf-signature { margin: -6px 0 14px; }
+.pf-signature-preview { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; color: var(--muted); background: var(--surface); border-radius: var(--radius-sm); padding: 10px 12px; margin: 8px 0 6px; }
 .pf-files { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; }
 .pf-file { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; border-radius: 999px; background: var(--surface); font-size: 14px; max-width: 100%; }
 @media (max-width: 759px) {
