@@ -166,17 +166,63 @@ export function splitLinks(text) {
   return parts
 }
 
-export function telHref(phone) {
-  return 'tel:' + String(phone).replace(/[^\d+]/g, '')
+// ---------- Telefonnummern ----------
+// Nummern stehen so im CRM, wie jemand sie getippt oder aus einer Signatur kopiert hat:
+// „+49 (0) 171 1234567“, „0049 171/1234567“, „Tel.: 030 123 45-67“, „+49 30 1234 Durchwahl 12“.
+// Zum Wählen wird daraus eine saubere internationale Nummer. Angezeigt wird weiter das Original.
+// Länder, in denen die 0 nach der Landesvorwahl wegfällt, auch ohne Klammern („+49 0171 …“).
+// Italien (39) gehört nicht dazu, dort bleibt die 0 Teil der Nummer.
+const DROP_TRUNK_ZERO = ['49', '43', '41']
+const EXTENSION_RE = /\s*(?:ext\.?|extension|durchwahl|dw\.?|app\.?|x)\s*[:.]?\s*(\d{1,6})\s*$/i
+
+// { number: '+491711234567', extension: '12' } oder null, wenn keine Nummer erkennbar ist.
+// Ohne Landesvorwahl gilt Deutschland: „0171 …“ wird „+49171 …“.
+export function parsePhone(raw) {
+  let s = String(raw || '')
+    .normalize('NFKC') // „＋“ und schmale Leerzeichen aus Signaturen
+    .trim()
+  // Beschriftung davor weglassen („Tel.:“, „Mobil“, „T“): ab dem ersten Plus oder der ersten Ziffer
+  const start = s.search(/[+\d]/)
+  if (start < 0) return null
+  s = s.slice(start)
+  let extension = null
+  const ext = s.match(EXTENSION_RE)
+  if (ext) {
+    extension = ext[1]
+    s = s.slice(0, ext.index)
+  }
+  // „(0)“ nach der Landesvorwahl heißt „diese 0 nur im Inland wählen“
+  s = s.replace(/\(\s*0\s*\)/g, ' ')
+  const plus = s.startsWith('+')
+  let digits = s.replace(/\D/g, '')
+  if (plus) digits = '+' + digits
+  else if (digits.startsWith('00')) digits = '+' + digits.slice(2)
+  else if (digits.startsWith('0')) digits = '+49' + digits.slice(1)
+  else if (digits.length < 3) return null
+  else return { number: digits, extension } // Kurznummern wie 110 oder lokale Nummern ohne Vorwahl
+  for (const cc of DROP_TRUNK_ZERO) {
+    if (digits.startsWith('+' + cc + '0')) digits = '+' + cc + digits.slice(cc.length + 2)
+  }
+  // Landesvorwahl plus mindestens vier Ziffern, höchstens 15 Ziffern (internationaler Standard).
+  // Mehr heißt meist: zwei Nummern in einem Feld („0171 … / 0172 …“). Dann lieber gar nicht wählen.
+  const count = digits.replace(/\D/g, '').length
+  if (count < 6 || count > 15) return null
+  return { number: digits, extension }
 }
 
-// WhatsApp braucht die Nummer international ohne Plus (deutsche 0 wird 49)
+// Link zum Anrufen. Eine Durchwahl wählt das Handy nach einer kurzen Pause (Komma) nach.
+// Leer, wenn keine Nummer erkennbar ist, dann zeigt die App nur den Text.
+export function telHref(phone) {
+  const p = parsePhone(phone)
+  if (!p) return ''
+  return 'tel:' + p.number + (p.extension ? ',' + p.extension : '')
+}
+
+// WhatsApp braucht die Nummer international ohne Plus und ohne Durchwahl
 export function waHref(phone) {
-  let p = String(phone).replace(/[^\d+]/g, '')
-  if (p.startsWith('+')) p = p.slice(1)
-  else if (p.startsWith('00')) p = p.slice(2)
-  else if (p.startsWith('0')) p = '49' + p.slice(1)
-  return `https://wa.me/${p}`
+  const p = parsePhone(phone)
+  if (!p || !p.number.startsWith('+')) return ''
+  return `https://wa.me/${p.number.slice(1)}`
 }
 
 export function webHref(url) {

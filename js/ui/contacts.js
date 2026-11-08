@@ -118,7 +118,9 @@ export function ContactDetail({ id }) {
   const org = getOrg(p.org_id)
   const cards = state.db.cards.filter((c) => c.person_id === p.id && isOpen(c))
   const meetings = meetingsOfPerson(p.id)
-  const phone = (p.phones || [])[0]
+  // Für die Knöpfe oben die erste Nummer, die sich wählen lässt (siehe parsePhone in util.js)
+  const phone = (p.phones || []).find((x) => telHref(x))
+  const waPhone = (p.phones || []).find((x) => waHref(x))
   const email = (p.emails || [])[0]
 
   const del = async () => {
@@ -161,7 +163,7 @@ export function ContactDetail({ id }) {
       ${email && html`<button type="button" class="btn" onClick=${() => openDialog({ kind: 'new-event', guests: [email] })}><${Icon} name="calendar" size=${18} /> Termin einladen</button>`}
       ${phone && html`<a class="btn" href=${telHref(phone)}><${Icon} name="phone" size=${18} /> Anrufen</a>`}
       ${email && html`<a class="btn" href=${'mailto:' + email}><${Icon} name="mail" size=${18} /> Mailen</a>`}
-      ${phone && html`<a class="btn" href=${waHref(phone)} target="_blank" rel="noopener noreferrer"><${Icon} name="whatsapp" size=${18} /> WhatsApp</a>`}
+      ${waPhone && html`<a class="btn" href=${waHref(waPhone)} target="_blank" rel="noopener noreferrer"><${Icon} name="whatsapp" size=${18} /> WhatsApp</a>`}
     </div>
     <div class="detail-grid">
       <div class="col-main">
@@ -177,8 +179,10 @@ export function ContactDetail({ id }) {
           <ul class="contact-data">
             ${(p.phones || []).map(
               (ph) => html`<li>
-                <a href=${telHref(ph)}><${Icon} name="phone" size=${18} /> ${ph}</a>
-                <a class="icon-btn small" href=${waHref(ph)} target="_blank" rel="noopener noreferrer" aria-label=${'WhatsApp an ' + ph} title="WhatsApp"><${Icon} name="whatsapp" size=${18} /></a>
+                ${telHref(ph)
+                  ? html`<a href=${telHref(ph)}><${Icon} name="phone" size=${18} /> ${ph}</a>`
+                  : html`<span class="contact-plain" title="Diese Nummer lässt sich nicht automatisch wählen. Bitte unter „Bearbeiten“ prüfen."><${Icon} name="phone" size=${18} /> ${ph}</span>`}
+                ${waHref(ph) && html`<a class="icon-btn small" href=${waHref(ph)} target="_blank" rel="noopener noreferrer" aria-label=${'WhatsApp an ' + ph} title="WhatsApp"><${Icon} name="whatsapp" size=${18} /></a>`}
               </li>`
             )}
             ${(p.emails || []).map((m) => html`<li><a href=${'mailto:' + m}><${Icon} name="mail" size=${18} /> ${m}</a></li>`)}

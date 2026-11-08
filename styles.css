@@ -612,7 +612,8 @@ body.panel-open { overflow: hidden; }
 .quick-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: -6px 0 20px; }
 .contact-data li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .contact-data li + li { border-top: 1px solid var(--border); }
-.contact-data a:not(.icon-btn) { display: inline-flex; align-items: center; gap: 10px; padding: 10px 0; min-height: 44px; overflow-wrap: anywhere; }
+.contact-data a:not(.icon-btn), .contact-data .contact-plain { display: inline-flex; align-items: center; gap: 10px; padding: 10px 0; min-height: 44px; overflow-wrap: anywhere; }
+.contact-data .contact-plain { color: var(--muted); }
 
 /* ------------------------------------------------------------
    Anmeldung (dunkel, mit Signal-Bögen)
