@@ -116,7 +116,7 @@ export function History({ card }) {
         : html`<ul class="history-list">
             ${events.map(
               (e) => html`<li key=${e.id}>
-                <span class="history-text">${eventSentence(e)}</span>
+                <span class="history-text">${eventSentence(e)}${e.via === 'claude' && html` <span class="via-claude">über Claude</span>`}</span>
                 <span class="muted small" title=${new Date(e.at).toLocaleString('de-DE')}>${fmtRelative(e.at)}</span>
               </li>`
             )}

@@ -19,6 +19,7 @@ import { TopSearch } from './ui/search.js'
 import { Modal, dialogKinds } from './ui/common.js'
 import { openDialog, closeDialog } from './store.js'
 import { Login, SetPassword, NotMember, AuthError, Splash, MfaEnroll, MfaVerify } from './ui/auth.js'
+import { ClaudeConsent } from './ui/claude.js'
 
 const NAV_TEAM = [
   { key: '', label: 'Übersicht', icon: 'home' },
@@ -185,6 +186,8 @@ function App() {
       return html`<${MfaEnroll} />`
     case 'mfa-verify':
       return html`<${MfaVerify} />`
+    case 'claude':
+      return html`<${ClaudeConsent} /><${Toasts} />`
     case 'error':
       return html`<${AuthError} />`
     default:

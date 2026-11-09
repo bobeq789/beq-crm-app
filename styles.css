@@ -1313,3 +1313,32 @@ body.search-sheet-open .topbar { z-index: 70; }
 .row-text { display: flex; flex-direction: column; min-width: 0; }
 .row-sub { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
 
+
+/* ------------------------------------------------------------
+   Claude-Zugang (E1): Freigabe-Seite (auf Navy) und „Claude verbinden“ in den Einstellungen
+   ------------------------------------------------------------ */
+.claude-kicker { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--green); margin: 0 0 6px; }
+.auth-card .claude-rights { color: var(--white); margin: 14px 0 6px; }
+.claude-rights-head { display: flex; align-items: center; gap: 8px; font-weight: 500; margin: 12px 0 4px; }
+.claude-rights-head .icon { color: var(--green); flex: none; }
+.claude-rights ul { margin: 0; padding-left: 24px; color: var(--grey); }
+.claude-rights li { margin: 3px 0; }
+.claude-hint { text-align: left; margin: 12px 0 0; }
+.claude-facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; margin: 16px 0 12px; font-size: 14px; }
+.claude-facts dt { color: var(--grey); }
+.claude-facts dd { margin: 0; color: var(--white); overflow-wrap: anywhere; }
+.claude-login-hint { margin: -6px 0 16px; }
+.claude-url { margin: 12px 0; }
+.claude-url-row { display: flex; gap: 8px; }
+.claude-url-row input { flex: 1; min-width: 0; font-size: 14px; }
+.claude-steps { margin: 8px 0 12px; padding-left: 22px; }
+.claude-steps li { margin: 6px 0; }
+.claude-steps code { font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size: 13px; background: var(--bg); padding: 1px 5px; border-radius: 6px; overflow-wrap: anywhere; }
+.claude-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.claude-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); }
+.claude-list-name { display: flex; flex-direction: column; min-width: 0; }
+.via-claude { color: var(--muted); font-weight: 500; white-space: nowrap; }
+@media (max-width: 520px) {
+  .claude-list li { flex-direction: column; align-items: stretch; }
+  .claude-url-row { flex-direction: column; }
+}

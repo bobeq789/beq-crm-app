@@ -17,8 +17,10 @@ let api = null
 const listeners = new Set()
 
 export const state = {
-  // loading, login, set-password, not-member, mfa-enroll, mfa-verify, ready, error
+  // loading, login, set-password, not-member, mfa-enroll, mfa-verify, claude, ready, error
   auth: 'loading',
+  // Claude-Zugang (E1): Kennung der Anfrage von Claude, solange die Freigabe-Seite offen ist
+  claudeRequest: null,
   authMessage: null,
   sessionEmail: null,
   me: null,
@@ -117,6 +119,8 @@ export function errorText(err) {
   if (/JWT expired|session/i.test(msg)) return 'Deine Anmeldung ist abgelaufen. Bitte melde dich neu an.'
   if (/guest_guard_assignee|Gäste können nur sich selbst/i.test(msg)) return 'Als Gast kannst du nur dich, ein Teammitglied oder niemanden zuständig machen.'
   if (/guest_guard|Gäste dürfen/i.test(msg)) return 'Als Gast kannst du hier nur Spalte, Dringlichkeit, Fälligkeit und Zuständig ändern.'
+  // Meldungen aus 25_claude_zugang.sql (Freigabe für Claude) sind schon für Menschen geschrieben
+  if (/Claude-Zugang|Claude kann|zuerst mit dem zweiten Faktor|Kennung des Claude/i.test(msg)) return msg
   if (code === '42501' || /row-level security|permission denied/i.test(msg)) return 'Keine Berechtigung für diese Änderung.'
   if (code === '23503') return 'Das geht nicht, weil noch Einträge daran hängen.'
   if (code === '23505') return 'Diesen Eintrag gibt es schon.'
@@ -148,6 +152,7 @@ export function promptDialog({ title, label, value = '', confirmLabel = 'Speiche
 // Start und Anmeldung: Sitzung, Rolle, zweiter Faktor, Daten
 // ------------------------------------------------------------
 export async function boot() {
+  state.claudeRequest = readClaudeRequest()
   try {
     api = isDemo ? createDemoApi({ asGuest: demoAsGuest }) : await createSupabaseApi(config)
   } catch (err) {
@@ -245,6 +250,11 @@ export async function afterLogin(email) {
       }
       return emit()
     }
+    // Kommt die Person aus Claude, erst die Freigabe-Seite (mit zweitem Faktor, siehe oben)
+    if (state.claudeRequest) {
+      state.auth = 'claude'
+      return emit()
+    }
     await enterApp()
   } catch (err) {
     fail(err)
@@ -261,6 +271,66 @@ async function enterApp() {
   startFollowUp()
   await autoConnectMailbox()
 }
+
+// ------------------------------------------------------------
+// Claude-Zugang (E1, 25_claude_zugang.sql, Edge Function „crm-mcp“). Verbindet eine Person ihr
+// Claude, schickt Supabase sie mit ?authorization_id=… auf diese Seite (Authentication, OAuth
+// Server, Authorization Path). Die Kennung überlebt die Anmeldung, auch den Umweg über Google,
+// in sessionStorage. Freigeben geht erst nach dem zweiten Faktor (afterLogin()).
+// ------------------------------------------------------------
+const CLAUDE_KEY = 'beqcrm-claude-anfrage'
+// Supabase hängt die Kennung an die Website-Adresse. Doppelte Schrägstriche dabei glätten.
+function readClaudeRequest() {
+  try {
+    const query = new URLSearchParams(location.search)
+    const id = query.get('authorization_id')
+    if (id) {
+      sessionStorage.setItem(CLAUDE_KEY, JSON.stringify({ id, at: Date.now() }))
+      query.delete('authorization_id')
+      const rest = query.toString().replace(/=(&|$)/g, '$1')
+      history.replaceState(null, '', location.pathname.replace(/\/{2,}/g, '/') + (rest ? '?' + rest : '') + (location.hash || '#/'))
+    }
+    const saved = JSON.parse(sessionStorage.getItem(CLAUDE_KEY) || 'null')
+    // Supabase lässt eine Anfrage nur kurz offen, ältere gar nicht erst zeigen
+    if (saved && saved.id && Date.now() - saved.at < 30 * 60000) return saved.id
+    sessionStorage.removeItem(CLAUDE_KEY)
+  } catch {
+    // Ohne sessionStorage (privates Fenster mit strengen Regeln): Anfrage nur in dieser Adresse
+  }
+  return null
+}
+function clearClaudeRequest() {
+  state.claudeRequest = null
+  try {
+    sessionStorage.removeItem(CLAUDE_KEY)
+  } catch {
+    // nichts zu tun
+  }
+}
+// Freigabe-Seite verlassen, ohne zu Claude zurückzugehen: weiter ins CRM
+export async function leaveClaudeConsent() {
+  clearClaudeRequest()
+  state.auth = 'loading'
+  emit()
+  try {
+    await enterApp()
+  } catch (err) {
+    fail(err)
+  }
+}
+// Zurück zu Claude (nach Erlauben oder Ablehnen). Ohne Adresse (Demo): ins CRM.
+export function returnToClaude(url) {
+  clearClaudeRequest()
+  if (url) location.assign(url)
+  else leaveClaudeConsent()
+}
+export const claudeDetails = (id) => api.claudeDetails(id)
+export const claudeApprove = (id, info) => api.claudeApprove(id, info)
+export const claudeDeny = (id) => api.claudeDeny(id)
+export const claudeGrants = () => api.claudeGrants()
+export const claudeAccesses = () => api.claudeAccesses()
+export const claudeRevoke = (clientId) => api.claudeRevoke(clientId)
+export const claudeRevokeGrant = (clientId) => api.claudeRevokeGrant(clientId)
 
 // Erste Anmeldung mit Google (Entscheidung vom 06.11.2026, Variante B): gleich weiter zu
 // Google, um das eigene Postfach zu verbinden. Google hat das Konto schon gewählt, es

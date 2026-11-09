@@ -1,4 +1,4 @@
-// Einstellungen (Zahnrad): Farbschema pro Gerät, Konto, Postfächer und Kalender, Terminlink, Team (nur Admins), Produkte (Sales), Demo zurücksetzen
+// Einstellungen (Zahnrad): Farbschema pro Gerät, Konto, Postfächer und Kalender, Terminlink, Claude verbinden, Team (nur Admins), Produkte (Sales), Demo zurücksetzen
 import { html, useState } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { norm, fmtEuro } from '../lib/util.js'
@@ -25,6 +25,7 @@ import {
 } from '../store.js'
 import { PageHead, Tile, Segmented, Field } from './common.js'
 import { MailboxTile } from './mailboxes.js'
+import { ClaudeTile } from './claude.js'
 
 const ROLES = [
   { value: 'admin', label: 'Admin' },
@@ -294,6 +295,7 @@ export function SettingsPage() {
 
     ${!isGuest() && html`<${MailboxTile} />`}
     ${!isGuest() && html`<${TerminlinkTile} key=${state.prefsLoaded ? 'geladen' : 'leer'} />`}
+    ${!isGuest() && html`<${ClaudeTile} />`}
     ${isAdmin() && html`<${TeamAdmin} />`}
     ${!isGuest() && html`<${ProductCatalog} />`}
 

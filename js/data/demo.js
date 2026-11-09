@@ -36,6 +36,8 @@ import {
 } from './rules.js'
 
 const KEY = 'beqcrm-demo-v3'
+// Claude-Zugänge im Demo-Modus (nur in diesem Browser)
+const CLAUDE_KEY = 'beqcrm-demo-claude'
 const clone = (x) => JSON.parse(JSON.stringify(x))
 
 function loadDb() {
@@ -221,6 +223,42 @@ export function createDemoApi({ asGuest = false } = {}) {
       cascadeDelete(db, table, id)
       if (table === 'deal_items' && old) recalcDeal(db, old.deal_id)
       save()
+    },
+
+    // ---------- Claude-Zugang (E1): Freigabe-Seite zum Ausprobieren ----------
+    // ?demo&authorization_id=test zeigt eine Anfrage von Claude, …=fremd eine von einer fremden
+    // Seite, …=abgelaufen eine abgelaufene, …=schon eine schon erlaubte. Freigaben liegen nur hier.
+    async claudeDetails(id) {
+      if (id === 'abgelaufen') throw dbError('404', 'authorization not found')
+      if (id === 'schon') return { redirect_url: null }
+      const fremd = id === 'fremd'
+      return {
+        authorization_id: id,
+        redirect_uri: fremd ? 'https://werkzeug.example.com/callback' : 'https://claude.ai/api/mcp/auth_callback',
+        client: { id: fremd ? 'demo-fremd' : 'demo-claude', name: fremd ? 'Werkzeug' : 'Claude' },
+        scope: 'openid email profile',
+      }
+    },
+    async claudeApprove(id, { clientId, clientName, redirectHost }) {
+      if (asGuest) throw dbError('42501', 'Den Claude-Zugang gibt es nur für Mitglieder des Teams, nicht für Gäste.')
+      const list = local.get(CLAUDE_KEY, []).filter((x) => x.client_id !== clientId)
+      local.set(CLAUDE_KEY, [{ client_id: clientId, client_name: clientName, redirect_host: redirectHost, erteilt_at: new Date().toISOString() }, ...list])
+      return null
+    },
+    async claudeDeny() {
+      return null
+    },
+    async claudeGrants() {
+      return local.get(CLAUDE_KEY, []).map((x) => ({ clientId: x.client_id, name: x.client_name }))
+    },
+    async claudeAccesses() {
+      return asGuest ? [] : local.get(CLAUDE_KEY, [])
+    },
+    async claudeRevoke(clientId) {
+      local.set(CLAUDE_KEY, local.get(CLAUDE_KEY, []).filter((x) => x.client_id !== clientId))
+    },
+    async claudeRevokeGrant(clientId) {
+      local.set(CLAUDE_KEY, local.get(CLAUDE_KEY, []).filter((x) => x.client_id !== clientId))
     },
 
     // ---------- Follow-up wie 20_follow_up.sql (Gäste bekommen nichts) ----------
@@ -420,6 +458,7 @@ export function createDemoApi({ asGuest = false } = {}) {
     // Beispieldaten neu erzeugen
     reset() {
       local.remove(KEY)
+      local.remove(CLAUDE_KEY)
       db = loadDb()
     },
   }

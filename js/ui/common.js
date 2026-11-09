@@ -250,6 +250,10 @@ export function TaskRow({ card, showSince, sinceText, checkActivity }) {
 // bleibt gesperrt (body.panel-open), bis das letzte Fenster zu ist. Felder, die Escape selbst
 // brauchen (Klapplisten, Suche), halten die Taste mit stopPropagation oder preventDefault an.
 const overlayStack = []
+// Anmelden gleich nach dem Zeichnen (useLayoutEffect), nicht verzögert wie bei useEffect: Sonst
+// schloss ein schnelles Escape direkt nach dem Öffnen eines Dialogs das Fenster dahinter.
+// Die Reihenfolge folgt dem ersten Zeichnen des Fensters.
+let overlaySeq = 0
 function onOverlayKey(e) {
   if (e.key !== 'Escape' || e.defaultPrevented || !overlayStack.length) return
   overlayStack[overlayStack.length - 1].current()
@@ -257,8 +261,10 @@ function onOverlayKey(e) {
 export function useOverlay(onClose) {
   const ref = useRef(onClose)
   ref.current = onClose
-  useEffect(() => {
+  if (!ref.seq) ref.seq = ++overlaySeq
+  useLayoutEffect(() => {
     overlayStack.push(ref)
+    overlayStack.sort((a, b) => a.seq - b.seq)
     if (overlayStack.length === 1) {
       window.addEventListener('keydown', onOverlayKey)
       document.body.classList.add('panel-open')
@@ -651,7 +657,7 @@ function NoteItem({ note }) {
     <div class="note-meta">
       <span>
         ${note.internal && html`<span class="note-lock" title="Nur intern, für Gäste unsichtbar"><${Icon} name="lock" size=${14} /> Nur intern · </span>`}
-        ${memberName(note.author) || 'Unbekannt'} · ${fmtRelative(note.created_at)}${edited ? ' · bearbeitet' : ''}
+        ${memberName(note.author) || 'Unbekannt'}${note.via === 'claude' ? ' über Claude' : ''} · ${fmtRelative(note.created_at)}${edited ? ' · bearbeitet' : ''}
       </span>
       ${!editing &&
       html`<span class="note-actions">

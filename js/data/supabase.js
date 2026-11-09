@@ -172,6 +172,44 @@ export async function createSupabaseApi(config) {
       }
     },
 
+    // ---------- Claude-Zugang (E1, 25_claude_zugang.sql, Supabase OAuth Server) ----------
+    // Anfrage von Claude: Name, Weiterleitung, Kennung. War Claude schon erlaubt, liefert
+    // Supabase nur noch redirect_url (ohne authorization_id).
+    async claudeDetails(authorizationId) {
+      return check(await client.auth.oauth.getAuthorizationDetails(authorizationId))
+    },
+    // Erst die Freigabe im CRM (mit zweitem Faktor), dann die Zustimmung bei Supabase
+    async claudeApprove(authorizationId, { clientId, clientName, redirectHost }) {
+      check(await client.rpc('claude_freigabe_erteilen', { p_client_id: clientId, p_client_name: clientName || null, p_redirect_host: redirectHost || null }))
+      const data = check(await client.auth.oauth.approveAuthorization(authorizationId, { skipBrowserRedirect: true }))
+      return (data && data.redirect_url) || null
+    },
+    async claudeDeny(authorizationId) {
+      const data = check(await client.auth.oauth.denyAuthorization(authorizationId, { skipBrowserRedirect: true }))
+      return (data && data.redirect_url) || null
+    },
+    // Zugänge, die Supabase für diese Person kennt (null, wenn Supabase die Liste nicht liefert)
+    async claudeGrants() {
+      const fn = client.auth.oauth.listGrants || client.auth.oauth.getUserGrants
+      if (!fn) return null
+      const { data, error } = await fn.call(client.auth.oauth)
+      if (error || !Array.isArray(data)) return null
+      return data.map((g) => ({ clientId: String(g.client_id || (g.client && (g.client.client_id || g.client.id)) || ''), name: g.client_name || (g.client && (g.client.client_name || g.client.name)) || null })).filter((g) => g.clientId)
+    },
+    // Freigaben im CRM (nicht entzogen)
+    async claudeAccesses() {
+      return check(await client.rpc('meine_claude_zugaenge'))
+    },
+    // Entziehen: zuerst im CRM (sperrt sofort), dann bei Supabase (meldet Claude ab)
+    async claudeRevoke(clientId) {
+      check(await client.rpc('claude_freigabe_entziehen', { p_client_id: clientId }))
+      await this.claudeRevokeGrant(clientId)
+    },
+    async claudeRevokeGrant(clientId) {
+      const { error } = await client.auth.oauth.revokeGrant({ clientId })
+      if (error) throw error
+    },
+
     // ---------- Daten ----------
     async loadAll(role) {
       const guest = role === 'gast'

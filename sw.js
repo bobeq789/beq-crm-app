@@ -2,7 +2,7 @@
 // Hält die App-Dateien vor, damit die App schnell startet und auch bei schlechtem Netz aufgeht.
 // Fragt immer zuerst das Netz, damit Updates sofort ankommen.
 // Anfragen an Supabase (andere Adresse) laufen nie über den Cache.
-const VERSION = 'beqcrm-v20'
+const VERSION = 'beqcrm-v21'
 const FILES = [
   './',
   'index.html',
@@ -42,6 +42,7 @@ const FILES = [
   'js/ui/activities.js',
   'js/ui/tiles.js',
   'js/ui/search.js',
+  'js/ui/claude.js',
   'vendor/htm/preact/standalone.module.js',
   'vendor/@supabase/supabase-js/supabase.js',
   'vendor/dompurify/purify.es.mjs',

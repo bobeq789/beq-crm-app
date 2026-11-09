@@ -31,7 +31,7 @@ function SignalArcs() {
   </svg>`
 }
 
-function AuthShell({ children }) {
+export function AuthShell({ children }) {
   return html`<div class="auth-screen">
     <${SignalArcs} />
     <div class="auth-card">
@@ -95,6 +95,7 @@ export function Login() {
 
   return html`<${AuthShell}>
     <h1 class="auth-title">Anmelden</h1>
+    ${state.claudeRequest && html`<p class="auth-info claude-login-hint">Claude möchte sich mit dem CRM verbinden. Melde dich zuerst an, danach entscheidest du.</p>`}
     <button type="button" class="btn btn-primary btn-block" disabled=${busy} onClick=${google}>Mit Google anmelden</button>
     <p class="auth-hint auth-hint-top">Mit deinem beQ-Konto bei Google. Beim ersten Mal richtest du danach einmal den Code aus der Authenticator-App ein.</p>
     <p class="auth-or">oder mit E-Mail und Passwort</p>
