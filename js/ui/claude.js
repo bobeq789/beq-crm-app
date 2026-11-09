@@ -54,7 +54,8 @@ function CanList() {
   return html`<div class="claude-rights">
     <p class="claude-rights-head"><${Icon} name="check" size=${16} /> Claude darf, mit deinen Rechten im CRM</p>
     <ul>
-      <li>Aufgaben, Notizen, Aktivitäten, Kontakte, Firmen, Deals und Meetings lesen und anlegen oder ändern</li>
+      <li>Aufgaben, Notizen, Aktivitäten, Kontakte, Firmen, Deals und Meetings lesen, anlegen und ändern</li>
+      <li>Aufgaben und Deals in andere Spalten und Projekte verschieben</li>
       <li>Termine lesen, die du im CRM siehst</li>
       <li>Mails lesen, nur aus deinen eigenen Postfächern</li>
     </ul>
@@ -62,7 +63,8 @@ function CanList() {
     <ul>
       <li>etwas löschen</li>
       <li>Mails senden</li>
-      <li>Team, Rechte, Postfächer, Projekte, Spalten, Produkte oder deine Einstellungen ändern</li>
+      <li>Projekte und Spalten anlegen, umbenennen oder löschen</li>
+      <li>Team, Rechte, Postfächer, Produkte oder deine Einstellungen ändern</li>
     </ul>
   </div>`
 }
