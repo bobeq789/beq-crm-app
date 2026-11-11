@@ -73,10 +73,11 @@ export function createDemoApi({ asGuest = false } = {}) {
   }
   // Sales wie die Regeln in 08_sales.sql: Katalog ändern nur Admins, Deals nur, wer die Zahlen sehen darf
   const SALES = new Set(['products', 'deals', 'deal_items'])
-  // Postfächer wie 10_postfaecher.sql: anlegen nur über Google, Schalter nur Besitzer oder Admin
+  // Postfächer wie 10_postfaecher.sql und 26_super_admin.sql: anlegen nur über Google, Schalter
+  // nur Besitzer oder Super-Admin
   const canManageMailbox = (box) => {
     const self = db.team_members.find((t) => t.email === me && t.active)
-    return !!self && self.role !== 'gast' && (box.owner === me || self.role === 'admin')
+    return !!self && self.role !== 'gast' && (box.owner === me || (self.role === 'admin' && !!self.super_admin))
   }
   const checkSales = (table, row) => {
     if (!SALES.has(table)) return

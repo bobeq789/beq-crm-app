@@ -50,6 +50,8 @@ export const state = {
 
 export const isGuest = () => state.role === 'gast'
 export const isAdmin = () => state.role === 'admin'
+// Super-Admin (26_super_admin.sql): als Einziger fremde Kalender und die Liste fremder Postfächer
+export const isSuperAdmin = () => state.role === 'admin' && !!(state.me && state.me.super_admin)
 
 export function emit() {
   listeners.forEach((fn) => fn())

@@ -33,7 +33,7 @@ const WITH_UPDATED_AT = new Set(['projects', 'organizations', 'persons', 'meetin
 const WITH_CREATED_AT = new Set(['team_members', 'projects', 'stages', 'organizations', 'persons', 'meetings', 'cards', 'card_shares', 'project_shares', 'notes', 'emails', 'products', 'deals', 'deal_items', 'aktivitaeten'])
 
 const DEFAULTS = {
-  team_members: { role: 'mitglied', active: true, sales_team: null, team_lead: false },
+  team_members: { role: 'mitglied', active: true, sales_team: null, team_lead: false, super_admin: false },
   projects: { color: '#37BA98', sort: 0, archived: false },
   stages: { sort: 0, probability: null },
   organizations: { website: null, domain: null, address: null, industry: null, labels: [], external_id: null },

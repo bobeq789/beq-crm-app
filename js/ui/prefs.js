@@ -7,6 +7,7 @@ import {
   state,
   isDemo,
   isAdmin,
+  isSuperAdmin,
   isGuest,
   getTheme,
   setTheme,
@@ -81,13 +82,19 @@ function TeamAdmin() {
         (t) => html`<li class=${t.active ? '' : 'inactive'} key=${t.id}>
           <span class="team-who">
             <strong>${t.name}</strong>
-            <span class="muted small">${t.email}</span>
+            <span class="muted small">${t.email}${t.super_admin ? ' · Super-Admin' : ''}</span>
           </span>
-          <select aria-label=${'Rolle von ' + t.name} value=${t.role} disabled=${t.email === state.me.email} onChange=${(e) => update('team_members', t.id, { role: e.target.value })}>
+          <select
+            aria-label=${'Rolle von ' + t.name}
+            value=${t.role}
+            disabled=${t.email === state.me.email || (t.super_admin && !isSuperAdmin())}
+            title=${t.super_admin && !isSuperAdmin() ? 'Den Super-Admin ändert nur der Super-Admin selbst.' : undefined}
+            onChange=${(e) => update('team_members', t.id, { role: e.target.value })}
+          >
             ${ROLES.map((r) => html`<option value=${r.value}>${r.label}</option>`)}
           </select>
           ${t.role !== 'gast' && html`<${SalesTeamFields} member=${t} teams=${salesTeams} />`}
-          <button type="button" class="btn btn-small" onClick=${() => toggleActive(t)}>${t.active ? 'Deaktivieren' : 'Aktivieren'}</button>
+          <button type="button" class="btn btn-small" disabled=${t.super_admin && !isSuperAdmin()} onClick=${() => toggleActive(t)}>${t.active ? 'Deaktivieren' : 'Aktivieren'}</button>
         </li>`
       )}
     </ul>

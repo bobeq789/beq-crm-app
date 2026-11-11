@@ -32,7 +32,8 @@ export function buildSeed() {
   const today = todayStr()
   const created = daysAgo(30)
 
-  db.team_members = DEMO_TEAM.map((t) => ({ id: uid(), ...t, active: true, created_at: created, sales_team: null, team_lead: false }))
+  // Anna ist in der Demo Super-Admin (wie backoffice@beq.com, 26_super_admin.sql)
+  db.team_members = DEMO_TEAM.map((t, i) => ({ id: uid(), ...t, active: true, created_at: created, sales_team: null, team_lead: false, super_admin: i === 0 }))
   // Erfundenes Sales-Team: Jonas leitet „Team Nord“, Mira gehört dazu
   db.team_members[1].sales_team = 'Team Nord'
   db.team_members[1].team_lead = true

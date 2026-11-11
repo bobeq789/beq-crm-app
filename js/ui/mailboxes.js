@@ -5,7 +5,7 @@ import { html, useEffect } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { fmtRelative, norm } from '../lib/util.js'
 import { useRoute } from '../router.js'
-import { state, isAdmin, myEmail, memberName, update, toast, confirmDialog, connectMailbox, disconnectMailbox, mailboxDataCounts, syncNow } from '../store.js'
+import { state, isSuperAdmin, myEmail, memberName, update, toast, confirmDialog, connectMailbox, disconnectMailbox, mailboxDataCounts, syncNow } from '../store.js'
 import { useState } from '../lib/preact.js'
 import { Tile } from './common.js'
 
@@ -78,7 +78,7 @@ async function askDisconnect(box) {
 function MailboxRow({ box }) {
   const me = norm(myEmail())
   const mine = box.owner === me
-  const canManage = mine || isAdmin()
+  const canManage = mine || isSuperAdmin()
   const active = box.status === 'aktiv'
   const status = statusText(box)
   const toggle = (field, value) => {
@@ -129,13 +129,14 @@ function SyncButton() {
 export function MailboxTile() {
   useConnectResult()
   const me = norm(myEmail())
+  // Fremde Postfächer sieht nur der Super-Admin (26_super_admin.sql, in Supabase regelt das die Datenbank)
   const list = (state.db.mailboxes || [])
-    .filter((b) => b.status !== 'getrennt')
+    .filter((b) => b.status !== 'getrennt' && (b.owner === me || isSuperAdmin()))
     .sort((a, b) => Number(b.owner === me) - Number(a.owner === me) || a.address.localeCompare(b.address, 'de'))
   return html`<${Tile} title="Postfächer und Kalender" count=${list.length}>
     <p class="muted small">
       Verbinde deine beQ-Postfächer, gern auch mehrere. Das CRM liest dann Mails und Termine mit. Senden, Einladen und Löschen geht nur, wenn du es im CRM selbst auslöst, und nur in deinen eigenen Postfächern. Gelöschte Mails landen im Papierkorb von Gmail.
-      Deine Mails liest nur du. Deine Termine sehen außerdem dein Teamlead und die Admins, Gäste nie. Verbinde nur Postfächer, für die du zustimmen darfst.
+      Deine Mails liest nur du. Deine Termine sehen außerdem dein Teamlead und der Super-Admin, andere Admins nicht, Gäste nie. Verbinde nur Postfächer, für die du zustimmen darfst.
     </p>
     ${list.length > 0 && html`<ul class="team-list mailbox-list">${list.map((b) => html`<${MailboxRow} key=${b.id} box=${b} />`)}</ul>`}
     <div class="settings-actions">
