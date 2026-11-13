@@ -284,6 +284,15 @@ export async function createSupabaseApi(config) {
     async savePrefs(email, werte) {
       check(await client.from('nutzer_einstellungen').upsert({ person: String(email).toLowerCase(), werte }, { onConflict: 'person' }))
     },
+    // Mail-Verfolgung (27_mail_spur.sql): Zahlen je eigener verfolgter Mail. Fehlt die SQL-Datei
+    // noch, kommt einfach nichts.
+    async mailSpuren() {
+      try {
+        return check(await client.rpc('meine_mail_spuren')) || []
+      } catch {
+        return []
+      }
+    },
     // Mails still nachladen (Postfach offen und Neues da)
     async reloadEmails() {
       return fetchAll('emails')

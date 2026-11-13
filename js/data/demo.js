@@ -22,6 +22,7 @@ import {
   openAnswers,
   mailsWithoutReply,
   newInboxMails,
+  mailSpurRows,
   cascadeDelete,
   guestView,
   dbError,
@@ -292,6 +293,10 @@ export function createDemoApi({ asGuest = false } = {}) {
     async reloadEmails() {
       return clone(db.emails)
     },
+    // Mail-Verfolgung wie meine_mail_spuren() (27_mail_spur.sql)
+    async mailSpuren() {
+      return asGuest ? [] : clone(mailSpurRows(db, me))
+    },
     // Persönliche Einstellungen wie 21_nutzer_einstellungen.sql (Gäste haben keine)
     async loadPrefs() {
       if (asGuest) return {}
@@ -416,8 +421,13 @@ export function createDemoApi({ asGuest = false } = {}) {
           const person = db.persons.find((p) => (p.emails || []).map((e) => e.toLowerCase()).includes(addr))
           if (person) db.email_persons.push({ id: crypto.randomUUID(), email_id: id, person_id: person.id })
         }
+        // Mail-Verfolgung: Spur ohne Ereignisse, Links aus dem eigenen Text (wie google-mail)
+        if (payload.verfolgen === true) {
+          const links = [...new Set(String(payload.text || '').match(/\bhttps?:\/\/[^\s<>"]*[^\s<>".,;:!?)\]'»“]/gi) || [])]
+          db.mail_spuren.push({ id: crypto.randomUUID(), absender: me, mailbox: box.address, provider_id: 'demo-' + id, links, gesendet_at: now, ereignisse: [] })
+        }
         save()
-        return { ok: true, id }
+        return { ok: true, id, ...(payload.verfolgen === true ? { verfolgt: true } : {}) }
       }
       if (action === 'loeschen') {
         const mail = db.emails.find((m) => m.id === payload.email_id)

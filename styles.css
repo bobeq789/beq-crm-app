@@ -1342,3 +1342,25 @@ body.search-sheet-open .topbar { z-index: 70; }
   .claude-list li { flex-direction: column; align-items: stretch; }
   .claude-url-row { flex-direction: column; }
 }
+
+/* Mail-Verfolgung (27_mail_spur.sql): Marken in Listen, Kasten in der Mail, Hinweis an der Aufgabe */
+.spur-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.badge.spur-badge .icon { flex: none; }
+.badge.spur-badge.spur-open { color: var(--text); }
+.badge.spur-badge.spur-click { background: var(--today-bg); color: var(--today-text); font-weight: 600; }
+.spur-box { background: var(--raised); border-radius: var(--radius-sm); padding: 10px 12px; margin: 10px 0; font-size: 14px; }
+.mail.open .spur-box { background: var(--surface); }
+.spur-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+.spur-head .icon { color: var(--accent-text); }
+.spur-facts { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: 2px; }
+.spur-link { padding-left: 22px; overflow-wrap: anywhere; }
+.spur-url { color: var(--text); }
+.spur-box p { margin: 0; }
+.pf-track { margin: -6px 0 14px; }
+.pf-track p { margin: 6px 0 0; }
+.spur-notice {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin: 0 0 12px;
+  border-radius: 10px; background: var(--surface); color: var(--text); font-size: 14px;
+}
+.spur-notice > .icon { color: var(--accent-text); flex: none; }
+.spur-notice-text { flex: 1 1 auto; overflow-wrap: anywhere; }

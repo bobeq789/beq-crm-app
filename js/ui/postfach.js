@@ -35,7 +35,7 @@ import {
   savePrefs,
 } from '../store.js'
 import { PageHead, Segmented, Empty, LinkText, Modal, Field, dialogKinds, useIsMobile } from './common.js'
-import { MailAttachments, attachmentsOf } from './emails.js'
+import { MailAttachments, attachmentsOf, SpurBadges, SpurBox, SPUR_HINT } from './emails.js'
 
 const PAGE = 60
 const MAX_FILES = 18 * 1024 * 1024
@@ -78,6 +78,7 @@ function MailItem({ mail, active, onOpen }) {
         ${mail.subject || '(ohne Betreff)'}
       </span>
       ${mail.snippet && html`<span class="pf-snippet">${mail.snippet}</span>`}
+      <${SpurBadges} mail=${mail} />
     </button>
   </li>`
 }
@@ -126,6 +127,7 @@ function MailReader({ mail, onBack }) {
       html`<a class="btn btn-small" href=${gmailUrl(mail.mailbox, mail.provider_id)} target="_blank" rel="noopener noreferrer"><${Icon} name="external" size=${16} /> In Gmail</a>`}
     </div>
     <${MailAttachments} mail=${mail} cls="pf-attachments" />
+    <${SpurBox} mail=${mail} />
     <div class="pf-body">
       ${!loaded
         ? html`<p class="muted">Wird geladen …</p>`
@@ -347,6 +349,8 @@ function MailCompose({ d }) {
   const [error, setError] = useState(null)
   const [sig, setSig] = useState({ status: 'laden', text: '' })
   const [withSig, setWithSig] = useState(true)
+  // Mail-Verfolgung: bewusst jedes Mal aus (Entscheidung vom 13.11.2026)
+  const [track, setTrack] = useState(false)
   const fileInput = useRef()
   // Terminlink (D4): Cursorstelle im Mailtext merken, solange das Feld den Fokus hat
   const textRef = useRef()
@@ -445,6 +449,7 @@ function MailCompose({ d }) {
         signatur: withSig && sig.status === 'da',
         antwort_auf: d.mail && d.mode !== 'weiter' ? d.mail.id : null,
         dateien,
+        ...(track ? { verfolgen: true } : {}),
       })
       setBusy(false)
       if (ok) close()
@@ -512,6 +517,14 @@ function MailCompose({ d }) {
           : sig.status === 'keine'
           ? html`<p class="muted small">Für ${form.von} ist in Gmail keine Signatur hinterlegt. Du legst sie in Gmail unter „Einstellungen“, „Signatur“ an.</p>`
           : html`<p class="muted small">Die Signatur ließ sich nicht laden, die Mail geht ohne Signatur raus. ${sig.text}</p>`}
+      </div>
+      <div class="pf-track">
+        <label class="check-label">
+          <input type="checkbox" checked=${track} onChange=${(e) => setTrack(e.target.checked)} />
+          Öffnen und Klicks verfolgen
+        </label>
+        ${track &&
+        html`<p class="muted small">Die Mail bekommt ein unsichtbares Bild, Links laufen über das CRM. Ob und wann sie geöffnet oder ein Link angeklickt wurde, siehst nur du an der Mail. ${SPUR_HINT}</p>`}
       </div>
       ${d.mode === 'weiter' && attachmentsOf(d.mail || {}).length > 0 && html`<p class="muted small">Die Anhänge der ursprünglichen Mail sind nicht dabei. Häng sie bei Bedarf neu an.</p>`}
       <div class="pf-files">

@@ -27,7 +27,7 @@ export const EXTRA_TABLES = ['card_events', 'card_seen']
 export const OPTIONAL_TABLES = ['project_shares', 'products', 'deals', 'deal_items', 'mailboxes', 'aktivitaeten']
 
 // Nur im Demo-Modus: Dateien an Aufgaben (in Supabase liegen sie im Storage, nicht in einer Tabelle)
-export const DEMO_TABLES = ['files', 'nachfass_aus', 'nutzer_gesehen', 'nutzer_einstellungen']
+export const DEMO_TABLES = ['files', 'nachfass_aus', 'nutzer_gesehen', 'nutzer_einstellungen', 'mail_spuren']
 
 const WITH_UPDATED_AT = new Set(['projects', 'organizations', 'persons', 'meetings', 'cards', 'notes', 'events', 'products', 'deals', 'aktivitaeten'])
 const WITH_CREATED_AT = new Set(['team_members', 'projects', 'stages', 'organizations', 'persons', 'meetings', 'cards', 'card_shares', 'project_shares', 'notes', 'emails', 'products', 'deals', 'deal_items', 'aktivitaeten'])
@@ -549,4 +549,37 @@ export function newInboxMails(db, me) {
   return db.emails
     .filter((e) => e.direction === 'in' && (e.labels || []).includes('INBOX') && inBoxes(e, boxes) && e.created_at > seen.at && e.sent_at > dayBefore)
     .map((e) => e.id)
+}
+
+// ------------------------------------------------------------
+// Mail-Verfolgung wie meine_mail_spuren() in 27_mail_spur.sql: nur eigene, nur gesendete.
+// Im Demo-Modus steht je Spur die Liste der Ereignisse direkt dabei.
+// ------------------------------------------------------------
+export function mailSpurRows(db, me) {
+  return (db.mail_spuren || [])
+    .filter((s) => s.absender === me && s.gesendet_at)
+    .map((s) => {
+      const ev = s.ereignisse || []
+      const opens = ev.filter((e) => e.art === 'geoeffnet')
+      const clicks = ev.filter((e) => e.art === 'geklickt')
+      const last = (list) => (list.length ? list.map((e) => e.at).sort().pop() : null)
+      const byLink = new Map()
+      clicks.forEach((e) => {
+        const x = byLink.get(e.link) || { link: e.link, anzahl: 0, zuletzt: null }
+        x.anzahl++
+        if (!x.zuletzt || e.at > x.zuletzt) x.zuletzt = e.at
+        byLink.set(e.link, x)
+      })
+      return {
+        mailbox: s.mailbox,
+        provider_id: s.provider_id,
+        gesendet_at: s.gesendet_at,
+        links_anzahl: (s.links || []).length,
+        geoeffnet: opens.length,
+        zuletzt_geoeffnet: last(opens),
+        geklickt: clicks.length,
+        zuletzt_geklickt: last(clicks),
+        links: [...byLink.values()].sort((a, b) => String(b.zuletzt).localeCompare(String(a.zuletzt))),
+      }
+    })
 }

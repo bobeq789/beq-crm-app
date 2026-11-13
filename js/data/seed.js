@@ -476,6 +476,19 @@ export function buildSeed() {
     db.email_persons.push({ id: uid(), email_id: id, person_id: person.id })
   })
 
+  // Mail-Verfolgung (27_mail_spur.sql) an drei Mails von Anna: geöffnet und geklickt, nur
+  // geöffnet, noch nicht geöffnet
+  const spur = (subject, events, links = []) => {
+    const mail = db.emails.find((m) => m.subject === subject && m.direction === 'out')
+    db.mail_spuren.push({
+      id: uid(), absender: mail.mailbox, mailbox: mail.mailbox, provider_id: mail.provider_id, links, gesendet_at: mail.sent_at,
+      ereignisse: events.map(([art, h, link]) => ({ art, at: new Date(new Date(mail.sent_at).getTime() + h * 3600000).toISOString(), link: link || null })),
+    })
+  }
+  spur('Angebot Pilotinstallation', [['geoeffnet', 1], ['geoeffnet', 20], ['geklickt', 20.1, 'https://example.com/angebot-pilot'], ['geoeffnet', 45]], ['https://example.com/angebot-pilot'])
+  spur('Preisblatt beQ Hub', [['geoeffnet', 3]])
+  spur('Termin für die Quartiersverwaltung', [])
+
   // Verlauf: jede Karte „angelegt“, Anna hat gestern früh alles gesehen,
   // danach haben Kollegen einiges geändert (das ist für Anna „Neu“)
   const hoursAgo = (h) => new Date(Date.now() - h * 3600000).toISOString()

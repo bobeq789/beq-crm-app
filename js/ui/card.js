@@ -2,7 +2,7 @@
 // Gäste sehen eine schlanke Fassung: nur Spalte, Dringlichkeit und Fälligkeit änderbar, dazu Notizen.
 import { html, useState, useEffect } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
-import { fmtDate, fmtRelative, norm, telHref } from '../lib/util.js'
+import { fmtDate, fmtDateTime, fmtRelative, norm, telHref } from '../lib/util.js'
 import {
   getCard,
   getProject,
@@ -23,6 +23,8 @@ import {
   sharesOf,
   markCardSeen,
   state,
+  spurFor,
+  emailsOfPersons,
   myEmail,
   assignCard,
   activitiesOfCard,
@@ -144,6 +146,22 @@ function AnswerNotice({ card }) {
     <${Icon} name="mail" size=${18} />
     <div class="answer-notice-text"><strong>Antwort da:</strong> ${who} ${wroteWhen(a.sent_at)}${a.subject ? html`: „${a.subject}“` : ''}</div>
     ${mail && html`<button type="button" class="btn btn-small btn-primary" onClick=${() => openReply(mail)}><${Icon} name="reply" size=${16} /> Antworten</button>`}
+  </div>`
+}
+
+// Mail-Verfolgung (27_mail_spur.sql): die letzte eigene verfolgte Mail an den Kontakt der
+// Aufgabe (ohne Kontakt: an die Kontakte der Firma). Nur für den Absender, wie in der Mail.
+function TrackedMailNotice({ card }) {
+  const ids = card.person_id ? [card.person_id] : card.org_id ? state.db.persons.filter((p) => p.org_id === card.org_id).map((p) => p.id) : []
+  if (!ids.length) return null
+  const mail = emailsOfPersons(ids).find((m) => spurFor(m))
+  if (!mail) return null
+  const s = spurFor(mail)
+  const opened = s.geoeffnet > 0 ? `geöffnet ${s.geoeffnet === 1 ? 'einmal' : s.geoeffnet + '×'}, zuletzt ${fmtDateTime(s.zuletzt_geoeffnet)}` : 'noch nicht geöffnet'
+  const clicked = s.geklickt > 0 ? `, Link angeklickt ${fmtDateTime(s.zuletzt_geklickt)}` : ''
+  return html`<div class="spur-notice" role="status">
+    <${Icon} name="eye" size=${18} />
+    <div class="spur-notice-text">Deine Mail „${mail.subject || 'ohne Betreff'}“ vom ${fmtDate(mail.sent_at)}: ${opened}${clicked}.</div>
   </div>`
 }
 
@@ -281,6 +299,7 @@ export function CardPanel({ id }) {
       }}
     ></textarea>
     <${AnswerNotice} card=${card} />
+    <${TrackedMailNotice} card=${card} />
     <${ShareRow} card=${card} />
     ${card.archived &&
     html`<p class="notice">

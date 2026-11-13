@@ -2,7 +2,7 @@
 import { html, useState, useEffect } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { fmtDateTime, fmtSize, htmlToText, splitQuoted, gmailUrl } from '../lib/util.js'
-import { state, emailsOfPersons, ensureFull, personByEmail, memberName, member, isOwnMailbox, canOpenAttachments, openMailAttachment } from '../store.js'
+import { state, emailsOfPersons, ensureFull, personByEmail, memberName, member, isOwnMailbox, canOpenAttachments, openMailAttachment, spurFor } from '../store.js'
 import { Empty, LinkText } from './common.js'
 
 const PAGE = 10
@@ -38,6 +38,51 @@ export function MailAttachments({ mail, cls = '' }) {
   </ul>`
 }
 
+// ------------------------------------------------------------
+// Mail-Verfolgung (27_mail_spur.sql): nur an eigenen gesendeten Mails mit Schalter, nur für den
+// Absender. Kurz als Marken (Listen), ausführlich als Kasten (geöffnete Mail).
+// ------------------------------------------------------------
+export const SPUR_HINT = '„Geöffnet“ ist nicht immer genau: Apple Mail lädt Bilder oft von selbst, Outlook blockiert sie oft. Virenscanner klicken manchmal Links. Klicks sind verlässlicher als „geöffnet“.'
+
+// Link kurz zeigen: ohne https:// und www., lange Pfade gekürzt
+function shortLink(url) {
+  const s = String(url || '').replace(/^https?:\/\/(www\.)?/i, '')
+  return s.length > 48 ? s.slice(0, 47) + '…' : s
+}
+const times = (n) => (n === 1 ? 'einmal' : `${n}×`)
+
+export function SpurBadges({ mail }) {
+  const s = spurFor(mail)
+  if (!s) return null
+  return html`<span class="spur-badges">
+    ${s.geoeffnet > 0
+      ? html`<span class="badge spur-badge spur-open" title=${'Zuletzt geöffnet ' + fmtDateTime(s.zuletzt_geoeffnet)}><${Icon} name="eye" size=${13} /> Geöffnet ${s.geoeffnet > 1 ? s.geoeffnet + '×' : ''}</span>`
+      : html`<span class="badge spur-badge"><${Icon} name="eye" size=${13} /> Nicht geöffnet</span>`}
+    ${s.geklickt > 0 && html`<span class="badge spur-badge spur-click" title=${'Zuletzt angeklickt ' + fmtDateTime(s.zuletzt_geklickt)}><${Icon} name="external" size=${13} /> Angeklickt</span>`}
+  </span>`
+}
+
+export function SpurBox({ mail }) {
+  const s = spurFor(mail)
+  if (!s) return null
+  const links = s.links || []
+  return html`<section class="spur-box" aria-label="Verfolgung">
+    <div class="spur-head"><${Icon} name="eye" size=${16} /> <strong>Verfolgung</strong> <span class="muted small">nur für dich sichtbar</span></div>
+    <ul class="spur-facts">
+      <li>${s.geoeffnet > 0 ? html`Geöffnet ${times(s.geoeffnet)}, zuletzt ${fmtDateTime(s.zuletzt_geoeffnet)}` : 'Noch nicht geöffnet'}</li>
+      <li>
+        ${s.links_anzahl === 0
+          ? 'Die Mail hat keine Links.'
+          : s.geklickt > 0
+          ? html`Links angeklickt: ${times(s.geklickt)}, zuletzt ${fmtDateTime(s.zuletzt_geklickt)}`
+          : 'Noch kein Link angeklickt'}
+      </li>
+      ${links.map((l) => html`<li class="spur-link" key=${l.link}><span class="spur-url" title=${l.link}>${shortLink(l.link)}</span> <span class="muted small">${times(l.anzahl)}</span></li>`)}
+    </ul>
+    <p class="muted small">${SPUR_HINT}</p>
+  </section>`
+}
+
 // Name zu einer Adresse: Teammitglied, Kontakt oder die Adresse selbst
 function nameFor(address) {
   if (member(address)) return memberName(address)
@@ -63,6 +108,7 @@ function EmailRow({ mail }) {
       <span class="mail-main">
         <span class="mail-subject">${mail.subject || '(ohne Betreff)'}</span>
         <span class="mail-meta">${out ? 'an ' : 'von '}${counterpart} · ${fmtDateTime(mail.sent_at)}</span>
+        <${SpurBadges} mail=${mail} />
       </span>
       ${(mail.attachments || []).length > 0 && html`<${Icon} name="paperclip" size=${16} cls="mail-clip" />`}
     </button>
@@ -77,6 +123,7 @@ function EmailRow({ mail }) {
               </button>
               ${showQuoted && html`<div class="prose quoted"><${LinkText} text=${parts.quoted} /></div>`}`}`}
       <${MailAttachments} mail=${mail} />
+      <${SpurBox} mail=${mail} />
       <div class="mail-foot">
         <span class="muted small">Postfach: ${mail.mailbox}</span>
         ${mail.provider_id &&

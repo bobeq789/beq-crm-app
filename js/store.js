@@ -40,6 +40,8 @@ export const state = {
   // Posteingang, „Ohne Antwort“ (erst beim Öffnen des Reiters geladen), letzter Blick ins
   // Postfach vor diesem Öffnen (zum Hervorheben neuer Mails), Postfach gerade offen
   followUp: { answers: [], newMail: [], noReply: null, postfachPrev: null, postfachOpen: false },
+  // Mail-Verfolgung (27_mail_spur.sql): je eigener verfolgter Mail die Zahlen, Schlüssel Postfach|Gmail-Kennung
+  spuren: new Map(),
   // Persönliche Einstellungen auf allen Geräten (21_nutzer_einstellungen.sql): terminlink,
   // terminsatz, terminlinks je Postfach, kacheln (Anordnung der Übersicht)
   prefs: {},
@@ -369,8 +371,9 @@ function startFollowUp() {
 }
 export async function refreshFollowUp() {
   if (state.auth !== 'ready' || isGuest()) return
-  const [answers, newMail] = await Promise.all([api.antwortenOffen(), api.postfachNeu()])
+  const [answers, newMail, spuren] = await Promise.all([api.antwortenOffen(), api.postfachNeu(), api.mailSpuren()])
   state.followUp = { ...state.followUp, answers: answers || [], newMail: newMail || [] }
+  state.spuren = new Map((spuren || []).map((r) => [norm(r.mailbox) + '|' + r.provider_id, r]))
   // Postfach gerade offen und Neues da: Liste still nachladen und wieder als gesehen merken.
   // Hervorgehoben bleibt alles seit dem Öffnen (postfachPrev ändert sich dabei nicht).
   if (state.followUp.postfachOpen && state.followUp.newMail.length) {
@@ -734,11 +737,15 @@ export function myActiveMailboxes() {
 }
 export const isOwnMailbox = (address) => myActiveMailboxes().some((b) => b.address === norm(address))
 
-// Mail senden. payload: von, an, cc, bcc, betreff, text, antwort_auf, dateien [{ name, mime, data }]
+// Mail senden. payload: von, an, cc, bcc, betreff, text, antwort_auf, dateien [{ name, mime, data }],
+// verfolgen (Mail-Verfolgung, standardmäßig aus)
 export async function sendMail(payload) {
   try {
     const result = await api.mailAction('senden', payload)
-    toast(result && result.ohne_signatur ? 'Mail gesendet, aber ohne Signatur. Google hat sie gerade nicht geliefert.' : 'Mail gesendet')
+    const notes = []
+    if (result && result.ohne_signatur) notes.push('ohne Signatur, Google hat sie gerade nicht geliefert')
+    if (result && result.verfolgt === false) notes.push('die Verfolgung ließ sich diesmal nicht einrichten')
+    toast(notes.length ? `Mail gesendet, aber ${notes.join(', und ')}.` : payload.verfolgen ? 'Mail gesendet. Öffnen und Klicks siehst du an der Mail.' : 'Mail gesendet')
     await reload()
     return true
   } catch (err) {
@@ -761,6 +768,12 @@ export async function mailSignature(von) {
   } catch (err) {
     return { status: 'fehler', text: errorText(err) }
   }
+}
+
+// Mail-Verfolgung einer Mail (nur eigene gesendete, nur für den Absender, 27_mail_spur.sql)
+export function spurFor(mail) {
+  if (!mail || mail.direction !== 'out' || !mail.provider_id) return null
+  return state.spuren.get(norm(mail.mailbox) + '|' + mail.provider_id) || null
 }
 
 // Mail in den Papierkorb von Gmail und aus dem CRM
