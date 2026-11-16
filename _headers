@@ -7,7 +7,7 @@
   Referrer-Policy: no-referrer
   X-Robots-Tag: noindex, nofollow
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://odsdaynsczicfaxoqlms.supabase.co wss://odsdaynsczicfaxoqlms.supabase.co; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://odsdaynsczicfaxoqlms.supabase.co; font-src 'self'; connect-src 'self' https://odsdaynsczicfaxoqlms.supabase.co wss://odsdaynsczicfaxoqlms.supabase.co; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
 
 /sw.js
   Cache-Control: no-cache

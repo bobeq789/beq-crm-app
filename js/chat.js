@@ -4,7 +4,7 @@
 // (im Demo-Modus über einen zweiten Tab), dazu jede Minute ein Abgleich der Zahlen.
 // Wer was sieht, regelt die Datenbank. Die App zeigt nur, was sie bekommt.
 import { state, emit, toast, errorText, myEmail, memberName, getApi, confirmDialog } from './store.js'
-import { uid, norm, firstName } from './lib/util.js'
+import { uid, norm, firstName, safeFileName } from './lib/util.js'
 
 const PAGE = 50
 const api = () => getApi()
@@ -14,7 +14,7 @@ export function chatErrorText(err) {
   const msg = String((err && err.message) || '')
   const code = err && err.code
   if (['22023', '23505', '42501', '23503', 'meldung'].includes(code) && /[a-zäöüß]{3} [a-zäöüß]/i.test(msg) && !/permission denied|row-level|violates/i.test(msg)) return msg
-  if (code === '23514') return 'Die Nachricht ist leer oder zu lang (höchstens 4.000 Zeichen).'
+  if (code === '23514') return 'Die Nachricht ist leer oder zu lang (höchstens 4.000 Zeichen und 10 Dateien).'
   return errorText(err)
 }
 
@@ -220,27 +220,51 @@ export function markRead(raumId) {
 }
 
 // Senden: erscheint sofort (blass, bis die Datenbank bestätigt)
-// antwortAuf: Antwort im Verlauf dieser Nachricht
-export async function sendMessage(raumId, text, erwaehnt, antwortAuf = null) {
+// antwortAuf: Antwort im Verlauf dieser Nachricht. files: Dateien aus dem Eingabefeld
+// (33_chat_dateien.sql). Erst laden alle hoch, dann kommt die Nachricht mit den Anhängen.
+export async function sendMessage(raumId, text, erwaehnt, antwortAuf = null, files = []) {
   const id = uid()
-  const draft = { id, raum_id: raumId, autor: norm(myEmail()), text, erwaehnt, antwort_auf: antwortAuf, antworten: 0, created_at: new Date().toISOString(), bearbeitet_at: null, geloescht_at: null }
+  const local = files.map((f) => ({ name: f.file.name, groesse: f.file.size, typ: f.file.type, breite: f.breite, hoehe: f.hoehe, lokal: f.preview || null }))
+  const draft = { id, raum_id: raumId, autor: norm(myEmail()), text, erwaehnt, anhaenge: local, antwort_auf: antwortAuf, antworten: 0, created_at: new Date().toISOString(), bearbeitet_at: null, geloescht_at: null }
   const get = () => (antwortAuf ? threadOf(antwortAuf) : messagesOf(raumId))
   const put = (entry) => (antwortAuf ? putThread(antwortAuf, entry) : putMessages(raumId, entry))
   const cur = get()
   put({ ...cur, list: [...cur.list, { ...draft, pending: true }] })
+  const uploaded = []
   try {
-    const row = await api().chatSend({ id, raum_id: raumId, text, erwaehnt, antwort_auf: antwortAuf })
+    for (const [i, f] of files.entries()) {
+      const pfad = `${raumId}/${Date.now()}-${i}-${safeFileName(f.file.name) || 'Datei'}`
+      try {
+        await api().chatUpload(pfad, f.file)
+      } catch (err) {
+        err.uploadName = f.file.name
+        throw err
+      }
+      uploaded.push({ pfad, name: f.file.name, breite: f.breite, hoehe: f.hoehe })
+    }
+    const row = await api().chatSend({ id, raum_id: raumId, text, erwaehnt, antwort_auf: antwortAuf, anhaenge: uploaded })
+    // Vorschau aus dem Browser behalten, bis der Link aus dem Speicher da ist
+    uploaded.forEach((u, i) => local[i].lokal && rememberUrl(u.pfad, local[i].lokal, 5 * 60 * 1000))
     mergeRows([row])
     if (antwortAuf) bumpReplies(raumId, antwortAuf, row.created_at)
     markRead(raumId)
     scheduleRefresh(false)
     return true
   } catch (err) {
+    if (uploaded.length) api().chatRemoveFiles(uploaded.map((u) => u.pfad)).catch(() => {})
     const after = get()
     put({ ...after, list: after.list.map((m) => (m.id === id ? { ...m, pending: false, failed: true } : m)) })
-    toast(chatErrorText(err), { error: true })
+    toast(err.uploadName ? `„${err.uploadName}“ ließ sich nicht hochladen. ${uploadErrorText(err)}` : chatErrorText(err), { error: true })
     return false
   }
+}
+
+function uploadErrorText(err) {
+  const msg = String((err && err.message) || '')
+  if (/exceeded|too large|413/i.test(msg)) return 'Die Datei ist zu groß (höchstens 25 MB).'
+  if (/row-level security|403|Unauthorized/i.test(msg)) return 'Dafür fehlt dir die Berechtigung.'
+  if (/Bucket not found/i.test(msg)) return 'Der Speicher ist noch nicht eingerichtet (33_chat_dateien.sql).'
+  return errorText(err)
 }
 
 // Zähler an der ersten Nachricht sofort hochsetzen (die Datenbank schickt ihn gleich nach)
@@ -361,7 +385,9 @@ export async function editMessage(msg, text, erwaehnt) {
 export async function deleteMessage(msg) {
   const ok = await confirmDialog({
     title: 'Nachricht löschen?',
-    text: 'Der Text ist danach für alle weg. Im Verlauf steht „Nachricht gelöscht“.',
+    text: (msg.anhaenge || []).length
+      ? 'Text und Dateien sind danach für alle weg. Im Verlauf steht „Nachricht gelöscht“.'
+      : 'Der Text ist danach für alle weg. Im Verlauf steht „Nachricht gelöscht“.',
     confirmLabel: 'Löschen',
     danger: true,
   })
@@ -369,7 +395,91 @@ export async function deleteMessage(msg) {
   try {
     const row = await api().chatEdit(msg.id, { geloescht: true })
     mergeRows([row])
+    // Die eigenen Dateien gleich mit aus dem Speicher nehmen
+    const paths = (msg.anhaenge || []).map((a) => a.pfad).filter(Boolean)
+    if (paths.length) api().chatRemoveFiles(paths).catch(() => {})
   } catch (err) {
     toast(chatErrorText(err), { error: true })
   }
+}
+
+// ------------------------------------------------------------
+// Dateien im Chat (33_chat_dateien.sql): signierte Links, eine Stunde gültig, gesammelt geholt
+// ------------------------------------------------------------
+export const MAX_CHAT_FILE_BYTES = 25 * 1024 * 1024
+export const MAX_CHAT_FILES = 10
+export const isImage = (a) => /^image\/(jpeg|png|gif|webp)$/.test((a && a.typ) || '')
+
+const wanted = new Set()
+let urlTimer = null
+export function fileUrl(path) {
+  const hit = state.chat.urls.get(path)
+  return hit && hit.until > Date.now() ? hit.url : null
+}
+function rememberUrl(path, url, ms) {
+  const urls = new Map(state.chat.urls)
+  urls.set(path, { url, until: Date.now() + ms })
+  setChat({ urls })
+}
+// Links für diese Pfade holen (gesammelt, höchstens einmal je 50 ms)
+export function requestUrls(paths) {
+  paths.filter((p) => p && !fileUrl(p)).forEach((p) => wanted.add(p))
+  if (!wanted.size || urlTimer) return
+  urlTimer = setTimeout(async () => {
+    const list = [...wanted]
+    wanted.clear()
+    urlTimer = null
+    try {
+      const rows = await api().chatFileUrls(list)
+      const urls = new Map(state.chat.urls)
+      rows.forEach((r) => urls.set(r.path, { url: r.signedUrl, until: Date.now() + 55 * 60 * 1000 }))
+      // Ohne Link (zum Beispiel im Demo-Modus ohne Inhalt): nicht immer wieder fragen
+      list.filter((p) => !urls.has(p) || urls.get(p).until <= Date.now()).forEach((p) => urls.set(p, { url: null, until: Date.now() + 10 * 60 * 1000 }))
+      setChat({ urls })
+    } catch {
+      // Später noch einmal, beim nächsten Anzeigen
+    }
+  }, 50)
+}
+
+// Öffnen: Fenster sofort beim Tippen öffnen und den Link danach hineinladen, sonst stoppt
+// der Popup-Blocker auf dem iPhone das Fenster
+export async function openChatFile(att) {
+  const known = fileUrl(att.pfad)
+  if (known) {
+    window.open(known, '_blank', 'noopener')
+    return
+  }
+  const win = window.open('', '_blank')
+  try {
+    const rows = await api().chatFileUrls([att.pfad])
+    if (!rows.length) throw Object.assign(new Error('Im Demo-Modus haben Dateien keinen Inhalt.'), { code: 'meldung' })
+    rememberUrl(att.pfad, rows[0].signedUrl, 55 * 60 * 1000)
+    if (win) win.location.href = rows[0].signedUrl
+    else window.location.href = rows[0].signedUrl
+  } catch (err) {
+    if (win) win.close()
+    toast(err.code === 'meldung' ? err.message : `Die Datei ließ sich nicht öffnen. ${errorText(err)}`, { error: !(err.code === 'meldung') })
+  }
+}
+
+// Datei für das Eingabefeld vorbereiten: bei Bildern Vorschau und Seitenmaße
+export async function prepareFile(file) {
+  const out = { id: uid(), file, preview: null, breite: null, hoehe: null }
+  if (isImage({ typ: file.type })) {
+    out.preview = URL.createObjectURL(file)
+    try {
+      const img = new Image()
+      await new Promise((resolve, reject) => {
+        img.onload = resolve
+        img.onerror = reject
+        img.src = out.preview
+      })
+      out.breite = img.naturalWidth || null
+      out.hoehe = img.naturalHeight || null
+    } catch {
+      // Ohne Maße geht es auch
+    }
+  }
+  return out
 }

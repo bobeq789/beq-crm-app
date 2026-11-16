@@ -50,7 +50,7 @@ export const state = {
   // Chat (30_chat.sql, js/chat.js): available heißt, die SQL-Datei ist da. rooms aus
   // chat_uebersicht(), messages je Raum (alt nach neu), active ist der gerade offene Raum.
   // threads: Antworten je erster Nachricht, thread: gerade offener Verlauf, reactions: je Nachricht
-  chat: { available: false, rooms: [], messages: new Map(), active: null, threads: new Map(), thread: null, reactions: new Map() },
+  chat: { available: false, rooms: [], messages: new Map(), active: null, threads: new Map(), thread: null, reactions: new Map(), urls: new Map() },
   loadedAt: 0,
   toasts: [],
   dialog: null,
@@ -233,7 +233,7 @@ function resetSession() {
   state.mfaFactorId = null
   state.db = emptyDb()
   state.full = { meetings: new Set(), emails: new Set() }
-  state.chat = { available: false, rooms: [], messages: new Map(), active: null, threads: new Map(), thread: null, reactions: new Map() }
+  state.chat = { available: false, rooms: [], messages: new Map(), active: null, threads: new Map(), thread: null, reactions: new Map(), urls: new Map() }
 }
 
 // Nach Passwort: freigeschaltet? zweiter Faktor? Dann Daten laden.

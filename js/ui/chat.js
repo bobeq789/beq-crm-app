@@ -3,7 +3,7 @@
 // Texte aus Nachrichten immer als Text (NoteText), nie als HTML.
 import { html, useState, useEffect, useRef, useLayoutEffect } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
-import { norm, firstName, fmtTime, fmtDate } from '../lib/util.js'
+import { norm, firstName, fmtTime, fmtDate, fmtSize } from '../lib/util.js'
 import { state, myEmail, memberName, isGuest, isAdmin, openDialog, closeDialog, toast, activeMembers, activeGuests } from '../store.js'
 import { navigate, openOverlay, closeOverlay } from '../router.js'
 import { PageHead, Empty, Avatar, Modal, Field, Segmented, useIsMobile, useOverlay } from './common.js'
@@ -34,6 +34,13 @@ import {
   toggleReaction,
   searchMessages,
   loadUntil,
+  fileUrl,
+  requestUrls,
+  openChatFile,
+  prepareFile,
+  isImage,
+  MAX_CHAT_FILE_BYTES,
+  MAX_CHAT_FILES,
 } from '../chat.js'
 import { REACTIONS } from '../data/chat_rules.js'
 
@@ -192,6 +199,29 @@ function RoomView({ room, mobile, focusId }) {
   const lastCount = useRef(0)
   const [editing, setEditing] = useState(null)
   const flash = useFocusMessage(scrollRef, msgs, focusId, () => (nearBottom.current = false), () => loadOlder(room.id))
+  // Dateien in den Raum ziehen: landen im Eingabefeld
+  const fileSink = useRef(null)
+  const [dragging, setDragging] = useState(false)
+  const canWrite = !room.archiviert
+  const hasFiles = (e) => e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files')
+  const dropProps = canWrite
+    ? {
+        onDragOver: (e) => {
+          if (!hasFiles(e)) return
+          e.preventDefault()
+          if (!dragging) setDragging(true)
+        },
+        onDragLeave: (e) => {
+          if (!e.currentTarget.contains(e.relatedTarget)) setDragging(false)
+        },
+        onDrop: (e) => {
+          if (!hasFiles(e)) return
+          e.preventDefault()
+          setDragging(false)
+          fileSink.current && fileSink.current([...e.dataTransfer.files])
+        },
+      }
+    : {}
 
   useEffect(() => {
     setActiveRoom(room.id)
@@ -235,7 +265,7 @@ function RoomView({ room, mobile, focusId }) {
       : room.art === 'gruppe'
       ? `Gruppe mit ${(room.mitglieder || []).length} Personen`
       : 'Direktnachricht'
-  return html`<section class="chat-room" aria-label=${roomTitle(room)}>
+  return html`<section class=${'chat-room' + (dragging ? ' dragging' : '')} aria-label=${roomTitle(room)} ...${dropProps}>
     <header class="chat-room-head">
       ${mobile && html`<a class="icon-btn chat-back" href="#/chat" aria-label="Alle Chats"><${Icon} name="back" /></a>`}
       <div class="chat-room-title">
@@ -259,7 +289,7 @@ function RoomView({ room, mobile, focusId }) {
     </div>
     ${room.archiviert
       ? html`<p class="chat-archived-note">Der Kanal ist archiviert. Lesen geht weiter, schreiben nicht mehr.</p>`
-      : html`<${Composer} room=${room} onSent=${() => (nearBottom.current = true)} />`}
+      : html`<${Composer} room=${room} fileSink=${fileSink} onSent=${() => (nearBottom.current = true)} />`}
   </section>`
 }
 
@@ -347,7 +377,10 @@ function Message({ m, room, follow, editing, setEditing, flash, inThread }) {
         ? html`<${EditBox} m=${m} room=${room} onDone=${() => setEditing(null)} />`
         : deleted
         ? html`<p class="chat-msg-text chat-deleted">Nachricht gelöscht</p>`
-        : html`<p class="chat-msg-text"><${NoteText} text=${m.text} mentions=${m.erwaehnt} />${m.bearbeitet_at && html` <span class="chat-edited">(bearbeitet)</span>`}</p>`}
+        : m.text
+        ? html`<p class="chat-msg-text"><${NoteText} text=${m.text} mentions=${m.erwaehnt} />${m.bearbeitet_at && html` <span class="chat-edited">(bearbeitet)</span>`}</p>`
+        : null}
+      ${!deleted && !editing && (m.anhaenge || []).length > 0 && html`<${Attachments} m=${m} />`}
       ${m.failed &&
       html`<p class="chat-failed">Nicht gesendet. <button type="button" class="link-btn" onClick=${() => discardFailed(m.raum_id, m.id, m.antwort_auf)}>Verwerfen</button></p>`}
       <${ReactionBar} m=${m} canReact=${canReact} />
@@ -538,18 +571,46 @@ function useMentionInput(room, initial = '') {
   return { text, setText: update, reset: () => (setText(''), setQuery(null)), ref, onKey, suggestions, mentions: () => parseMentions(text, people) }
 }
 
-function Composer({ room, onSent, parentId = null }) {
+function Composer({ room, onSent, parentId = null, fileSink = null }) {
   const input = useMentionInput(room)
   const [busy, setBusy] = useState(false)
+  const [files, setFiles] = useState([])
+  const fileInput = useRef()
+  const id = 'chat-input-' + (parentId || room.id)
+
+  // Dateien dazunehmen: höchstens 10, je höchstens 25 MB
+  const addFiles = async (list) => {
+    const ok = []
+    for (const f of list) {
+      if (!f || !f.size) continue
+      if (f.size > MAX_CHAT_FILE_BYTES) {
+        toast(`„${f.name}“ ist größer als 25 MB. Bitte verkleinern oder als Link schicken.`, { error: true })
+        continue
+      }
+      ok.push(f)
+    }
+    const prepared = await Promise.all(ok.map(prepareFile))
+    setFiles((cur) => {
+      const room_ = MAX_CHAT_FILES - cur.length
+      if (prepared.length > room_) toast(`Höchstens ${MAX_CHAT_FILES} Dateien je Nachricht.`, { error: true })
+      return [...cur, ...prepared.slice(0, Math.max(0, room_))]
+    })
+    input.ref.current && input.ref.current.focus()
+  }
+  if (fileSink) fileSink.current = addFiles
+  const removeFile = (fid) => setFiles((cur) => cur.filter((f) => f.id !== fid))
+
   const send = async () => {
     const text = input.text.trim()
-    if (!text || busy) return
+    if ((!text && !files.length) || busy) return
     if (text.length > 4000) return toast('Die Nachricht ist zu lang (höchstens 4.000 Zeichen).', { error: true })
     setBusy(true)
     const mentions = input.mentions()
+    const sending = files
     input.reset()
+    setFiles([])
     onSent()
-    await sendMessage(room.id, text, mentions, parentId)
+    await sendMessage(room.id, text, mentions, parentId, sending)
     setBusy(false)
     input.ref.current && input.ref.current.focus()
   }
@@ -560,19 +621,75 @@ function Composer({ room, onSent, parentId = null }) {
       send()
     }
   }
-  return html`<div class="chat-composer">
-    ${input.suggestions}
-    <label class="sr-only" for=${'chat-input-' + (parentId || room.id)}>${parentId ? 'Antwort im Verlauf' : 'Nachricht an ' + roomTitle(room)}</label>
-    <textarea
-      id=${'chat-input-' + (parentId || room.id)}
-      ref=${input.ref}
-      rows="1"
-      placeholder=${parentId ? 'Antworten' : 'Nachricht an ' + roomTitle(room)}
-      value=${input.text}
-      onInput=${(e) => input.setText(e.target.value)}
-      onKeyDown=${onKeyDown}
-    ></textarea>
-    <button type="button" class="btn btn-primary chat-send" aria-label="Senden" disabled=${!input.text.trim()} onClick=${send}><${Icon} name="send" size=${18} /></button>
+  // Bild aus der Zwischenablage einfügen
+  const onPaste = (e) => {
+    const list = [...((e.clipboardData && e.clipboardData.files) || [])]
+    if (!list.length) return
+    e.preventDefault()
+    addFiles(list)
+  }
+  return html`<div class="chat-composer-wrap">
+    ${files.length > 0 &&
+    html`<ul class="chat-pending-files" aria-label="Dateien für die Nachricht">
+      ${files.map(
+        (f) => html`<li key=${f.id}>
+          ${f.preview ? html`<img src=${f.preview} alt="" />` : html`<span class="chat-file-icon" aria-hidden="true"><${Icon} name="paperclip" size=${16} /></span>`}
+          <span class="chat-file-name">${f.file.name}</span>
+          <span class="chat-file-size">${fmtSize(f.file.size)}</span>
+          <button type="button" class="icon-btn" aria-label=${'„' + f.file.name + '“ entfernen'} onClick=${() => removeFile(f.id)}><${Icon} name="x" size=${14} /></button>
+        </li>`
+      )}
+    </ul>`}
+    <div class="chat-composer">
+      ${input.suggestions}
+      <input type="file" multiple class="sr-only" tabindex="-1" aria-hidden="true" ref=${fileInput}
+        onChange=${(e) => (addFiles([...e.target.files]), (e.target.value = ''))} />
+      <button type="button" class="icon-btn chat-attach" aria-label="Datei anhängen" title="Datei oder Bild anhängen" onClick=${() => fileInput.current.click()}>
+        <${Icon} name="paperclip" size=${18} />
+      </button>
+      <label class="sr-only" for=${id}>${parentId ? 'Antwort im Verlauf' : 'Nachricht an ' + roomTitle(room)}</label>
+      <textarea
+        id=${id}
+        ref=${input.ref}
+        rows="1"
+        placeholder=${parentId ? 'Antworten' : 'Nachricht an ' + roomTitle(room)}
+        value=${input.text}
+        onInput=${(e) => input.setText(e.target.value)}
+        onKeyDown=${onKeyDown}
+        onPaste=${onPaste}
+      ></textarea>
+      <button type="button" class="btn btn-primary chat-send" aria-label="Senden" disabled=${!input.text.trim() && !files.length} onClick=${send}><${Icon} name="send" size=${18} /></button>
+    </div>
+  </div>`
+}
+
+// Anhänge einer Nachricht: Bilder als Vorschau, andere Dateien als Zeile. Antippen öffnet.
+function Attachments({ m }) {
+  const list = m.anhaenge || []
+  useEffect(() => {
+    requestUrls(list.filter((a) => a.pfad && isImage(a)).map((a) => a.pfad))
+  }, [m.id, list.length, state.chat.urls.size])
+  const images = list.filter(isImage)
+  const others = list.filter((a) => !isImage(a))
+  const open = (a) => a.pfad && openChatFile(a)
+  return html`<div class="chat-attachments">
+    ${images.length > 0 &&
+    html`<div class=${'chat-images' + (images.length > 1 ? ' many' : '')}>
+      ${images.map((a, i) => {
+        const src = a.lokal || (a.pfad && fileUrl(a.pfad))
+        const ratio = a.breite && a.hoehe ? `${a.breite} / ${a.hoehe}` : '4 / 3'
+        return html`<button type="button" key=${a.pfad || i} class="chat-image" style=${{ aspectRatio: ratio }} onClick=${() => open(a)} aria-label=${'Bild „' + a.name + '“ öffnen'} title=${a.name}>
+          ${src ? html`<img src=${src} alt=${a.name} loading="lazy" />` : html`<span class="chat-image-wait"><${Icon} name="paperclip" size=${18} /><span>${a.name}</span></span>`}
+        </button>`
+      })}
+    </div>`}
+    ${others.map(
+      (a, i) => html`<button type="button" key=${a.pfad || 'f' + i} class="chat-file" onClick=${() => open(a)} title=${a.name}>
+        <span class="chat-file-icon" aria-hidden="true"><${Icon} name="paperclip" size=${16} /></span>
+        <span class="chat-file-name">${a.name}</span>
+        ${a.groesse ? html`<span class="chat-file-size">${fmtSize(a.groesse)}</span>` : null}
+      </button>`
+    )}
   </div>`
 }
 
@@ -587,7 +704,7 @@ function EditBox({ m, room, onDone }) {
   }, [])
   const save = async () => {
     const text = input.text.trim()
-    if (!text) return
+    if (!text && !(m.anhaenge || []).length) return
     if (text === m.text) return onDone()
     if (await editMessage(m, text, input.mentions())) onDone()
   }
@@ -606,7 +723,7 @@ function EditBox({ m, room, onDone }) {
     <textarea ref=${input.ref} aria-label="Nachricht bearbeiten" value=${input.text} onInput=${(e) => input.setText(e.target.value)} onKeyDown=${onKeyDown}></textarea>
     <div class="chat-edit-actions">
       <button type="button" class="btn btn-small" onClick=${onDone}>Abbrechen</button>
-      <button type="button" class="btn btn-small btn-primary" disabled=${!input.text.trim()} onClick=${save}>Speichern</button>
+      <button type="button" class="btn btn-small btn-primary" disabled=${!input.text.trim() && !(m.anhaenge || []).length} onClick=${save}>Speichern</button>
     </div>
   </div>`
 }

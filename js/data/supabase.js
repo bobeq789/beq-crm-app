@@ -314,10 +314,29 @@ export async function createSupabaseApi(config) {
       if (before) q = q.lt('created_at', before)
       return check(await q)
     },
-    async chatSend({ id, raum_id, text, erwaehnt, antwort_auf }) {
+    async chatSend({ id, raum_id, text, erwaehnt, antwort_auf, anhaenge }) {
       const row = { id, raum_id, text, erwaehnt }
       if (antwort_auf) row.antwort_auf = antwort_auf
+      if (anhaenge && anhaenge.length) row.anhaenge = anhaenge
       return check(await client.from('chat_nachrichten').insert(row).select().single())
+    },
+    // Dateien im Chat (33_chat_dateien.sql): privater Bucket „chat“, Pfad <Raum-ID>/<Zeit>-<Name>
+    async chatUpload(path, file) {
+      const { error } = await client.storage.from('chat').upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false })
+      if (error) throw error
+    },
+    // Signierte Links, eine Stunde gültig. Ohne Recht fehlt der Pfad in der Antwort.
+    async chatFileUrls(paths) {
+      if (!paths.length) return []
+      const { data, error } = await client.storage.from('chat').createSignedUrls(paths, 3600)
+      if (error) throw error
+      return (data || []).filter((d) => d && d.signedUrl && !d.error).map((d) => ({ path: d.path, signedUrl: d.signedUrl }))
+    },
+    // Nur eigene Dateien (Regel crm_chat_loeschen), anderes löscht Supabase still nicht
+    async chatRemoveFiles(paths) {
+      if (!paths.length) return
+      const { error } = await client.storage.from('chat').remove(paths)
+      if (error) throw error
     },
     // Antworten im Verlauf, Reaktionen, Suche (32_chat_verlauf.sql)
     async chatThread(parentId) {

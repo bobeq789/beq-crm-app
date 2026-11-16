@@ -146,6 +146,19 @@ export function createDemoApi({ asGuest = false } = {}) {
       save()
       return clone(row)
     },
+    // Dateien im Chat: Bilder als kleine Fassung im Browser, andere Dateien ohne Inhalt
+    async chatUpload(path, file) {
+      const data = /^image\/(jpeg|png|gif|webp)$/.test(file.type || '') ? await demoPreview(file) : null
+      chat.chatUpload(db, me, { pfad: path, groesse: file.size, typ: file.type, data })
+      save()
+    },
+    async chatFileUrls(paths) {
+      return chat.chatFileUrls(db, me, paths)
+    },
+    async chatRemoveFiles(paths) {
+      chat.chatRemoveFiles(db, me, paths)
+      save()
+    },
     async chatThread(parentId) {
       return clone(chat.chatThread(db, me, parentId))
     },
@@ -567,5 +580,27 @@ export function createDemoApi({ asGuest = false } = {}) {
       local.remove(CLAUDE_KEY)
       db = loadDb()
     },
+  }
+}
+
+// Bild im Demo-Modus auf höchstens 640 Pixel verkleinern (als data-URL im Browser gespeichert)
+async function demoPreview(file) {
+  try {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    await new Promise((resolve, reject) => {
+      img.onload = resolve
+      img.onerror = reject
+      img.src = url
+    })
+    const k = Math.min(1, 640 / Math.max(img.naturalWidth, img.naturalHeight))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * k))
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * k))
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+    URL.revokeObjectURL(url)
+    return canvas.toDataURL('image/jpeg', 0.8)
+  } catch {
+    return null
   }
 }

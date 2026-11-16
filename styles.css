@@ -1437,7 +1437,8 @@ body.search-sheet-open .topbar { z-index: 70; }
 .chat-msg-tools .icon-btn { width: 32px; height: 32px; color: var(--muted); }
 @media (hover: none) { .chat-msg-tools { opacity: 1; } }
 
-.chat-composer { position: relative; display: flex; gap: 8px; align-items: flex-end; padding: 10px 12px; border-top: 1px solid var(--border); }
+.chat-composer-wrap { border-top: 1px solid var(--border); }
+.chat-composer { position: relative; display: flex; gap: 8px; align-items: flex-end; padding: 10px 12px; }
 .chat-composer textarea { flex: 1; resize: none; min-height: 44px; max-height: 160px; field-sizing: content; }
 .chat-send { min-width: 44px; padding: 0 12px; }
 .chat-archived-note { margin: 0; padding: 12px 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; }
@@ -1500,4 +1501,36 @@ body.search-sheet-open .topbar { z-index: 70; }
 }
 @media (max-width: 759px) {
   .chat-thread { width: 100%; padding-top: var(--safe-top); padding-bottom: var(--safe-bottom); }
+}
+
+/* Chat, Stufe C Schritt 2: Dateien und Bilder (33_chat_dateien.sql) */
+.chat-attach { width: 44px; height: 44px; flex: none; color: var(--muted); }
+.chat-room.dragging { box-shadow: inset 0 0 0 2px var(--green); }
+.chat-pending-files { list-style: none; margin: 0; padding: 10px 12px 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.chat-pending-files li {
+  display: flex; align-items: center; gap: 8px; max-width: 100%; min-height: 44px; padding: 4px 4px 4px 6px;
+  background: var(--raised); border-radius: var(--radius-sm); font-size: 14px;
+}
+.chat-pending-files img { width: 36px; height: 36px; object-fit: cover; border-radius: 6px; flex: none; }
+.chat-pending-files .icon-btn { width: 36px; height: 36px; color: var(--muted); }
+.chat-file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-file-size { color: var(--muted); font-size: 12px; flex: none; }
+.chat-file-icon { display: inline-flex; color: var(--muted); flex: none; }
+.chat-attachments { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 6px; }
+.chat-images { display: flex; flex-wrap: wrap; gap: 6px; max-width: 100%; }
+.chat-image {
+  display: block; width: min(320px, 100%); max-height: 320px; padding: 0; border: 0; border-radius: var(--radius-sm);
+  overflow: hidden; background: var(--raised); cursor: zoom-in;
+}
+.chat-images.many .chat-image { width: min(160px, calc(50% - 3px)); max-height: 160px; }
+.chat-image img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.chat-image-wait { display: flex; height: 100%; min-height: 80px; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px; color: var(--muted); font-size: 12px; text-align: center; overflow-wrap: anywhere; }
+.chat-file {
+  display: flex; align-items: center; gap: 8px; max-width: min(360px, 100%); min-height: 44px; padding: 6px 12px;
+  border: 0; border-radius: var(--radius-sm); background: var(--raised); color: var(--text); font: inherit; font-size: 14px; text-align: left; cursor: pointer;
+}
+.chat-file:hover { background: var(--hover); }
+@media (max-width: 759px) {
+  .chat-pending-files { padding: 8px 8px 0; }
+  .chat-attach { width: 40px; }
 }

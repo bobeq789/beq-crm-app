@@ -4,7 +4,14 @@
 import { uid } from '../lib/util.js'
 import { dbError } from './rules.js'
 
-export const CHAT_TABLES = ['chat_raeume', 'chat_mitglieder', 'chat_nachrichten', 'chat_gelesen', 'chat_reaktionen']
+export const CHAT_TABLES = ['chat_raeume', 'chat_mitglieder', 'chat_nachrichten', 'chat_gelesen', 'chat_reaktionen', 'chat_dateien']
+// Dateien im Chat (33_chat_dateien.sql): Pfad <Raum-ID>/<Datei>, höchstens 10 je Nachricht
+export const MAX_ATTACHMENTS = 10
+const CHAT_PATH = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/([^/]+)$/i
+export const roomOfPath = (p) => {
+  const m = CHAT_PATH.exec(String(p || ''))
+  return m && m[2] !== '.' && m[2] !== '..' ? m[1].toLowerCase() : null
+}
 // Feste Zeichen für Reaktionen (wie die Prüfung in 32_chat_verlauf.sql)
 export const REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '✅']
 
@@ -104,12 +111,34 @@ export function chatMessages(db, me, raumId, before, limit) {
     .slice(0, limit)
 }
 
-export function chatSend(db, me, { id, raum_id, text, erwaehnt, antwort_auf }) {
+// Anhänge prüfen wie tg_chat_anhaenge_pruefen(): eigener Raum, selbst hochgeladen, Größe und
+// Art aus dem Speicher
+function checkAttachments(db, me, raumId, list) {
+  const out = []
+  const seen = new Set()
+  for (const a of list || []) {
+    const p = a && a.pfad
+    if (!p || roomOfPath(p) !== raumId) throw noRight('Diese Datei gehört nicht zu diesem Chat.')
+    if (seen.has(p)) continue
+    seen.add(p)
+    const f = (db.chat_dateien || []).find((x) => x.pfad === p)
+    if (!f) throw dbError('23503', 'Die Datei fehlt im Speicher. Bitte noch einmal hochladen.')
+    if (f.owner !== me) throw noRight('Nur selbst hochgeladene Dateien lassen sich anhängen.')
+    const ok = (v) => Number.isInteger(v) && v > 0 && v <= 20000
+    const dims = ok(a.breite) && ok(a.hoehe) ? { breite: a.breite, hoehe: a.hoehe } : {}
+    out.push({ pfad: p, name: String(a.name || '').trim().slice(0, 200) || p.split('/')[1].replace(/^\d+-/, ''), groesse: f.groesse, typ: f.typ || 'application/octet-stream', ...dims })
+  }
+  if (out.length > MAX_ATTACHMENTS) throw dbError('23514', 'check')
+  return out
+}
+
+export function chatSend(db, me, { id, raum_id, text, erwaehnt, antwort_auf, anhaenge }) {
   me = low(me)
   const r = room(db, me, raum_id)
   if (r.archiviert) throw noRight('Der Kanal ist archiviert.')
+  const files = checkAttachments(db, me, raum_id, anhaenge)
   const t = String(text || '')
-  if (!t.trim() || t.length > 4000) throw dbError('23514', 'check')
+  if ((!t.trim() && !files.length) || t.length > 4000) throw dbError('23514', 'check')
   let parent = null
   if (antwort_auf) {
     parent = db.chat_nachrichten.find((n) => n.id === antwort_auf)
@@ -117,7 +146,7 @@ export function chatSend(db, me, { id, raum_id, text, erwaehnt, antwort_auf }) {
     if (parent.antwort_auf) throw bad('Auf eine Antwort lässt sich nicht noch einmal antworten. Bitte im selben Verlauf schreiben.')
     if (parent.geloescht_at) throw bad('Diese Nachricht ist gelöscht.')
   }
-  const msg = { id: id || uid(), raum_id, art: r.art, autor: me, text: t, erwaehnt: mentionable(db, erwaehnt), antwort_auf: antwort_auf || null, antworten: 0, letzte_antwort_at: null, created_at: now(), bearbeitet_at: null, geloescht_at: null }
+  const msg = { id: id || uid(), raum_id, art: r.art, autor: me, text: t, erwaehnt: mentionable(db, erwaehnt), anhaenge: files, antwort_auf: antwort_auf || null, antworten: 0, letzte_antwort_at: null, created_at: now(), bearbeitet_at: null, geloescht_at: null }
   db.chat_nachrichten.push(msg)
   r.letzte_at = msg.created_at
   if (parent) {
@@ -170,10 +199,10 @@ export function chatEdit(db, me, id, patch) {
   if (!n || n.autor !== me || !canSeeRoom(db, me, db.chat_raeume.find((r) => r.id === n.raum_id))) throw noRight()
   if (n.geloescht_at) throw noRight('Diese Nachricht ist gelöscht und lässt sich nicht mehr ändern.')
   if (patch.geloescht) {
-    Object.assign(n, { text: '', erwaehnt: [], geloescht_at: now() })
+    Object.assign(n, { text: '', erwaehnt: [], anhaenge: [], geloescht_at: now() })
   } else {
     const t = String(patch.text || '')
-    if (!t.trim() || t.length > 4000) throw dbError('23514', 'check')
+    if ((!t.trim() && !(n.anhaenge || []).length) || t.length > 4000) throw dbError('23514', 'check')
     Object.assign(n, { text: t, erwaehnt: mentionable(db, patch.erwaehnt), bearbeitet_at: now() })
   }
   return n
@@ -272,4 +301,36 @@ export function chatMarkRead(db, me, raumId, bis) {
   const g = db.chat_gelesen.find((x) => x.raum_id === raumId && x.email === me)
   if (g) g.gelesen_bis = [g.gelesen_bis, t].sort().pop()
   else db.chat_gelesen.push({ raum_id: raumId, email: me, gelesen_bis: t })
+}
+
+// ------------------------------------------------------------
+// Dateien im Chat (33_chat_dateien.sql). Im Demo-Modus liegt nur bei Bildern eine kleine
+// Fassung als data-URL im Browser, andere Dateien haben keinen Inhalt.
+// ------------------------------------------------------------
+export function chatUpload(db, me, { pfad, groesse, typ, data }) {
+  me = low(me)
+  const raumId = roomOfPath(pfad)
+  const r = raumId && db.chat_raeume.find((x) => x.id === raumId)
+  if (!r || !canSeeRoom(db, me, r) || r.archiviert) throw noRight('new row violates row-level security policy')
+  if (groesse > 25 * 1024 * 1024) throw dbError('413', 'Payload too large: exceeded the maximum allowed size')
+  db.chat_dateien = db.chat_dateien || []
+  if (db.chat_dateien.some((x) => x.pfad === pfad)) throw dbError('23505', 'The resource already exists')
+  db.chat_dateien.push({ pfad, owner: me, groesse, typ: typ || 'application/octet-stream', data: data || null, raum_id: raumId, created_at: now() })
+}
+
+export function chatFileUrls(db, me, paths) {
+  return paths
+    .map((p) => {
+      const f = (db.chat_dateien || []).find((x) => x.pfad === p)
+      const r = f && db.chat_raeume.find((x) => x.id === f.raum_id)
+      return f && f.data && canSeeRoom(db, me, r) ? { path: p, signedUrl: f.data } : null
+    })
+    .filter(Boolean)
+}
+
+// Nur eigene Dateien (wie die Regel crm_chat_loeschen)
+export function chatRemoveFiles(db, me, paths) {
+  me = low(me)
+  const set = new Set(paths)
+  db.chat_dateien = (db.chat_dateien || []).filter((x) => !(set.has(x.pfad) && x.owner === me))
 }

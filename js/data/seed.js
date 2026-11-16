@@ -642,7 +642,7 @@ function seedChat(db) {
   }
   const members = (r, emails, at = r.created_at) => emails.forEach((e) => db.chat_mitglieder.push({ raum_id: r.id, email: e, art: r.art, hinzugefuegt_von: r.created_by, created_at: at }))
   const say = (r, autor, text, at, extra = {}) => {
-    const n = { id: uid(), raum_id: r.id, art: r.art, autor, text, erwaehnt: [], antwort_auf: null, antworten: 0, letzte_antwort_at: null, created_at: at, bearbeitet_at: null, geloescht_at: null, ...extra }
+    const n = { id: uid(), raum_id: r.id, art: r.art, autor, text, erwaehnt: [], anhaenge: [], antwort_auf: null, antworten: 0, letzte_antwort_at: null, created_at: at, bearbeitet_at: null, geloescht_at: null, ...extra }
     db.chat_nachrichten.push(n)
     if (!r.letzte_at || r.letzte_at < at) r.letzte_at = at
     return n
@@ -680,6 +680,10 @@ function seedChat(db) {
   members(messe, [J, A, G])
   say(messe, J, 'Paul, schickst du uns den Standplan?', daysAgo(3, 10, 0))
   say(messe, G, 'Ist unterwegs, kommt heute per Mail.', daysAgo(3, 10, 40))
+  // Datei im Chat (33_chat_dateien.sql), im Demo-Modus ohne Inhalt
+  const plan = `${messe.id}/1700000000000-Standplan.pdf`
+  db.chat_dateien.push({ pfad: plan, owner: G, groesse: 482133, typ: 'application/pdf', data: null, raum_id: messe.id, created_at: daysAgo(3, 10, 45) })
+  say(messe, G, 'Vorab schon mal hier.', daysAgo(3, 10, 45), { anhaenge: [{ pfad: plan, name: 'Standplan.pdf', groesse: 482133, typ: 'application/pdf' }] })
   db.chat_gelesen.push({ raum_id: messe.id, email: A, gelesen_bis: daysAgo(3, 12, 0) })
 
   const gf = room('kanal', 'Geschäftsführung', { offen: false, created_by: J, beschreibung: 'Nur auf Einladung' })
