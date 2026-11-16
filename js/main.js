@@ -16,6 +16,8 @@ import { SharedPage } from './ui/shared.js'
 import { SalesPage } from './ui/sales.js'
 import { PostfachPage } from './ui/postfach.js'
 import { TopSearch } from './ui/search.js'
+import { ChatPage, chatDialogs } from './ui/chat.js'
+import { unreadTotal } from './chat.js'
 import { Modal, dialogKinds } from './ui/common.js'
 import { openDialog, closeDialog } from './store.js'
 import { Login, SetPassword, NotMember, AuthError, Splash, MfaEnroll, MfaVerify } from './ui/auth.js'
@@ -24,6 +26,7 @@ import { ClaudeConsent } from './ui/claude.js'
 const NAV_TEAM = [
   { key: '', label: 'Übersicht', icon: 'home' },
   { key: 'board', label: 'Board', icon: 'board' },
+  { key: 'chat', label: 'Chat', icon: 'chat' },
   { key: 'sales', label: 'Sales', icon: 'sales' },
   { key: 'kalender', label: 'Kalender', icon: 'calendar' },
   { key: 'postfach', label: 'Postfach', icon: 'mail' },
@@ -31,9 +34,12 @@ const NAV_TEAM = [
   { key: 'kontakte', label: 'Kontakte', icon: 'contacts' },
   { key: 'firmen', label: 'Firmen', icon: 'orgs' },
 ]
-const NAV_GUEST = [{ key: 'geteilt', label: 'Geteilt', icon: 'share' }]
-// Am Handy unten nur vier Bereiche und „Mehr“, der Rest steckt hinter „Mehr“
-const MOBILE_MAIN = ['', 'board', 'postfach', 'kalender']
+const NAV_GUEST = [
+  { key: 'geteilt', label: 'Geteilt', icon: 'share' },
+  { key: 'chat', label: 'Chat', icon: 'chat' },
+]
+// Am Handy unten nur fünf Bereiche und „Mehr“, der Rest steckt hinter „Mehr“
+const MOBILE_MAIN = ['', 'board', 'chat', 'postfach', 'kalender']
 
 function NavMore() {
   const more = NAV_TEAM.filter((n) => !MOBILE_MAIN.includes(n.key))
@@ -49,16 +55,23 @@ function NavMore() {
   <//>`
 }
 dialogKinds['nav-more'] = NavMore
+Object.assign(dialogKinds, chatDialogs)
 
 function Page({ route }) {
   const [section, id, sub] = route.parts
-  // Gäste sehen nur „Geteilt“ und die Einstellungen
-  if (isGuest()) return section === 'einstellungen' ? html`<${SettingsPage} />` : html`<${SharedPage} />`
+  // Gäste sehen nur „Geteilt“, den Chat (Kanäle, in die sie eingeladen sind) und die Einstellungen
+  if (isGuest()) {
+    if (section === 'einstellungen') return html`<${SettingsPage} />`
+    if (section === 'chat') return html`<${ChatPage} raumId=${id} />`
+    return html`<${SharedPage} />`
+  }
   switch (section) {
     case undefined:
       return html`<${Overview} />`
     case 'board':
       return html`<${Board} projectId=${id} archiveOpen=${sub === 'archiv'} archiveQuery=${route.params.get('q') || ''} />`
+    case 'chat':
+      return html`<${ChatPage} raumId=${id} />`
     case 'sales':
       return html`<${SalesPage} />`
     case 'kalender':
@@ -105,8 +118,8 @@ function useAppBadge(n) {
 function Shell({ route }) {
   const guest = isGuest()
   const nav = guest ? NAV_GUEST : NAV_TEAM
-  const counts = guest ? {} : { '': overviewCount(), postfach: state.followUp.newMail.length }
-  const countText = { '': 'fällig', postfach: 'neu' }
+  const counts = guest ? { chat: unreadTotal() } : { '': overviewCount(), postfach: state.followUp.newMail.length, chat: unreadTotal() }
+  const countText = { '': 'fällig', postfach: 'neu', chat: 'ungelesen' }
   useAppBadge(counts[''] || 0)
   const section = route.parts[0] || (guest ? 'geteilt' : '')
   const cardId = route.params.get('karte')

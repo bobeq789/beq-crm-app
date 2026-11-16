@@ -7,7 +7,7 @@
 // Aus dem Suchbegriff wird auf Wunsch eine Aufgabe (Fenster „Neue Aufgabe“). Das ersetzt das
 // frühere Schnell-Anlegen über der Übersicht.
 //
-// Breite Fenster: Feld zwischen Logo und Reitern. Unter 1100 px nur eine Lupe, die Suche öffnet
+// Breite Fenster: Feld zwischen Logo und Reitern. Unter 1200 px nur eine Lupe, die Suche öffnet
 // sich dann als Fläche über der Seite (am Handy über die ganze Breite).
 // Tastatur: Strg+K (am Mac Cmd+K) oder „/“ öffnet die Suche, Pfeile wählen, Enter öffnet,
 // Escape schließt.
@@ -295,7 +295,7 @@ function SearchBox({ sheet, onClose, inputRef }) {
 
 // In der Kopfleiste: breites Fenster Feld, schmales Fenster Lupe mit Fläche darüber
 export function TopSearch() {
-  const compact = useMedia('(max-width: 1099px)')
+  const compact = useMedia('(max-width: 1199px)')
   const [sheetOpen, setSheetOpen] = useState(false)
   const inputRef = useRef()
 

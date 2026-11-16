@@ -15,6 +15,8 @@ const demoAsGuest = isDemo && params.has('gast')
 
 let api = null
 const listeners = new Set()
+// Für js/chat.js, das den Chat getrennt vom Rest lädt
+export const getApi = () => api
 
 export const state = {
   // loading, login, set-password, not-member, mfa-enroll, mfa-verify, claude, ready, error
@@ -45,6 +47,9 @@ export const state = {
   // Persönliche Einstellungen auf allen Geräten (21_nutzer_einstellungen.sql): terminlink,
   // terminsatz, terminlinks je Postfach, kacheln (Anordnung der Übersicht)
   prefs: {},
+  // Chat (30_chat.sql, js/chat.js): available heißt, die SQL-Datei ist da. rooms aus
+  // chat_uebersicht(), messages je Raum (alt nach neu), active ist der gerade offene Raum.
+  chat: { available: false, rooms: [], messages: new Map(), active: null },
   loadedAt: 0,
   toasts: [],
   dialog: null,
@@ -227,6 +232,7 @@ function resetSession() {
   state.mfaFactorId = null
   state.db = emptyDb()
   state.full = { meetings: new Set(), emails: new Set() }
+  state.chat = { available: false, rooms: [], messages: new Map(), active: null }
 }
 
 // Nach Passwort: freigeschaltet? zweiter Faktor? Dann Daten laden.
@@ -273,6 +279,7 @@ async function enterApp() {
   emit()
   loadPrefs()
   startFollowUp()
+  import('./chat.js').then((m) => m.startChat()).catch(() => {})
   await autoConnectMailbox()
 }
 
@@ -879,6 +886,7 @@ export async function signIn(email, password) {
 }
 export async function signOut() {
   state.auth = 'login'
+  import('./chat.js').then((m) => m.stopChat()).catch(() => {})
   resetSession()
   emit()
   await api.signOut()

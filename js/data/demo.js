@@ -36,6 +36,7 @@ import {
   cardFlags,
   archiveOldDone,
 } from './rules.js'
+import * as chat from './chat_rules.js'
 
 const KEY = 'beqcrm-demo-v3'
 // Claude-Zugänge im Demo-Modus (nur in diesem Browser)
@@ -126,7 +127,71 @@ export function createDemoApi({ asGuest = false } = {}) {
     },
 
     async loadAll() {
-      return clone(asGuest ? guestView(db, me) : db)
+      const view = clone(asGuest ? guestView(db, me) : db)
+      // Chat lädt die App getrennt (chatOverview, chatMessages), wie in Supabase
+      chat.CHAT_TABLES.forEach((t) => (view[t] = []))
+      return view
+    },
+
+    // ---------- Chat wie 30_chat.sql ----------
+    // Jede Funktion arbeitet mit den Regeln aus chat_rules.js und speichert danach.
+    async chatOverview() {
+      return clone(chat.chatOverview(db, me))
+    },
+    async chatMessages(raumId, before = null, limit = 50) {
+      return clone(chat.chatMessages(db, me, raumId, before, limit))
+    },
+    async chatSend(msg) {
+      const row = chat.chatSend(db, me, msg)
+      save()
+      return clone(row)
+    },
+    async chatEdit(id, patch) {
+      const row = chat.chatEdit(db, me, id, patch)
+      save()
+      return clone(row)
+    },
+    async chatCreateChannel(fields) {
+      const id = chat.chatCreateChannel(db, me, fields)
+      save()
+      return id
+    },
+    async chatDirect(email) {
+      const id = chat.chatDirect(db, me, email)
+      save()
+      return id
+    },
+    async chatCreateGroup(fields) {
+      const id = chat.chatCreateGroup(db, me, fields)
+      save()
+      return id
+    },
+    async chatAddMembers(raumId, emails) {
+      chat.chatAddMembers(db, me, raumId, emails)
+      save()
+    },
+    async chatRemoveMember(raumId, email) {
+      chat.chatRemoveMember(db, me, raumId, email)
+      save()
+    },
+    async chatChangeRoom(raumId, patch) {
+      chat.chatChangeRoom(db, me, raumId, patch)
+      save()
+    },
+    async chatMarkRead(raumId, bis) {
+      chat.chatMarkRead(db, me, raumId, bis)
+      save()
+    },
+    // Sofort sichtbar: im Demo-Modus über einen zweiten Tab im selben Browser (storage-Ereignis).
+    // Meldet nur „es gibt Neues“, die App holt dann selbst nach.
+    chatSubscribe(onChange) {
+      const fn = (e) => {
+        if (e.key !== KEY) return
+        db = loadDb()
+        onChange({ type: 'sync' })
+      }
+      window.addEventListener('storage', fn)
+      return () => window.removeEventListener('storage', fn)
     },
 
     // Ganzer Datensatz (im Demo-Modus ist ohnehin alles da)

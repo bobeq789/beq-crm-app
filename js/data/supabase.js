@@ -298,6 +298,68 @@ export async function createSupabaseApi(config) {
         return []
       }
     },
+    // ---------- Chat (30_chat.sql) ----------
+    // Räume, Mitglieder und Zahlen über chat_uebersicht(), Nachrichten seitenweise. Fehlt die
+    // SQL-Datei noch, gibt es einfach keinen Chat (null).
+    async chatOverview() {
+      const { data, error } = await client.rpc('chat_uebersicht')
+      if (error) {
+        if (error.code === 'PGRST202' || error.code === '42883') return null
+        throw error
+      }
+      return data || []
+    },
+    async chatMessages(raumId, before = null, limit = 50) {
+      let q = client.from('chat_nachrichten').select('*').eq('raum_id', raumId).order('created_at', { ascending: false }).limit(limit)
+      if (before) q = q.lt('created_at', before)
+      return check(await q)
+    },
+    async chatSend({ id, raum_id, text, erwaehnt }) {
+      return check(await client.from('chat_nachrichten').insert({ id, raum_id, text, erwaehnt }).select().single())
+    },
+    async chatEdit(id, patch) {
+      const row = patch.geloescht ? { geloescht_at: new Date().toISOString() } : { text: patch.text, erwaehnt: patch.erwaehnt || [] }
+      return check(await client.from('chat_nachrichten').update(row).eq('id', id).select().single())
+    },
+    async chatCreateChannel({ name, beschreibung, offen, mitglieder }) {
+      return check(await client.rpc('chat_kanal_anlegen', { p_name: name, p_beschreibung: beschreibung || null, p_offen: offen !== false, p_mitglieder: mitglieder || [] }))
+    },
+    async chatDirect(email) {
+      return check(await client.rpc('chat_direkt', { p_email: email }))
+    },
+    async chatCreateGroup({ mitglieder, name }) {
+      return check(await client.rpc('chat_gruppe_anlegen', { p_mitglieder: mitglieder || [], p_name: name || null }))
+    },
+    async chatAddMembers(raumId, emails) {
+      check(await client.rpc('chat_mitglieder_hinzufuegen', { p_raum: raumId, p_mitglieder: emails }))
+    },
+    async chatRemoveMember(raumId, email) {
+      check(await client.rpc('chat_mitglied_entfernen', { p_raum: raumId, p_email: email }))
+    },
+    async chatChangeRoom(raumId, patch) {
+      check(
+        await client.rpc('chat_raum_aendern', {
+          p_raum: raumId,
+          p_name: patch.name ?? null,
+          p_beschreibung: patch.beschreibung ?? null,
+          p_offen: patch.offen ?? null,
+          p_archiviert: patch.archiviert ?? null,
+        })
+      )
+    },
+    async chatMarkRead(raumId, bis) {
+      check(await client.rpc('chat_gelesen_setzen', { p_raum: raumId, p_bis: bis || null }))
+    },
+    // Sofort sichtbar über Supabase Realtime. Realtime prüft für jede Nachricht dieselben
+    // Zugriffsregeln wie die Datenbank, fremde Direktnachrichten kommen also nie an.
+    chatSubscribe(onChange) {
+      const channel = client
+        .channel('crm-chat')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_nachrichten' }, (p) => onChange({ type: 'message', row: p.new }))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_mitglieder' }, () => onChange({ type: 'sync' }))
+        .subscribe()
+      return () => client.removeChannel(channel)
+    },
     // Mails still nachladen (Postfach offen und Neues da)
     async reloadEmails() {
       return fetchAll('emails')

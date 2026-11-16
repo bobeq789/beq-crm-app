@@ -625,5 +625,65 @@ export function buildSeed() {
     mailbox('vertrieb@example.com', J, { sync_calendar: false, status: 'fehler', last_sync_at: daysAgo(3), last_error: 'Zugang widerrufen' }),
   ]
 
+  seedChat(db)
   return db
+}
+
+// Chat (30_chat.sql): erfundene Kanäle, eine Gruppe und Direktnachrichten. Eine Direktnachricht
+// zwischen Jonas und Mira sieht Anna nicht (wie in der Datenbank), den Kanal „Geschäftsführung“
+// sieht sie als Admin, ohne Mitglied zu sein.
+function seedChat(db) {
+  const G = DEMO_TEAM[3].email
+  const minutesAgo = (n) => new Date(Date.now() - n * 60000).toISOString()
+  const room = (art, name, extra = {}) => {
+    const r = { id: uid(), art, name, beschreibung: null, offen: true, project_id: null, direkt_schluessel: null, created_by: A, archiviert: false, letzte_at: null, created_at: daysAgo(20), updated_at: daysAgo(20), ...extra }
+    db.chat_raeume.push(r)
+    return r
+  }
+  const members = (r, emails, at = r.created_at) => emails.forEach((e) => db.chat_mitglieder.push({ raum_id: r.id, email: e, art: r.art, hinzugefuegt_von: r.created_by, created_at: at }))
+  const say = (r, autor, text, at, extra = {}) => {
+    const n = { id: uid(), raum_id: r.id, art: r.art, autor, text, erwaehnt: [], created_at: at, bearbeitet_at: null, geloescht_at: null, ...extra }
+    db.chat_nachrichten.push(n)
+    if (!r.letzte_at || r.letzte_at < at) r.letzte_at = at
+    return n
+  }
+
+  const allgemein = room('kanal', 'Allgemein', { beschreibung: 'Alles, was das ganze Team wissen sollte' })
+  members(allgemein, [A])
+  say(allgemein, A, 'Willkommen im Chat. Hier landet alles, was alle angeht.', daysAgo(20, 9, 0))
+  say(allgemein, J, 'Die neuen Flyer für die Messe sind da, liegen im Büro.', daysAgo(2, 14, 10))
+  say(allgemein, M, 'Danke! Ich nehme mir einen Stapel für den Termin am Donnerstag mit.', daysAgo(2, 14, 25))
+  say(allgemein, J, '@Anna kannst du die Liste der Pilotstandorte heute noch freigeben?', minutesAgo(95), { erwaehnt: [A] })
+  say(allgemein, M, 'Kurze Info: Ich bin ab 15 Uhr unterwegs, erreichbar am Handy.', minutesAgo(40))
+  db.chat_gelesen.push({ raum_id: allgemein.id, email: A, gelesen_bis: daysAgo(1, 18, 0) })
+
+  const vertrieb = room('kanal', 'Vertrieb Nord', { created_by: J, beschreibung: 'Absprachen im Team Nord' })
+  members(vertrieb, [J, M])
+  say(vertrieb, J, 'Wer übernimmt den Rückruf bei Nordlicht Logistik?', daysAgo(1, 11, 5))
+  say(vertrieb, M, 'Mache ich morgen früh.', daysAgo(1, 11, 20))
+
+  const messe = room('kanal', 'Messe Hamburg', { offen: false, created_by: J, beschreibung: 'Planung mit Paul (Gast)' })
+  members(messe, [J, A, G])
+  say(messe, J, 'Paul, schickst du uns den Standplan?', daysAgo(3, 10, 0))
+  say(messe, G, 'Ist unterwegs, kommt heute per Mail.', daysAgo(3, 10, 40))
+  db.chat_gelesen.push({ raum_id: messe.id, email: A, gelesen_bis: daysAgo(3, 12, 0) })
+
+  const gf = room('kanal', 'Geschäftsführung', { offen: false, created_by: J, beschreibung: 'Nur auf Einladung' })
+  members(gf, [J, M])
+  say(gf, J, 'Termin für die Quartalsplanung steht: Freitag 10:00 bis 11:30.', daysAgo(4, 9, 0))
+
+  const pilot = room('gruppe', 'Pilot Auental', { created_by: M })
+  members(pilot, [A, J, M])
+  say(pilot, M, 'Die Klinik hat den zweiten Standort bestätigt.', daysAgo(1, 16, 0))
+  say(pilot, A, 'Super, dann plane ich die Installation für nächste Woche.', daysAgo(1, 16, 12))
+  db.chat_gelesen.push({ raum_id: pilot.id, email: A, gelesen_bis: daysAgo(1, 16, 12) })
+
+  const anJonas = room('direkt', null, { direkt_schluessel: [A, J].sort().join(' '), created_by: J })
+  members(anJonas, [A, J])
+  say(anJonas, J, 'Hast du kurz Zeit für einen Anruf?', minutesAgo(25))
+  say(anJonas, J, 'Hat sich erledigt, danke!', minutesAgo(20), { text: '', geloescht_at: minutesAgo(18) })
+
+  const privat = room('direkt', null, { direkt_schluessel: [J, M].sort().join(' '), created_by: J })
+  members(privat, [J, M])
+  say(privat, J, 'Nur zwischen Jonas und Mira.', daysAgo(1, 9, 0))
 }
