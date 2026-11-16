@@ -23,6 +23,7 @@ import {
   mailsWithoutReply,
   newInboxMails,
   mailSpurRows,
+  closedDealMove,
   cascadeDelete,
   guestView,
   dbError,
@@ -63,6 +64,14 @@ export function createDemoApi({ asGuest = false } = {}) {
     return !!card && db.project_shares.some((s) => s.project_id === card.project_id && s.email === me)
   }
   const notAllowed = () => dbError('42501', 'permission denied')
+  // Deal gewonnen oder verloren: Aufgabe nach „Erledigt“ (wie 28_deal_abschluss.sql), mit Verlauf
+  const moveClosedDeal = (oldDeal, deal) => {
+    const hit = closedDealMove(db, oldDeal, deal)
+    if (!hit) return
+    const moved = prepareUpdate('cards', hit.card, { stage_id: hit.stageId })
+    db.cards = db.cards.map((c) => (c.id === moved.id ? moved : c))
+    db.card_events.push(...cardEventsFor(db, 'update', hit.card, moved, me))
+  }
   const isAdmin = () => db.team_members.some((t) => t.email === me && t.active && t.role === 'admin')
   // Wartespalte: Wiedervorlage wie tg_cards_wiedervorlage() in 19_aktivitaeten.sql
   const waitingFollowUp = (oldCard, card) => {
@@ -155,6 +164,7 @@ export function createDemoApi({ asGuest = false } = {}) {
       if (table === 'cards') db.card_events.push(...cardEventsFor(db, 'insert', null, r, me))
       if (table === 'aktivitaeten') db.card_events.push(...activityEventsFor(r, me))
       if (table === 'cards') waitingFollowUp(null, r)
+      if (table === 'deals') moveClosedDeal(null, r)
       // Teammitglied weist einem Gast zu: automatisch teilen
       const share = table === 'cards' && !asGuest && autoShareFor(db, null, r)
       if (share) db.card_shares.push(share)
@@ -197,6 +207,7 @@ export function createDemoApi({ asGuest = false } = {}) {
         db.card_events.push(...activityEventsFor(r, me, old))
       }
       if (table === 'cards') waitingFollowUp(old, r)
+      if (table === 'deals') moveClosedDeal(old, r)
       const share = table === 'cards' && !asGuest && autoShareFor(db, old, r)
       if (share) db.card_shares.push(share)
       save()

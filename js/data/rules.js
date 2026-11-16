@@ -583,3 +583,19 @@ export function mailSpurRows(db, me) {
       }
     })
 }
+
+// ------------------------------------------------------------
+// Deal abgeschlossen (gewonnen oder verloren, vorher offen oder neu): Aufgabe in die Spalte der
+// Art „done“ ihres Projekts, wie tg_deals_abschluss() in 28_deal_abschluss.sql. Liefert die Aufgabe
+// und die Zielspalte oder null (schon erledigt, archiviert, kein Wechsel).
+// ------------------------------------------------------------
+export const isClosedDeal = (d) => !!d && (d.status === 'gewonnen' || d.status === 'verloren')
+export function closedDealMove(db, oldDeal, deal) {
+  if (!isClosedDeal(deal) || isClosedDeal(oldDeal)) return null
+  const card = (db.cards || []).find((c) => c.id === deal.card_id)
+  if (!card || card.archived) return null
+  const current = db.stages.find((s) => s.id === card.stage_id)
+  if (current && current.kind === 'done') return null
+  const done = db.stages.filter((s) => s.project_id === card.project_id && s.kind === 'done').sort((a, b) => a.sort - b.sort)[0]
+  return done ? { card, stageId: done.id } : null
+}

@@ -4,7 +4,7 @@
 import { html, useState, useEffect } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { fmtEuro, firstName, norm } from '../lib/util.js'
-import { itemTotal } from '../data/rules.js'
+import { itemTotal, closedDealMove } from '../data/rules.js'
 import {
   isGuest,
   myEmail,
@@ -21,6 +21,8 @@ import {
   confirmDialog,
   toast,
   getStage,
+  state,
+  openActivitiesOfCard,
 } from '../store.js'
 import { Field } from './common.js'
 
@@ -94,6 +96,19 @@ function DealEditor({ card, deal }) {
   useEffect(() => setValue(euroInput(deal.value_cents)), [deal.value_cents])
   useEffect(() => setReason(deal.lost_reason || ''), [deal.id, deal.lost_reason])
   const set = (patch) => update('deals', deal.id, patch)
+  // Gewonnen oder verloren schiebt die Aufgabe nach „Erledigt“ (28_deal_abschluss.sql), das sagt die App dazu
+  const setStatus = async (s) => {
+    const move = closedDealMove(state.db, deal, { ...deal, status: s.value })
+    const saved = await set({ status: s.value })
+    if (saved && move) {
+      const stage = getStage(move.stageId)
+      // Offene Aktivitäten halten die Aufgabe aus dem Archiv (24_archiv.sql)
+      const later = openActivitiesOfCard(card.id).length
+        ? 'Ins Archiv kommt sie, sobald ihre offenen Aktivitäten erledigt sind und sie 30 Tage nicht geändert wurde.'
+        : 'Nach 30 Tagen ohne Änderung kommt sie ins Archiv.'
+      toast(`Deal ${s.label.toLowerCase()}. Die Aufgabe steht jetzt in „${stage ? stage.name : 'Erledigt'}“. ${later}`)
+    }
+  }
 
   const places = items.reduce((s, i) => s + Number(i.quantity) * Number(i.places || 0), 0)
   const bonus = items.reduce((s, i) => s + Number(i.quantity) * Number(i.bonus_places || 0), 0)
@@ -154,7 +169,7 @@ function DealEditor({ card, deal }) {
             type="button"
             class=${'chip-btn' + (deal.status === s.value ? ' active' : '')}
             aria-pressed=${deal.status === s.value}
-            onClick=${() => deal.status !== s.value && set({ status: s.value })}
+            onClick=${() => deal.status !== s.value && setStatus(s)}
           >
             ${s.label}
           </button>`

@@ -4,7 +4,7 @@
 import { useState, useEffect } from './lib/preact.js'
 import { SETTINGS } from './settings.js'
 import { uid, local, todayStr, addDays, fmtDate, firstName, initials, norm, safeFileName } from './lib/util.js'
-import { prepareInsert, prepareUpdate, afterInsert, afterUpdate, cascadeDelete, emptyDb, recalcDeal } from './data/rules.js'
+import { prepareInsert, prepareUpdate, afterInsert, afterUpdate, cascadeDelete, emptyDb, recalcDeal, isClosedDeal } from './data/rules.js'
 import { createDemoApi } from './data/demo.js'
 import { createSupabaseApi } from './data/supabase.js'
 
@@ -910,6 +910,8 @@ export async function insert(table, row) {
     emit()
     // Neue Aufgabe direkt in einer Wartespalte: die Datenbank legt eine Wiedervorlage an
     if (table === 'cards' && cardKind(saved) === 'waiting') refreshCardActivities(saved.id)
+    // Deal gleich abgeschlossen: die Datenbank schiebt die Aufgabe nach „Erledigt“ (28_deal_abschluss.sql)
+    if (table === 'deals' && isClosedDeal(saved)) refreshCard(saved.card_id)
     return saved
   } catch (err) {
     await failed(err)
@@ -930,6 +932,8 @@ export async function update(table, id, patch) {
     emit()
     // Nach dem Verschieben die Aktivitäten nachladen, die Datenbank kann eine anlegen
     if (table === 'cards' && 'stage_id' in patch && patch.stage_id !== old.stage_id) refreshCardActivities(id)
+    // Deal gewonnen oder verloren: die Datenbank schiebt die Aufgabe nach „Erledigt“ (28_deal_abschluss.sql)
+    if (table === 'deals' && isClosedDeal(saved) && !isClosedDeal(old)) refreshCard(saved.card_id)
     return saved
   } catch (err) {
     await failed(err)
@@ -1198,6 +1202,15 @@ export async function followUpIn(card, days) {
   return saved
 }
 // Aktivitäten einer Aufgabe neu laden (die Datenbank legt in der Wartespalte selbst eine an)
+// Eine Aufgabe neu laden, nachdem die Datenbank sie selbst geändert hat
+export async function refreshCard(cardId) {
+  const row = await api.fetchRow('cards', cardId).catch(() => null)
+  if (!row) return
+  replaceRow('cards', row)
+  state.db = { ...state.db }
+  emit()
+}
+
 export async function refreshCardActivities(cardId) {
   const rows = await api.fetchActivities(cardId)
   if (!rows) return

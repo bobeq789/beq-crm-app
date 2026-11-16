@@ -97,7 +97,9 @@ export function computeSales({ deals, items, from, to, owner, projectId }) {
   const closedIn = (d) => d.closed_at && d.closed_at >= from && d.closed_at <= to
   const won = inScope.filter((d) => d.status === 'gewonnen' && closedIn(d))
   const lost = inScope.filter((d) => d.status === 'verloren' && closedIn(d))
-  const open = inScope.filter((d) => d.status === 'offen')
+  // Offene Deals an archivierten Aufgaben zählen nicht mehr als offen (Entscheidung vom 16.11.2026).
+  // Umsatz zählt nur „gewonnen“, auch wenn die Aufgabe archiviert ist.
+  const open = inScope.filter((d) => d.status === 'offen' && !(getCard(d.card_id) || {}).archived)
   const sum = (list) => list.reduce((s, d) => s + Number(d.value_cents || 0), 0)
   const weighted = open.reduce((s, d) => s + (Number(d.value_cents || 0) * (probabilityOf(d) || 0)) / 100, 0)
   const wonIds = new Set(won.map((d) => d.id))
