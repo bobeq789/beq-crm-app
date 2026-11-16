@@ -642,16 +642,30 @@ function seedChat(db) {
   }
   const members = (r, emails, at = r.created_at) => emails.forEach((e) => db.chat_mitglieder.push({ raum_id: r.id, email: e, art: r.art, hinzugefuegt_von: r.created_by, created_at: at }))
   const say = (r, autor, text, at, extra = {}) => {
-    const n = { id: uid(), raum_id: r.id, art: r.art, autor, text, erwaehnt: [], created_at: at, bearbeitet_at: null, geloescht_at: null, ...extra }
+    const n = { id: uid(), raum_id: r.id, art: r.art, autor, text, erwaehnt: [], antwort_auf: null, antworten: 0, letzte_antwort_at: null, created_at: at, bearbeitet_at: null, geloescht_at: null, ...extra }
     db.chat_nachrichten.push(n)
     if (!r.letzte_at || r.letzte_at < at) r.letzte_at = at
     return n
   }
+  // Antwort im Verlauf (32_chat_verlauf.sql): Zähler an der ersten Nachricht wie in der Datenbank
+  const reply = (r, parent, autor, text, at, extra = {}) => {
+    const n = say(r, autor, text, at, { antwort_auf: parent.id, ...extra })
+    parent.antworten += 1
+    parent.letzte_antwort_at = at
+    return n
+  }
+  const react = (n, email, zeichen) =>
+    db.chat_reaktionen.push({ nachricht_id: n.id, email, zeichen, aktiv: true, raum_id: n.raum_id, art: n.art, created_at: n.created_at, updated_at: n.created_at })
 
   const allgemein = room('kanal', 'Allgemein', { beschreibung: 'Alles, was das ganze Team wissen sollte' })
   members(allgemein, [A])
   say(allgemein, A, 'Willkommen im Chat. Hier landet alles, was alle angeht.', daysAgo(20, 9, 0))
-  say(allgemein, J, 'Die neuen Flyer für die Messe sind da, liegen im Büro.', daysAgo(2, 14, 10))
+  const flyer = say(allgemein, J, 'Die neuen Flyer für die Messe sind da, liegen im Büro.', daysAgo(2, 14, 10))
+  react(flyer, A, '👍')
+  react(flyer, M, '👍')
+  react(flyer, M, '🎉')
+  reply(allgemein, flyer, A, 'Super, wie viele sind es?', daysAgo(2, 14, 15))
+  reply(allgemein, flyer, J, 'Zwei Kartons, also reichlich.', daysAgo(2, 14, 18))
   say(allgemein, M, 'Danke! Ich nehme mir einen Stapel für den Termin am Donnerstag mit.', daysAgo(2, 14, 25))
   say(allgemein, J, '@Anna kannst du die Liste der Pilotstandorte heute noch freigeben?', minutesAgo(95), { erwaehnt: [A] })
   say(allgemein, M, 'Kurze Info: Ich bin ab 15 Uhr unterwegs, erreichbar am Handy.', minutesAgo(40))

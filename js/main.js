@@ -62,7 +62,7 @@ function Page({ route }) {
   // Gäste sehen nur „Geteilt“, den Chat (Kanäle, in die sie eingeladen sind) und die Einstellungen
   if (isGuest()) {
     if (section === 'einstellungen') return html`<${SettingsPage} />`
-    if (section === 'chat') return html`<${ChatPage} raumId=${id} />`
+    if (section === 'chat') return html`<${ChatPage} raumId=${id} verlauf=${route.params.get('verlauf')} nachricht=${route.params.get('nachricht')} />`
     return html`<${SharedPage} />`
   }
   switch (section) {
@@ -71,7 +71,7 @@ function Page({ route }) {
     case 'board':
       return html`<${Board} projectId=${id} archiveOpen=${sub === 'archiv'} archiveQuery=${route.params.get('q') || ''} />`
     case 'chat':
-      return html`<${ChatPage} raumId=${id} />`
+      return html`<${ChatPage} raumId=${id} verlauf=${route.params.get('verlauf')} nachricht=${route.params.get('nachricht')} />`
     case 'sales':
       return html`<${SalesPage} />`
     case 'kalender':

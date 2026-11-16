@@ -5,8 +5,8 @@ import { html, useState, useEffect, useRef, useLayoutEffect } from '../lib/preac
 import { Icon } from '../lib/icons.js'
 import { norm, firstName, fmtTime, fmtDate } from '../lib/util.js'
 import { state, myEmail, memberName, isGuest, isAdmin, openDialog, closeDialog, toast, activeMembers, activeGuests } from '../store.js'
-import { navigate } from '../router.js'
-import { PageHead, Empty, Avatar, Modal, Field, Segmented, useIsMobile } from './common.js'
+import { navigate, openOverlay, closeOverlay } from '../router.js'
+import { PageHead, Empty, Avatar, Modal, Field, Segmented, useIsMobile, useOverlay } from './common.js'
 import { withLabels, parseMentions, NoteText } from './mentions.js'
 import {
   getRoom,
@@ -27,14 +27,22 @@ import {
   removeMember,
   changeRoom,
   chatErrorText,
+  threadOf,
+  loadThread,
+  setOpenThread,
+  reactionsOf,
+  toggleReaction,
+  searchMessages,
+  loadUntil,
 } from '../chat.js'
+import { REACTIONS } from '../data/chat_rules.js'
 
 const me = () => norm(myEmail())
 
 // ------------------------------------------------------------
 // Seite
 // ------------------------------------------------------------
-export function ChatPage({ raumId }) {
+export function ChatPage({ raumId, verlauf, nachricht }) {
   const mobile = useIsMobile()
   const chat = state.chat
   const guest = isGuest()
@@ -57,7 +65,7 @@ export function ChatPage({ raumId }) {
       ${showList && html`<${RoomList} activeId=${raumId} />`}
       ${showRoom &&
       (room
-        ? html`<${RoomView} room=${room} key=${room.id} mobile=${mobile} />`
+        ? html`<${RoomView} room=${room} key=${room.id} mobile=${mobile} focusId=${verlauf ? null : nachricht} />`
         : raumId
         ? html`<div class="chat-empty-room">
             ${mobile && html`<a class="back-link" href="#/chat"><${Icon} name="back" size=${16} /> Alle Chats</a>`}
@@ -65,6 +73,7 @@ export function ChatPage({ raumId }) {
           </div>`
         : html`<div class="chat-empty-room"><p>Wähl links einen Kanal oder eine Unterhaltung.</p></div>`)}
     </div>
+    ${room && verlauf && html`<${ThreadPanel} room=${room} parentId=${verlauf} focusId=${nachricht} key=${verlauf} />`}
   </div>`
 }
 
@@ -73,11 +82,26 @@ export function ChatPage({ raumId }) {
 // ------------------------------------------------------------
 function RoomList({ activeId }) {
   const [showArchived, setShowArchived] = useState(false)
+  const [query, setQuery] = useState('')
+  const searching = query.trim().length >= 2
   const rooms = state.chat.rooms
   const channels = rooms.filter((r) => r.art === 'kanal' && !r.archiviert).sort((a, b) => roomTitle(a).localeCompare(roomTitle(b), 'de'))
   const talks = rooms.filter((r) => r.art !== 'kanal')
   const archived = rooms.filter((r) => r.art === 'kanal' && r.archiviert)
+  const searchBox = html`<div class="chat-search">
+    <${Icon} name="search" size=${16} />
+    <label class="sr-only" for="chat-suche">Im Chat suchen</label>
+    <input id="chat-suche" type="search" placeholder="Im Chat suchen" value=${query} onInput=${(e) => setQuery(e.target.value)}
+      onKeyDown=${(e) => e.key === 'Escape' && query && (e.stopPropagation(), setQuery(''))} />
+  </div>`
+  if (searching) {
+    return html`<nav class="chat-list" aria-label="Suche im Chat">
+      ${searchBox}
+      <${SearchResults} query=${query.trim()} />
+    </nav>`
+  }
   return html`<nav class="chat-list" aria-label="Kanäle und Unterhaltungen">
+    ${searchBox}
     <h2 class="chat-list-head">Kanäle</h2>
     ${channels.length ? html`<ul class="chat-items">${channels.map((r) => html`<${RoomItem} room=${r} active=${r.id === activeId} key=${r.id} />`)}</ul>` : html`<p class="chat-list-empty">Noch keine Kanäle.</p>`}
     <h2 class="chat-list-head">Direktnachrichten und Gruppen</h2>
@@ -90,6 +114,50 @@ function RoomList({ activeId }) {
       </button>
       ${showArchived && html`<ul class="chat-items">${archived.map((r) => html`<${RoomItem} room=${r} active=${r.id === activeId} key=${r.id} />`)}</ul>`}`}
   </nav>`
+}
+
+// Treffer der Suche: Raum, wer, wann, Ausschnitt mit dem Begriff (alles als Text)
+function SearchResults({ query }) {
+  const [state_, setState] = useState({ q: null, rows: [], loading: true })
+  useEffect(() => {
+    let alive = true
+    setState((s) => ({ ...s, loading: true }))
+    const t = setTimeout(async () => {
+      const rows = await searchMessages(query)
+      if (alive) setState({ q: query, rows, loading: false })
+    }, 250)
+    return () => {
+      alive = false
+      clearTimeout(t)
+    }
+  }, [query])
+  if (state_.loading && state_.q !== query) return html`<p class="chat-list-empty">Sucht …</p>`
+  if (!state_.rows.length) return html`<p class="chat-list-empty">Nichts gefunden.</p>`
+  return html`<ul class="chat-results">
+    ${state_.rows.map((m) => {
+      const room = getRoom(m.raum_id)
+      const go = () => {
+        const params = m.antwort_auf ? { verlauf: m.antwort_auf, nachricht: m.id } : { nachricht: m.id }
+        navigate('/chat/' + m.raum_id, params)
+      }
+      return html`<li key=${m.id}>
+        <button type="button" class="chat-result" onClick=${go}>
+          <span class="chat-result-head"><strong>${room ? roomTitle(room) : 'Chat'}</strong> <span class="muted">${memberName(m.autor)} · ${fmtDate(m.created_at)}${m.antwort_auf ? ' · im Verlauf' : ''}</span></span>
+          <span class="chat-result-text"><${Snippet} text=${m.text} query=${query} /></span>
+        </button>
+      </li>`
+    })}
+  </ul>`
+}
+
+// Ausschnitt um den Treffer, Treffer fett. Nur Text, nie HTML.
+function Snippet({ text, query }) {
+  const t = String(text || '')
+  const i = t.toLocaleLowerCase('de').indexOf(query.toLocaleLowerCase('de'))
+  if (i < 0) return t.slice(0, 140)
+  const start = Math.max(0, i - 50)
+  const end = Math.min(t.length, i + query.length + 80)
+  return html`${start > 0 ? '…' : ''}${t.slice(start, i)}<mark>${t.slice(i, i + query.length)}</mark>${t.slice(i + query.length, end)}${end < t.length ? '…' : ''}`
 }
 
 function RoomIcon({ room }) {
@@ -117,12 +185,13 @@ function RoomItem({ room, active }) {
 // ------------------------------------------------------------
 // Ein Raum: Kopf, Verlauf, Eingabe
 // ------------------------------------------------------------
-function RoomView({ room, mobile }) {
+function RoomView({ room, mobile, focusId }) {
   const msgs = messagesOf(room.id)
   const scrollRef = useRef()
   const nearBottom = useRef(true)
   const lastCount = useRef(0)
   const [editing, setEditing] = useState(null)
+  const flash = useFocusMessage(scrollRef, msgs, focusId, () => (nearBottom.current = false), () => loadOlder(room.id))
 
   useEffect(() => {
     setActiveRoom(room.id)
@@ -186,12 +255,40 @@ function RoomView({ room, mobile }) {
       html`<div class="chat-older"><button type="button" class="btn btn-small" disabled=${msgs.loading} onClick=${() => loadOlder(room.id)}>${msgs.loading ? 'Lädt …' : 'Ältere Nachrichten laden'}</button></div>`}
       ${msgs.loading && !msgs.list.length && html`<p class="chat-hint">Lädt …</p>`}
       ${msgs.loaded && !msgs.list.length && html`<p class="chat-hint">Noch keine Nachrichten. Schreib die erste.</p>`}
-      <${MessageList} room=${room} list=${msgs.list} editing=${editing} setEditing=${setEditing} />
+      <${MessageList} room=${room} list=${msgs.list} editing=${editing} setEditing=${setEditing} flash=${flash} />
     </div>
     ${room.archiviert
       ? html`<p class="chat-archived-note">Der Kanal ist archiviert. Lesen geht weiter, schreiben nicht mehr.</p>`
       : html`<${Composer} room=${room} onSent=${() => (nearBottom.current = true)} />`}
   </section>`
+}
+
+// Sprung zu einer Nachricht (aus der Suche): ältere Seiten nachladen, bis sie da ist, dann
+// hinscrollen und kurz hervorheben. Gibt die hervorgehobene Kennung zurück.
+function useFocusMessage(scrollRef, entry, focusId, stopFollow, loadMore) {
+  const [flash, setFlash] = useState(null)
+  const done = useRef(null)
+  const tries = useRef(0)
+  useEffect(() => {
+    if (!focusId || done.current === focusId || !entry.loaded) return
+    const found = entry.list.some((m) => m.id === focusId)
+    if (!found) {
+      if (!entry.complete && !entry.loading && tries.current < 20) {
+        tries.current += 1
+        loadMore()
+      }
+      return
+    }
+    done.current = focusId
+    stopFollow()
+    requestAnimationFrame(() => {
+      const el = scrollRef.current && scrollRef.current.querySelector(`[data-id="${focusId}"]`)
+      if (el) el.scrollIntoView({ block: 'center' })
+      setFlash(focusId)
+      setTimeout(() => setFlash(null), 2500)
+    })
+  }, [focusId, entry.list.length, entry.loaded, entry.loading])
+  return flash
 }
 
 // Tag als Trenner: Heute, Gestern, sonst Datum
@@ -205,7 +302,7 @@ function dayLabel(iso) {
   return fmtDate(iso)
 }
 
-function MessageList({ room, list, editing, setEditing }) {
+function MessageList({ room, list, editing, setEditing, flash, inThread = false }) {
   const out = []
   let lastDay = null
   let prev = null
@@ -218,19 +315,29 @@ function MessageList({ room, list, editing, setEditing }) {
     }
     // Folgenachricht derselben Person innerhalb von 5 Minuten: ohne Kopf
     const follow = prev && prev.autor === m.autor && new Date(m.created_at) - new Date(prev.created_at) < 5 * 60000
-    out.push(html`<${Message} key=${m.id} m=${m} room=${room} follow=${follow} editing=${editing === m.id} setEditing=${setEditing} />`)
+    out.push(html`<${Message} key=${m.id} m=${m} room=${room} follow=${follow} editing=${editing === m.id} setEditing=${setEditing} flash=${flash === m.id} inThread=${inThread} />`)
     prev = m
   })
   return html`<div class="chat-messages" role="log" aria-live="polite">${out}</div>`
 }
 
-function Message({ m, room, follow, editing, setEditing }) {
+function Message({ m, room, follow, editing, setEditing, flash, inThread }) {
   const own = norm(m.autor) === me()
   const deleted = !!m.geloescht_at
   const mentionsMe = (m.erwaehnt || []).includes(me())
-  return html`<div class=${'chat-msg' + (follow ? ' follow' : '') + (m.pending ? ' pending' : '') + (m.failed ? ' failed' : '') + (mentionsMe && !deleted ? ' mentioned' : '')}>
+  const [picker, setPicker] = useState(false)
+  // Am Handy (ohne Maus) zeigt ein Tipp auf die Nachricht die Knöpfe
+  const [active, setActive] = useState(false)
+  const onTap = (e) => {
+    if (e.target.closest('button, a, textarea, input')) return
+    setActive(!active)
+  }
+  const canReact = !deleted && !m.pending && !m.failed && !room.archiviert
+  const canReply = !inThread && !m.antwort_auf && !deleted && !m.pending && !m.failed
+  const cls = ['chat-msg', follow && 'follow', m.pending && 'pending', m.failed && 'failed', mentionsMe && !deleted && 'mentioned', flash && 'flash', active && 'active'].filter(Boolean).join(' ')
+  return html`<div class=${cls} data-id=${m.id}>
     <div class="chat-msg-avatar">${!follow && html`<${Avatar} email=${m.autor} />`}</div>
-    <div class="chat-msg-main">
+    <div class="chat-msg-main" onClick=${onTap}>
       ${!follow &&
       html`<div class="chat-msg-head">
         <strong>${memberName(m.autor)}</strong>
@@ -242,14 +349,107 @@ function Message({ m, room, follow, editing, setEditing }) {
         ? html`<p class="chat-msg-text chat-deleted">Nachricht gelöscht</p>`
         : html`<p class="chat-msg-text"><${NoteText} text=${m.text} mentions=${m.erwaehnt} />${m.bearbeitet_at && html` <span class="chat-edited">(bearbeitet)</span>`}</p>`}
       ${m.failed &&
-      html`<p class="chat-failed">Nicht gesendet. <button type="button" class="link-btn" onClick=${() => discardFailed(m.raum_id, m.id)}>Verwerfen</button></p>`}
+      html`<p class="chat-failed">Nicht gesendet. <button type="button" class="link-btn" onClick=${() => discardFailed(m.raum_id, m.id, m.antwort_auf)}>Verwerfen</button></p>`}
+      <${ReactionBar} m=${m} canReact=${canReact} />
+      ${picker && canReact && html`<${ReactionPicker} m=${m} onClose=${() => setPicker(false)} />`}
+      ${!inThread && !m.antwort_auf && m.antworten > 0 &&
+      html`<button type="button" class="chat-replies" onClick=${() => openOverlay('verlauf', m.id)}>
+        <${Icon} name="reply" size=${14} /> ${m.antworten === 1 ? '1 Antwort' : m.antworten + ' Antworten'}
+        <span class="muted">· zuletzt ${dayLabel(m.letzte_antwort_at) === 'Heute' ? fmtTime(m.letzte_antwort_at) : dayLabel(m.letzte_antwort_at)}</span>
+      </button>`}
     </div>
-    ${own && !deleted && !editing && !m.pending && !m.failed &&
+    ${!editing && !m.pending && !m.failed &&
     html`<div class="chat-msg-tools">
-      <button type="button" class="icon-btn" aria-label="Nachricht bearbeiten" title="Bearbeiten" onClick=${() => setEditing(m.id)}><${Icon} name="edit" size=${16} /></button>
-      <button type="button" class="icon-btn" aria-label="Nachricht löschen" title="Löschen" onClick=${() => deleteMessage(m)}><${Icon} name="trash" size=${16} /></button>
+      ${canReact && html`<button type="button" class="icon-btn" aria-label="Reagieren" title="Reagieren" aria-expanded=${picker} onClick=${() => setPicker(!picker)}><${Icon} name="smile" size=${16} /></button>`}
+      ${canReply && html`<button type="button" class="icon-btn" aria-label="Im Verlauf antworten" title="Im Verlauf antworten" onClick=${() => openOverlay('verlauf', m.id)}><${Icon} name="reply" size=${16} /></button>`}
+      ${own && !deleted && html`<button type="button" class="icon-btn" aria-label="Nachricht bearbeiten" title="Bearbeiten" onClick=${() => setEditing(m.id)}><${Icon} name="edit" size=${16} /></button>`}
+      ${own && !deleted && html`<button type="button" class="icon-btn" aria-label="Nachricht löschen" title="Löschen" onClick=${() => deleteMessage(m)}><${Icon} name="trash" size=${16} /></button>`}
     </div>`}
   </div>`
+}
+
+// Reaktionen unter einer Nachricht: je Zeichen die Zahl, eigene hervorgehoben. Antippen schaltet.
+function ReactionBar({ m, canReact }) {
+  const list = reactionsOf(m.id)
+  if (!list.length) return null
+  const self = me()
+  const groups = REACTIONS.map((z) => ({ z, who: list.filter((x) => x.zeichen === z).map((x) => x.email) })).filter((g) => g.who.length)
+  return html`<div class="chat-reactions">
+    ${groups.map((g) => {
+      const mine = g.who.includes(self)
+      const names = g.who.map((e) => (e === self ? 'du' : firstName(memberName(e)))).join(', ')
+      return html`<button type="button" class=${'chat-reaction' + (mine ? ' mine' : '')} aria-pressed=${mine} disabled=${!canReact}
+        title=${names} aria-label=${g.z + ' ' + g.who.length + ', ' + names} onClick=${() => toggleReaction(m, g.z)}>
+        <span aria-hidden="true">${g.z}</span> ${g.who.length}
+      </button>`
+    })}
+  </div>`
+}
+
+function ReactionPicker({ m, onClose }) {
+  const mine = new Set(reactionsOf(m.id).filter((x) => x.email === me()).map((x) => x.zeichen))
+  return html`<div class="chat-picker" role="group" aria-label="Reaktion wählen" onKeyDown=${(e) => e.key === 'Escape' && (e.stopPropagation(), onClose())}>
+    ${REACTIONS.map(
+      (z) => html`<button type="button" class=${mine.has(z) ? 'mine' : ''} aria-pressed=${mine.has(z)} onClick=${() => (toggleReaction(m, z), onClose())}>${z}</button>`
+    )}
+  </div>`
+}
+
+// ------------------------------------------------------------
+// Verlauf (Antworten auf eine Nachricht): Fenster rechts, am Handy über die ganze Fläche
+// ------------------------------------------------------------
+function ThreadPanel({ room, parentId, focusId }) {
+  const close = () => closeOverlay('verlauf')
+  useOverlay(close)
+  const scrollRef = useRef()
+  const [editing, setEditing] = useState(null)
+  const thread = threadOf(parentId)
+  const parent = messagesOf(room.id).list.find((m) => m.id === parentId) || thread.parent
+  const [loadedParent, setLoadedParent] = useState(null)
+  useEffect(() => {
+    setOpenThread(parentId)
+    loadThread(parentId)
+    if (!parent) loadUntilParent()
+    return () => setOpenThread(null)
+  }, [parentId])
+  // Erste Nachricht nicht im geladenen Raum (zum Beispiel aus der Suche): einzeln holen
+  async function loadUntilParent() {
+    const rows = await searchParent(room.id, parentId)
+    if (rows) setLoadedParent(rows)
+  }
+  const head = parent || loadedParent
+  const flash = useFocusMessage(scrollRef, { ...thread, complete: true }, focusId, () => {}, () => {})
+  // Neue Antworten: nach unten scrollen
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (el && !focusId) el.scrollTop = el.scrollHeight
+  }, [thread.list.length])
+  return html`<div class="backdrop chat-thread-backdrop" onClick=${(e) => e.target === e.currentTarget && close()}>
+    <aside class="chat-thread" role="dialog" aria-modal="true" aria-label="Verlauf">
+      <header class="chat-room-head">
+        <div class="chat-room-title">
+          <h2>Verlauf</h2>
+          <p class="muted">${roomTitle(room)}</p>
+        </div>
+        <button type="button" class="icon-btn" aria-label="Verlauf schließen" onClick=${close}><${Icon} name="x" /></button>
+      </header>
+      <div class="chat-scroll" ref=${scrollRef}>
+        ${head && html`<div class="chat-thread-parent"><${MessageList} room=${room} list=${[head]} editing=${null} setEditing=${() => {}} inThread=${true} /></div>`}
+        ${thread.loading && !thread.list.length && html`<p class="chat-hint">Lädt …</p>`}
+        ${thread.loaded && !thread.list.length && html`<p class="chat-hint">Noch keine Antworten.</p>`}
+        <${MessageList} room=${room} list=${thread.list} editing=${editing} setEditing=${setEditing} flash=${flash} inThread=${true} />
+      </div>
+      ${room.archiviert || (head && head.geloescht_at)
+        ? html`<p class="chat-archived-note">${room.archiviert ? 'Der Kanal ist archiviert.' : 'Die Nachricht ist gelöscht, antworten geht nicht mehr.'}</p>`
+        : html`<${Composer} room=${room} parentId=${parentId} onSent=${() => {}} />`}
+    </aside>
+  </div>`
+}
+
+// Erste Nachricht eines Verlaufs einzeln suchen (nur, wenn sie nicht im Raum geladen ist)
+async function searchParent(raumId, parentId) {
+  await loadUntil(raumId, '0000')
+  return messagesOf(raumId).list.find((m) => m.id === parentId) || null
 }
 
 // ------------------------------------------------------------
@@ -338,7 +538,7 @@ function useMentionInput(room, initial = '') {
   return { text, setText: update, reset: () => (setText(''), setQuery(null)), ref, onKey, suggestions, mentions: () => parseMentions(text, people) }
 }
 
-function Composer({ room, onSent }) {
+function Composer({ room, onSent, parentId = null }) {
   const input = useMentionInput(room)
   const [busy, setBusy] = useState(false)
   const send = async () => {
@@ -349,7 +549,7 @@ function Composer({ room, onSent }) {
     const mentions = input.mentions()
     input.reset()
     onSent()
-    await sendMessage(room.id, text, mentions)
+    await sendMessage(room.id, text, mentions, parentId)
     setBusy(false)
     input.ref.current && input.ref.current.focus()
   }
@@ -362,12 +562,12 @@ function Composer({ room, onSent }) {
   }
   return html`<div class="chat-composer">
     ${input.suggestions}
-    <label class="sr-only" for=${'chat-input-' + room.id}>Nachricht an ${roomTitle(room)}</label>
+    <label class="sr-only" for=${'chat-input-' + (parentId || room.id)}>${parentId ? 'Antwort im Verlauf' : 'Nachricht an ' + roomTitle(room)}</label>
     <textarea
-      id=${'chat-input-' + room.id}
+      id=${'chat-input-' + (parentId || room.id)}
       ref=${input.ref}
       rows="1"
-      placeholder=${'Nachricht an ' + roomTitle(room)}
+      placeholder=${parentId ? 'Antworten' : 'Nachricht an ' + roomTitle(room)}
       value=${input.text}
       onInput=${(e) => input.setText(e.target.value)}
       onKeyDown=${onKeyDown}

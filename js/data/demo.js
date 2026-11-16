@@ -146,6 +146,19 @@ export function createDemoApi({ asGuest = false } = {}) {
       save()
       return clone(row)
     },
+    async chatThread(parentId) {
+      return clone(chat.chatThread(db, me, parentId))
+    },
+    async chatReactions(ids) {
+      return clone(chat.chatReactions(db, me, ids))
+    },
+    async chatReact(id, zeichen, aktiv) {
+      chat.chatReact(db, me, id, zeichen, aktiv)
+      save()
+    },
+    async chatSearch(q) {
+      return clone(chat.chatSearch(db, me, q))
+    },
     async chatEdit(id, patch) {
       const row = chat.chatEdit(db, me, id, patch)
       save()

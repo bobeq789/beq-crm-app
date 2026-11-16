@@ -310,12 +310,35 @@ export async function createSupabaseApi(config) {
       return data || []
     },
     async chatMessages(raumId, before = null, limit = 50) {
-      let q = client.from('chat_nachrichten').select('*').eq('raum_id', raumId).order('created_at', { ascending: false }).limit(limit)
+      let q = client.from('chat_nachrichten').select('*').eq('raum_id', raumId).is('antwort_auf', null).order('created_at', { ascending: false }).limit(limit)
       if (before) q = q.lt('created_at', before)
       return check(await q)
     },
-    async chatSend({ id, raum_id, text, erwaehnt }) {
-      return check(await client.from('chat_nachrichten').insert({ id, raum_id, text, erwaehnt }).select().single())
+    async chatSend({ id, raum_id, text, erwaehnt, antwort_auf }) {
+      const row = { id, raum_id, text, erwaehnt }
+      if (antwort_auf) row.antwort_auf = antwort_auf
+      return check(await client.from('chat_nachrichten').insert(row).select().single())
+    },
+    // Antworten im Verlauf, Reaktionen, Suche (32_chat_verlauf.sql)
+    async chatThread(parentId) {
+      return check(await client.from('chat_nachrichten').select('*').eq('antwort_auf', parentId).order('created_at', { ascending: true }).limit(500))
+    },
+    async chatReactions(ids) {
+      if (!ids.length) return []
+      const out = []
+      for (let i = 0; i < ids.length; i += 100) {
+        out.push(...check(await client.from('chat_reaktionen').select('nachricht_id,email,zeichen').in('nachricht_id', ids.slice(i, i + 100)).eq('aktiv', true)))
+      }
+      return out
+    },
+    async chatReact(id, zeichen, aktiv) {
+      check(await client.rpc('chat_reagieren', { p_nachricht: id, p_zeichen: zeichen, p_aktiv: aktiv }))
+    },
+    async chatSearch(q) {
+      const pattern = '%' + String(q).trim().replace(/[%_\\]/g, (c) => '\\' + c) + '%'
+      return check(
+        await client.from('chat_nachrichten').select('id,raum_id,autor,text,created_at,antwort_auf').ilike('text', pattern).is('geloescht_at', null).order('created_at', { ascending: false }).limit(50)
+      )
     },
     async chatEdit(id, patch) {
       const row = patch.geloescht ? { geloescht_at: new Date().toISOString() } : { text: patch.text, erwaehnt: patch.erwaehnt || [] }
@@ -350,13 +373,14 @@ export async function createSupabaseApi(config) {
     async chatMarkRead(raumId, bis) {
       check(await client.rpc('chat_gelesen_setzen', { p_raum: raumId, p_bis: bis || null }))
     },
-    // Sofort sichtbar über Supabase Realtime. Realtime prüft für jede Nachricht dieselben
-    // Zugriffsregeln wie die Datenbank, fremde Direktnachrichten kommen also nie an.
+    // Sofort sichtbar über Supabase Realtime. Realtime prüft für jede Nachricht und Reaktion
+    // dieselben Zugriffsregeln wie die Datenbank, fremde Direktnachrichten kommen also nie an.
+    // Neue Räume (zum Beispiel jemand legt eine Gruppe an) holt der minütliche Abgleich.
     chatSubscribe(onChange) {
       const channel = client
         .channel('crm-chat')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_nachrichten' }, (p) => onChange({ type: 'message', row: p.new }))
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_mitglieder' }, () => onChange({ type: 'sync' }))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_reaktionen' }, (p) => onChange({ type: 'reaction', row: p.new }))
         .subscribe()
       return () => client.removeChannel(channel)
     },

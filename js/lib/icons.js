@@ -57,6 +57,8 @@ const PATHS = {
   send: 'M4 12 20 4l-6 16-3-7-7-1zM11 13l9-9',
   inbox: 'M4 13h4l2 3h4l2-3h4M4 13l2.5-8h11l2.5 8v6H4z',
   more: 'M5 12h.01M12 12h.01M19 12h.01',
+  // Gesicht: Reaktion im Chat
+  smile: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM8.5 14a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01',
   // Raute: offener Kanal im Chat
   hash: 'M5 9h14M5 15h14M10 4 8 20M16 4l-2 16',
   // Zwei Sprechblasen: Chat

@@ -4,7 +4,9 @@
 import { uid } from '../lib/util.js'
 import { dbError } from './rules.js'
 
-export const CHAT_TABLES = ['chat_raeume', 'chat_mitglieder', 'chat_nachrichten', 'chat_gelesen']
+export const CHAT_TABLES = ['chat_raeume', 'chat_mitglieder', 'chat_nachrichten', 'chat_gelesen', 'chat_reaktionen']
+// Feste Zeichen für Reaktionen (wie die Prüfung in 32_chat_verlauf.sql)
+export const REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '✅']
 
 const low = (s) => String(s || '').trim().toLowerCase()
 const now = () => new Date().toISOString()
@@ -72,8 +74,14 @@ export function chatOverview(db, me) {
         strict = true
       } else if (mm) start = mm.created_at
       else if (r.art === 'kanal' && r.offen) start = [r.created_at, self ? self.created_at : r.created_at].sort().pop()
+      // Antworten zählen nur, wenn sie einen betreffen (eigene Nachricht, selbst im Verlauf, erwähnt)
+      const concernsMe = (n) =>
+        !n.antwort_auf ||
+        (n.erwaehnt || []).includes(me) ||
+        db.chat_nachrichten.some((p) => p.id === n.antwort_auf && p.autor === me) ||
+        db.chat_nachrichten.some((x) => x.antwort_auf === n.antwort_auf && x.autor === me)
       const unread = start
-        ? db.chat_nachrichten.filter((n) => n.raum_id === r.id && n.autor !== me && !n.geloescht_at && (strict ? n.created_at > start : n.created_at >= start))
+        ? db.chat_nachrichten.filter((n) => n.raum_id === r.id && n.autor !== me && !n.geloescht_at && (strict ? n.created_at > start : n.created_at >= start) && concernsMe(n))
         : []
       return {
         ...r,
@@ -91,21 +99,69 @@ export function chatOverview(db, me) {
 export function chatMessages(db, me, raumId, before, limit) {
   room(db, me, raumId)
   return db.chat_nachrichten
-    .filter((n) => n.raum_id === raumId && (!before || n.created_at < before))
+    .filter((n) => n.raum_id === raumId && !n.antwort_auf && (!before || n.created_at < before))
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
     .slice(0, limit)
 }
 
-export function chatSend(db, me, { id, raum_id, text, erwaehnt }) {
+export function chatSend(db, me, { id, raum_id, text, erwaehnt, antwort_auf }) {
   me = low(me)
   const r = room(db, me, raum_id)
   if (r.archiviert) throw noRight('Der Kanal ist archiviert.')
   const t = String(text || '')
   if (!t.trim() || t.length > 4000) throw dbError('23514', 'check')
-  const msg = { id: id || uid(), raum_id, art: r.art, autor: me, text: t, erwaehnt: mentionable(db, erwaehnt), created_at: now(), bearbeitet_at: null, geloescht_at: null }
+  let parent = null
+  if (antwort_auf) {
+    parent = db.chat_nachrichten.find((n) => n.id === antwort_auf)
+    if (!parent || parent.raum_id !== raum_id) throw bad('Auf diese Nachricht lässt sich hier nicht antworten.')
+    if (parent.antwort_auf) throw bad('Auf eine Antwort lässt sich nicht noch einmal antworten. Bitte im selben Verlauf schreiben.')
+    if (parent.geloescht_at) throw bad('Diese Nachricht ist gelöscht.')
+  }
+  const msg = { id: id || uid(), raum_id, art: r.art, autor: me, text: t, erwaehnt: mentionable(db, erwaehnt), antwort_auf: antwort_auf || null, antworten: 0, letzte_antwort_at: null, created_at: now(), bearbeitet_at: null, geloescht_at: null }
   db.chat_nachrichten.push(msg)
   r.letzte_at = msg.created_at
+  if (parent) {
+    parent.antworten = (parent.antworten || 0) + 1
+    parent.letzte_antwort_at = msg.created_at
+  }
   return msg
+}
+
+// Antworten auf eine Nachricht, älteste zuerst
+export function chatThread(db, me, parentId) {
+  const parent = db.chat_nachrichten.find((n) => n.id === parentId)
+  if (!parent) throw noRight('Diese Nachricht gibt es nicht.')
+  room(db, me, parent.raum_id)
+  return db.chat_nachrichten.filter((n) => n.antwort_auf === parentId).sort((a, b) => a.created_at.localeCompare(b.created_at))
+}
+
+// Reaktionen (aktive) zu diesen Nachrichten, nur aus sichtbaren Räumen
+export function chatReactions(db, me, ids) {
+  const set = new Set(ids)
+  return db.chat_reaktionen.filter((x) => set.has(x.nachricht_id) && x.aktiv && canSeeRoom(db, me, db.chat_raeume.find((r) => r.id === x.raum_id)))
+}
+
+export function chatReact(db, me, nachrichtId, zeichen, aktiv) {
+  me = low(me)
+  const n = db.chat_nachrichten.find((x) => x.id === nachrichtId)
+  const r = n && db.chat_raeume.find((x) => x.id === n.raum_id)
+  if (!n || !canSeeRoom(db, me, r)) throw dbError('23503', 'Diese Nachricht gibt es nicht.')
+  if (r.archiviert) throw noRight('Der Kanal ist archiviert.')
+  if (!REACTIONS.includes(zeichen)) throw dbError('23514', 'check')
+  if (n.geloescht_at) throw bad('Auf gelöschte Nachrichten lässt sich nicht reagieren.')
+  const old = db.chat_reaktionen.find((x) => x.nachricht_id === nachrichtId && x.email === me && x.zeichen === zeichen)
+  if (old) Object.assign(old, { aktiv: aktiv !== false, updated_at: now() })
+  else db.chat_reaktionen.push({ nachricht_id: nachrichtId, email: me, zeichen, aktiv: aktiv !== false, raum_id: n.raum_id, art: n.art, created_at: now(), updated_at: now() })
+}
+
+// Suche: nur Nachrichten aus sichtbaren Räumen, ohne gelöschte, neueste zuerst
+export function chatSearch(db, me, q, limit = 50) {
+  const needle = String(q || '').trim().toLowerCase()
+  if (needle.length < 2) return []
+  return db.chat_nachrichten
+    .filter((n) => !n.geloescht_at && n.text.toLowerCase().includes(needle) && canSeeRoom(db, me, db.chat_raeume.find((r) => r.id === n.raum_id)))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .slice(0, limit)
 }
 
 export function chatEdit(db, me, id, patch) {
