@@ -1,5 +1,5 @@
-// Einstellungen (Zahnrad): Farbschema pro Gerät, Konto, Postfächer und Kalender, Terminlink, Claude verbinden, Team (nur Admins), Produkte (Sales), Demo zurücksetzen
-import { html, useState } from '../lib/preact.js'
+// Einstellungen (Zahnrad): Farbschema pro Gerät, Konto, Mitteilungen aufs Handy, Postfächer und Kalender, Terminlink, Claude verbinden, Team (nur Admins), Produkte (Sales), Demo zurücksetzen
+import { html, useState, useEffect } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { norm, fmtEuro } from '../lib/util.js'
 import { parseEuro } from './deal.js'
@@ -27,6 +27,17 @@ import {
 import { PageHead, Tile, Segmented, Field } from './common.js'
 import { MailboxTile } from './mailboxes.js'
 import { ClaudeTile } from './claude.js'
+import {
+  pushSupported,
+  isIos,
+  isStandalone,
+  refreshPushState,
+  enablePush,
+  disablePush,
+  sendTestPush,
+  pushPrefs,
+  savePushPrefs,
+} from '../push.js'
 
 const ROLES = [
   { value: 'admin', label: 'Admin' },
@@ -266,6 +277,79 @@ function TerminlinkTile() {
   <//>`
 }
 
+// Mitteilungen aufs Handy (34_chat_push.sql): je Gerät einschalten, Einstellungen für alle Geräte
+function PushTile() {
+  const p = state.push
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    refreshPushState()
+  }, [])
+  const prefs = pushPrefs()
+  const guest = isGuest()
+  const channels = state.chat.rooms.filter((r) => r.art === 'kanal' && !r.archiviert)
+  const kanaele = prefs.kanaele || []
+  const run = async (fn) => {
+    setBusy(true)
+    await fn()
+    setBusy(false)
+  }
+  const flag = (key) => prefs[key] !== false
+  let status
+  if (isDemo) status = 'Im Demo-Modus gibt es keine Mitteilungen aufs Handy. Die Einstellungen kannst du trotzdem ansehen.'
+  else if (!pushSupported()) status = 'Dieser Browser kann keine Mitteilungen empfangen.'
+  else if (isIos() && !isStandalone()) status = 'Auf dem iPhone geht das nur aus der App auf dem Home-Bildschirm: im Browser „Teilen“, „Zum Home-Bildschirm“, dann das CRM von dort öffnen und hier einschalten.'
+  else if (p.permission === 'denied') status = 'Mitteilungen sind im Browser blockiert. Erlaube sie in den Einstellungen des Browsers für diese Seite, dann hier einschalten.'
+  else status = p.here ? 'Auf diesem Gerät sind Mitteilungen an.' : 'Auf diesem Gerät sind Mitteilungen aus.'
+  const canSwitch = !isDemo && pushSupported() && !(isIos() && !isStandalone()) && p.permission !== 'denied'
+  const devices = p.devices || []
+  return html`<${Tile} title="Mitteilungen aufs Handy">
+    <p class="muted small">Neue Chat-Nachrichten als Mitteilung, auch wenn das CRM zu ist. Schalte jedes Gerät einzeln ein. Was ankommt, gilt für alle deine Geräte.</p>
+    <p class=${p.here ? 'push-status on' : 'push-status'} role="status">${status}</p>
+    ${devices.length > 0 &&
+    html`<p class="muted small">An auf: ${devices.map((d) => d.geraet || 'Gerät').join(', ')}</p>`}
+    <div class="settings-actions">
+      ${p.here
+        ? html`<button type="button" class="btn" disabled=${busy} onClick=${() => run(disablePush)}><${Icon} name="bell" size=${18} /> Auf diesem Gerät ausschalten</button>`
+        : html`<button type="button" class="btn btn-primary" disabled=${busy || !canSwitch} onClick=${() => run(enablePush)}><${Icon} name="bell" size=${18} /> Auf diesem Gerät einschalten</button>`}
+      <button type="button" class="btn" disabled=${busy || isDemo || !devices.length} onClick=${() => run(sendTestPush)}>Testmitteilung schicken</button>
+    </div>
+    ${guest
+      ? html`<p class="muted small">Du bekommst Mitteilungen, wenn dich jemand mit @ erwähnt oder im Verlauf auf deine Nachricht antwortet.</p>`
+      : html`<div class="push-prefs">
+          <${Segmented}
+            label="Vorschau"
+            value=${prefs.vorschau === 'name' ? 'name' : 'text'}
+            onChange=${(v) => savePushPrefs({ vorschau: v })}
+            options=${[
+              { value: 'text', label: 'Name und Textanfang' },
+              { value: 'name', label: 'Nur Name' },
+            ]}
+          />
+          <fieldset class="push-kinds">
+            <legend>Mitteilung bei</legend>
+            <label class="check-label"><input type="checkbox" checked=${flag('direkt')} onChange=${(e) => savePushPrefs({ direkt: e.target.checked })} /> Direktnachrichten</label>
+            <label class="check-label"><input type="checkbox" checked=${flag('gruppen')} onChange=${(e) => savePushPrefs({ gruppen: e.target.checked })} /> Gruppen</label>
+            <label class="check-label"><input type="checkbox" checked=${flag('erwaehnungen')} onChange=${(e) => savePushPrefs({ erwaehnungen: e.target.checked })} /> @Erwähnungen und Antworten im Verlauf</label>
+          </fieldset>
+          ${channels.length > 0 &&
+          html`<fieldset class="push-kinds">
+            <legend>Kanäle (nur die, die du einschaltest)</legend>
+            ${channels.map(
+              (r) => html`<label class="check-label" key=${r.id}>
+                <input
+                  type="checkbox"
+                  checked=${kanaele.includes(r.id)}
+                  onChange=${(e) => savePushPrefs({ kanaele: e.target.checked ? [...kanaele.filter((id) => id !== r.id), r.id] : kanaele.filter((id) => id !== r.id) })}
+                />
+                # ${r.name}
+              </label>`
+            )}
+          </fieldset>`}
+          <p class="muted small">Einzelne Gruppen und Direktnachrichten schaltest du im Chat oben mit der Glocke stumm.</p>
+        </div>`}
+  <//>`
+}
+
 export function SettingsPage() {
   const me = state.me || {}
   const theme = getTheme()
@@ -300,6 +384,7 @@ export function SettingsPage() {
       </div>
     <//>
 
+    ${state.chat.available && html`<${PushTile} key=${state.prefsLoaded ? 'geladen' : 'leer'} />`}
     ${!isGuest() && html`<${MailboxTile} />`}
     ${!isGuest() && html`<${TerminlinkTile} key=${state.prefsLoaded ? 'geladen' : 'leer'} />`}
     ${!isGuest() && html`<${ClaudeTile} />`}

@@ -320,6 +320,22 @@ export async function createSupabaseApi(config) {
       if (anhaenge && anhaenge.length) row.anhaenge = anhaenge
       return check(await client.from('chat_nachrichten').insert(row).select().single())
     },
+    // Mitteilungen aufs Handy (34_chat_push.sql)
+    async pushKey() {
+      return check(await client.rpc('push_schluessel'))
+    },
+    async pushDevices() {
+      return check(await client.from('push_abos').select('endpoint,geraet,created_at,zuletzt_gesendet').order('created_at'))
+    },
+    async pushSave({ endpoint, p256dh, auth, geraet }) {
+      check(await client.rpc('push_abo_speichern', { p_endpoint: endpoint, p_p256dh: p256dh, p_auth: auth, p_geraet: geraet || null }))
+    },
+    async pushRemove(endpoint) {
+      check(await client.rpc('push_abo_entfernen', { p_endpoint: endpoint }))
+    },
+    async pushTest() {
+      return check(await client.rpc('push_test_anfordern'))
+    },
     // Dateien im Chat (33_chat_dateien.sql): privater Bucket „chat“, Pfad <Raum-ID>/<Zeit>-<Name>
     async chatUpload(path, file) {
       const { error } = await client.storage.from('chat').upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false })

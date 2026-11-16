@@ -50,6 +50,8 @@ export const state = {
   // Chat (30_chat.sql, js/chat.js): available heißt, die SQL-Datei ist da. rooms aus
   // chat_uebersicht(), messages je Raum (alt nach neu), active ist der gerade offene Raum.
   // threads: Antworten je erster Nachricht, thread: gerade offener Verlauf, reactions: je Nachricht
+  // Mitteilungen aufs Handy (js/push.js): Stand dieses Geräts und Liste der eigenen Geräte
+  push: { loaded: false, permission: 'default', here: false, devices: [] },
   chat: { available: false, rooms: [], messages: new Map(), active: null, threads: new Map(), thread: null, reactions: new Map(), urls: new Map() },
   loadedAt: 0,
   toasts: [],

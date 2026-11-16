@@ -146,6 +146,20 @@ export function createDemoApi({ asGuest = false } = {}) {
       save()
       return clone(row)
     },
+    // Mitteilungen aufs Handy gibt es im Demo-Modus nicht (kein Push-Dienst, kein Schlüssel)
+    async pushKey() {
+      return null
+    },
+    async pushDevices() {
+      return []
+    },
+    async pushSave() {
+      throw dbError('meldung', 'Im Demo-Modus gibt es keine Mitteilungen aufs Handy.')
+    },
+    async pushRemove() {},
+    async pushTest() {
+      return 0
+    },
     // Dateien im Chat: Bilder als kleine Fassung im Browser, andere Dateien ohne Inhalt
     async chatUpload(path, file) {
       const data = /^image\/(jpeg|png|gif|webp)$/.test(file.type || '') ? await demoPreview(file) : null

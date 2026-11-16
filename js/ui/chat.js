@@ -43,6 +43,7 @@ import {
   MAX_CHAT_FILES,
 } from '../chat.js'
 import { REACTIONS } from '../data/chat_rules.js'
+import { roomPushOn, toggleRoomPush } from '../push.js'
 
 const me = () => norm(myEmail())
 
@@ -273,6 +274,14 @@ function RoomView({ room, mobile, focusId }) {
         <p class="muted">${sub}</p>
       </div>
       <div class="chat-room-actions">
+        ${!isGuest() &&
+        (() => {
+          const on = roomPushOn(room)
+          const label = room.art === 'kanal' ? (on ? 'Mitteilungen aus diesem Kanal ausschalten' : 'Mitteilungen aus diesem Kanal einschalten') : on ? 'Stumm schalten' : 'Stumm aufheben'
+          return html`<button type="button" class=${'icon-btn chat-bell' + (on ? ' on' : '')} aria-pressed=${on} aria-label=${label} title=${label} onClick=${() => toggleRoomPush(room)}>
+            <${Icon} name="bell" size=${18} />
+          </button>`
+        })()}
         ${room.art !== 'direkt' &&
         html`<button type="button" class="btn btn-small" onClick=${() => openDialog({ kind: 'chat-personen', raumId: room.id })} aria-label=${'Personen, ' + (room.mitglieder || []).length}>
           <${Icon} name="users" size=${16} /> ${(room.mitglieder || []).length}

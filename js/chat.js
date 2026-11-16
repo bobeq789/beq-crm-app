@@ -37,6 +37,8 @@ export async function startChat() {
   if (!unsubscribe) unsubscribe = api().chatSubscribe(onRealtime)
   if (!timer) timer = setInterval(refreshChat, 60 * 1000)
   document.addEventListener('visibilitychange', onVisible)
+  // Mitteilungen aufs Handy: angemeldetes Gerät auffrischen (34_chat_push.sql)
+  import('./push.js').then((m) => m.syncPush()).catch(() => {})
 }
 
 export function stopChat() {

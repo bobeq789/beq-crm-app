@@ -2,7 +2,9 @@
 // Hält die App-Dateien vor, damit die App schnell startet und auch bei schlechtem Netz aufgeht.
 // Fragt immer zuerst das Netz, damit Updates sofort ankommen.
 // Anfragen an Supabase (andere Adresse) laufen nie über den Cache.
-const VERSION = 'beqcrm-v29'
+// Zeigt Mitteilungen aus dem Chat an (34_chat_push.sql, Edge Function „chat-push“) und öffnet beim
+// Antippen die App an der richtigen Stelle.
+const VERSION = 'beqcrm-v30'
 const FILES = [
   './',
   'index.html',
@@ -46,6 +48,7 @@ const FILES = [
   'js/ui/tiles.js',
   'js/ui/search.js',
   'js/ui/claude.js',
+  'js/push.js',
   'vendor/htm/preact/standalone.module.js',
   'vendor/@supabase/supabase-js/supabase.js',
   'vendor/dompurify/purify.es.mjs',
@@ -90,5 +93,49 @@ self.addEventListener('fetch', (event) => {
         return res
       })
       .catch(() => caches.match(req, { ignoreSearch: true }).then((hit) => hit || caches.match('index.html')))
+  )
+})
+
+// ------------------------------------------------------------
+// Mitteilungen aufs Handy (Web Push). Der Inhalt kommt verschlüsselt, der Browser entschlüsselt
+// ihn selbst: { title, body, url, tag }. url ist ein Pfad in der App (#/chat/<Raum>).
+// ------------------------------------------------------------
+self.addEventListener('push', (event) => {
+  let data = {}
+  try {
+    data = event.data ? event.data.json() : {}
+  } catch {
+    data = {}
+  }
+  const title = String(data.title || 'beQ CRM').slice(0, 120)
+  const options = {
+    body: String(data.body || 'Neue Nachricht').slice(0, 300),
+    tag: String(data.tag || 'beq-crm'),
+    renotify: true,
+    icon: 'icons/icon-192.png',
+    badge: 'icons/icon-192.png',
+    data: { url: typeof data.url === 'string' && data.url.startsWith('#/') ? data.url : '#/chat' },
+  }
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      // Ist die App gerade im Vordergrund und zeigt genau diesen Chat, reicht die Nachricht dort
+      const here = list.find((c) => c.visibilityState === 'visible' && c.focused && new URL(c.url).hash.split('?')[0] === options.data.url.split('?')[0])
+      if (here && data.tag !== 'test') return
+      return self.registration.showNotification(title, options)
+    })
+  )
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const target = new URL('./' + ((event.notification.data && event.notification.data.url) || '#/chat'), self.registration.scope).href
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      const open = list.find((c) => c.url.startsWith(self.registration.scope))
+      if (open) {
+        return open.focus().then((c) => (c && 'navigate' in c ? c.navigate(target) : null)).catch(() => self.clients.openWindow(target))
+      }
+      return self.clients.openWindow(target)
+    })
   )
 })
