@@ -227,6 +227,11 @@ export async function createSupabaseApi(config) {
       }
       return db
     },
+    // Block aus dem alten CRM (29_altcrm.sql), nur für das Team
+    async fetchAltdaten(personId) {
+      const row = check(await client.from('kontakt_altdaten').select('inhalt').eq('person_id', personId).maybeSingle())
+      return row ? row.inhalt : ''
+    },
     async fetchRow(table, id) {
       return check(await client.from(table).select('*').eq('id', id).maybeSingle())
     },

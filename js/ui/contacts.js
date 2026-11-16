@@ -1,7 +1,7 @@
 // Kontakte: Liste mit Suche und Filter, Kontaktseite, Formular
-import { html, useState } from '../lib/preact.js'
+import { html, useState, useEffect } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
-import { matches, telHref, waHref, webHref, fmtDateTime, fmtDate, fmtTimeRange, local } from '../lib/util.js'
+import { matches, telHref, waHref, webHref, fmtDateTime, fmtDate, fmtTimeRange, local, norm } from '../lib/util.js'
 import {
   state,
   getPerson,
@@ -20,6 +20,11 @@ import {
   openDialog,
   isGuest,
   activitiesForPerson,
+  activeMembers,
+  member,
+  memberName,
+  myEmail,
+  loadAltdaten,
 } from '../store.js'
 import { navigate, openCard, openEvent } from '../router.js'
 import { EmailList, emailCount } from './emails.js'
@@ -29,14 +34,34 @@ import { PageHead, Tile, Empty, Labels, TaskRow, Notes, Field, ListInput, LabelP
 // Beim Sortieren Titel wie „Dr.“ überspringen
 const sortName = (name) => String(name || '').replace(/^(Dr\.|Prof\.)\s+/i, '')
 
+// Seitenweise anzeigen: mit dem alten CRM sind es mehrere tausend Kontakte (29_altcrm.sql)
+const PAGE = 100
+
+// Herkünfte, die häufigste zuerst
+function allSources() {
+  const count = new Map()
+  state.db.persons.forEach((p) => p.herkunft && count.set(p.herkunft, (count.get(p.herkunft) || 0) + 1))
+  return [...count.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'de')).map(([s]) => s)
+}
+
 export function ContactsList() {
   const [query, setQuery] = useState('')
   const [label, setLabel] = useState('')
+  const [source, setSource] = useState('')
+  const [scope, setScope] = useState(local.get('beqcrm-contacts-scope', 'alle'))
   const [sort, setSort] = useState(local.get('beqcrm-contacts-sort', 'name'))
+  const [limit, setLimit] = useState(PAGE)
+  const me = norm(myEmail())
+  const guest = isGuest()
   const list = state.db.persons
+    .filter((p) => guest || scope !== 'meine' || norm(p.betreuer) === me)
     .filter((p) => !label || (p.labels || []).includes(label))
+    .filter((p) => !source || p.herkunft === source)
     .filter((p) => matches(query, p.name, (getOrg(p.org_id) || {}).name, p.emails, p.phones, p.position))
     .sort((a, b) => (sort === 'name' ? sortName(a.name).localeCompare(sortName(b.name), 'de') : String(b.updated_at).localeCompare(String(a.updated_at))))
+  // Neue Suche oder neuer Filter: wieder ab der ersten Seite
+  useEffect(() => setLimit(PAGE), [query, label, source, scope, sort])
+  const sources = allSources()
 
   return html`<div class="page">
     <${PageHead}
@@ -49,10 +74,28 @@ export function ContactsList() {
         <${Icon} name="search" size=${18} />
         <input type="search" value=${query} placeholder="Suchen: Name, Firma, E-Mail, Telefon" aria-label="Kontakte durchsuchen" onInput=${(e) => setQuery(e.target.value)} />
       </label>
+      ${!guest &&
+      html`<${Segmented}
+        label="Betreuer"
+        value=${scope}
+        onChange=${(v) => {
+          setScope(v)
+          local.set('beqcrm-contacts-scope', v)
+        }}
+        options=${[
+          { value: 'meine', label: 'Meine' },
+          { value: 'alle', label: 'Alle' },
+        ]}
+      />`}
       <select value=${label} aria-label="Label" onChange=${(e) => setLabel(e.target.value)}>
         <option value="">Alle Labels</option>
         ${allLabels().map((l) => html`<option value=${l}>${l}</option>`)}
       </select>
+      ${sources.length > 0 &&
+      html`<select value=${source} aria-label="Herkunft" onChange=${(e) => setSource(e.target.value)}>
+        <option value="">Alle Herkünfte</option>
+        ${sources.map((s) => html`<option value=${s}>${s}</option>`)}
+      </select>`}
       <${Segmented}
         label="Sortierung"
         value=${sort}
@@ -66,10 +109,10 @@ export function ContactsList() {
         ]}
       />
     </div>
-    <p class="muted small list-count">${list.length} ${list.length === 1 ? 'Kontakt' : 'Kontakte'}</p>
+    <p class="muted small list-count">${list.length.toLocaleString('de-DE')} ${list.length === 1 ? 'Kontakt' : 'Kontakte'}</p>
     ${list.length
       ? html`<ul class="row-list">
-          ${list.map((p) => {
+          ${list.slice(0, limit).map((p) => {
             const org = getOrg(p.org_id)
             // Hörer neben der Zeile, nicht darin (kein Link im Link, Nachtrag „Anrufen“)
             return html`<li key=${p.id} class="row-with-call">
@@ -87,9 +130,57 @@ export function ContactsList() {
               <${CallLink} name=${p.name} phones=${p.phones} />
             </li>`
           })}
-        </ul>`
-      : html`<${Empty}>${query || label ? 'Keine Kontakte gefunden.' : 'Noch keine Kontakte.'}<//>`}
+        </ul>
+        ${list.length > limit &&
+        html`<button type="button" class="link-btn list-more" onClick=${() => setLimit(limit + PAGE)}>
+          Weitere ${Math.min(PAGE, list.length - limit)} anzeigen (noch ${(list.length - limit).toLocaleString('de-DE')})
+        </button>`}`
+      : html`<${Empty}>${query || label || source ? 'Keine Kontakte gefunden.' : scope === 'meine' && !guest ? 'Du betreust noch keine Kontakte. Unter „Alle“ siehst du alle.' : 'Noch keine Kontakte.'}<//>`}
   </div>`
+}
+
+// Betreuer des Kontakts (29_altcrm.sql): wer im Team ihn betreut. Gäste sehen nur den Namen.
+function BetreuerField({ person }) {
+  const current = norm(person.betreuer)
+  if (isGuest()) return current ? html`<p class="muted small betreuer-line">Betreut von ${memberName(current)}</p>` : null
+  const team = activeMembers()
+  const known = !current || team.some((t) => norm(t.email) === current)
+  return html`<label class="betreuer-line">
+    <span class="muted small">Betreut von</span>
+    <select
+      value=${current}
+      aria-label="Betreuer"
+      onChange=${(e) => update('persons', person.id, { betreuer: e.target.value || null })}
+    >
+      <option value="">[niemand]</option>
+      ${!known && html`<option value=${current}>${memberName(current) || current} (nicht mehr im Team)</option>`}
+      ${team.map((t) => html`<option value=${norm(t.email)}>${norm(t.email) === norm(myEmail()) ? t.name + ' (ich)' : t.name}</option>`)}
+    </select>
+  </label>`
+}
+
+// Block aus dem alten CRM: erst beim Aufklappen laden (lange Texte, 29_altcrm.sql). Als Text,
+// nie als HTML.
+function OldCrmData({ person }) {
+  // undefined: noch nicht geladen, '' : gibt es nicht, null: Fehler
+  const [text, setText] = useState(undefined)
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    let current = true
+    setText(undefined)
+    setOpen(false)
+    if (!isGuest()) loadAltdaten(person.id).then((t) => current && setText(t))
+    return () => {
+      current = false
+    }
+  }, [person.id])
+  if (isGuest() || !text) return null
+  return html`<${Tile} title="Aus dem alten CRM">
+    <button type="button" class="link-btn" aria-expanded=${open} onClick=${() => setOpen(!open)}>
+      ${open ? 'Ausblenden' : 'Anzeigen'}
+    </button>
+    ${open && html`<div class="old-crm">${text}</div>`}
+  <//>`
 }
 
 // Nächste und letzte Termine mit diesem Kontakt
@@ -155,7 +246,9 @@ export function ContactDetail({ id }) {
     <div class="detail-meta">
       ${p.position && html`<span>${p.position}</span>`}
       ${org && html`<a class="meta-item" href=${'#/firmen/' + org.id}><${Icon} name="orgs" size=${16} /> ${org.name}</a>`}
+      ${p.herkunft && html`<span class="meta-item">Herkunft: ${p.herkunft}</span>`}
     </div>
+    <${BetreuerField} person=${p} />
     <div class="detail-labels">
       ${isGuest()
         ? html`<${Labels} labels=${p.labels} />`
@@ -193,6 +286,7 @@ export function ContactDetail({ id }) {
           ${!(p.phones || []).length && !(p.emails || []).length && !p.linkedin_url && html`<${Empty}>Noch keine Kontaktdaten.<//>`}
         <//>
         <${EventsOfPerson} personId=${p.id} />
+        <${OldCrmData} person=${p} />
         <${Tile} title="Meetings" count=${meetings.length}>
           ${meetings.length
             ? html`<ul class="meeting-mini">${meetings.map((m) => html`<li key=${m.id}><a href=${'#/meetings/' + m.id}><span class="mm-title">${m.title}</span><span class="mm-meta">${fmtDateTime(m.held_at)}</span></a></li>`)}</ul>`
@@ -214,6 +308,9 @@ export function ContactForm({ id }) {
     phones: existing ? [...(existing.phones || [])] : [''],
     linkedin_url: existing ? existing.linkedin_url || '' : '',
     labels: existing ? [...(existing.labels || [])] : [],
+    // Neuer Kontakt: betreut von der Person, die ihn anlegt
+    betreuer: existing ? existing.betreuer || '' : isGuest() ? '' : norm(myEmail()),
+    herkunft: existing ? existing.herkunft || '' : '',
   }))
   const [saving, setSaving] = useState(false)
   const set = (patch) => setForm({ ...form, ...patch })
@@ -231,6 +328,7 @@ export function ContactForm({ id }) {
       phones: form.phones.map((x) => x.trim()).filter(Boolean),
       linkedin_url: form.linkedin_url.trim() || null,
       labels: form.labels,
+      ...(isGuest() ? {} : { betreuer: form.betreuer || null, herkunft: form.herkunft.trim() || null }),
     }
     const saved = existing ? await update('persons', existing.id, row) : await insert('persons', row)
     setSaving(false)
@@ -267,6 +365,19 @@ export function ContactForm({ id }) {
       <${Field} label="Labels">
         <${LabelPicker} value=${form.labels} inputId="person-label" onChange=${(labels) => set({ labels })} />
       <//>
+      ${!isGuest() &&
+      html`<div class="field-grid">
+        <${Field} label="Betreut von" htmlFor="p-betreuer">
+          <select id="p-betreuer" value=${form.betreuer} onChange=${(e) => set({ betreuer: e.target.value })}>
+            <option value="">[niemand]</option>
+            ${form.betreuer && !activeMembers().some((t) => norm(t.email) === form.betreuer) && html`<option value=${form.betreuer}>${memberName(form.betreuer)} (nicht mehr im Team)</option>`}
+            ${activeMembers().map((t) => html`<option value=${norm(t.email)}>${t.name}</option>`)}
+          </select>
+        <//>
+        <${Field} label="Herkunft" htmlFor="p-herkunft">
+          <input id="p-herkunft" value=${form.herkunft} placeholder="zum Beispiel Messe, Empfehlung" onInput=${(e) => set({ herkunft: e.target.value })} />
+        <//>
+      </div>`}
       <div class="form-actions">
         <a class="btn" href=${back}>Abbrechen</a>
         <button type="submit" class="btn btn-primary" disabled=${!form.name.trim() || saving}>${existing ? 'Speichern' : 'Kontakt anlegen'}</button>

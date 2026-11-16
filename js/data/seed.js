@@ -120,9 +120,19 @@ export function buildSeed() {
       linkedin_url: i % 3 === 0 ? `https://www.linkedin.com/in/${local.replace('.', '-')}-example` : null,
       labels,
       external_id: null,
+      // Felder aus 29_altcrm.sql: Betreuer, Herkunft und (bei zwei Kontakten) ein erfundener Block aus dem alten CRM
+      betreuer: i % 4 === 3 ? null : i % 2 === 0 ? A : J,
+      herkunft: ['Messe Musterstadt 2026', 'Empfehlung', 'Webinar Herbst 2025'][i % 3],
       created_at: daysAgo(35 - i),
       updated_at: daysAgo(14 - i),
     })
+    // Zwei Kontakte mit einem erfundenen Block aus dem alten CRM (kontakt_altdaten)
+    if (i < 2) {
+      db.kontakt_altdaten.push({
+        person_id: id,
+        inhalt: `── Aus dem alten CRM übernommen ──\nKunden-ID: ${1001 + i}\nAngelegt am: 0${i + 1}.02.2025\nBetreuer (alt): ${i % 2 === 0 ? 'Anna Berger' : 'Jonas Keller'}\nLetzte Aktivität: 12.09.2025`,
+      })
+    }
   })
 
   // Meetings

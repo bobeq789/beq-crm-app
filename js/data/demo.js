@@ -130,6 +130,12 @@ export function createDemoApi({ asGuest = false } = {}) {
     },
 
     // Ganzer Datensatz (im Demo-Modus ist ohnehin alles da)
+    // Block aus dem alten CRM wie kontakt_altdaten (29_altcrm.sql): Gäste nie
+    async fetchAltdaten(personId) {
+      if (asGuest) return ''
+      const row = (db.kontakt_altdaten || []).find((r) => r.person_id === personId)
+      return row ? row.inhalt : ''
+    },
     async fetchRow(table, id) {
       const row = find(table, id)
       return row ? clone(row) : null

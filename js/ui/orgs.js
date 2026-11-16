@@ -1,5 +1,5 @@
 // Firmen: Liste mit Suche und Filtern, Firmenseite, Formular
-import { html, useState } from '../lib/preact.js'
+import { html, useState, useEffect } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { SETTINGS } from '../settings.js'
 import { matches, webHref, webLabel, mapsHref, fmtDateTime } from '../lib/util.js'
@@ -29,6 +29,9 @@ export function OrgsList() {
   const [query, setQuery] = useState('')
   const [industry, setIndustry] = useState('')
   const [label, setLabel] = useState('')
+  // Seitenweise anzeigen (mit dem alten CRM tausende Firmen)
+  const [limit, setLimit] = useState(100)
+  useEffect(() => setLimit(100), [query, industry, label])
   const list = state.db.organizations
     .filter((o) => !industry || o.industry === industry)
     .filter((o) => !label || (o.labels || []).includes(label))
@@ -55,10 +58,10 @@ export function OrgsList() {
         ${allLabels().map((l) => html`<option value=${l}>${l}</option>`)}
       </select>
     </div>
-    <p class="muted small list-count">${list.length} ${list.length === 1 ? 'Firma' : 'Firmen'}</p>
+    <p class="muted small list-count">${list.length.toLocaleString('de-DE')} ${list.length === 1 ? 'Firma' : 'Firmen'}</p>
     ${list.length
       ? html`<ul class="row-list">
-          ${list.map((o) => {
+          ${list.slice(0, limit).map((o) => {
             const people = personsOfOrg(o.id).length
             return html`<li key=${o.id}>
               <a class="row-link" href=${'#/firmen/' + o.id}>
@@ -74,7 +77,11 @@ export function OrgsList() {
               </a>
             </li>`
           })}
-        </ul>`
+        </ul>
+        ${list.length > limit &&
+        html`<button type="button" class="link-btn list-more" onClick=${() => setLimit(limit + 100)}>
+          Weitere ${Math.min(100, list.length - limit)} anzeigen (noch ${(list.length - limit).toLocaleString('de-DE')})
+        </button>`}`
       : html`<${Empty}>${query || industry || label ? 'Keine Firmen gefunden.' : 'Noch keine Firmen.'}<//>`}
   </div>`
 }

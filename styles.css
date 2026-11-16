@@ -1364,3 +1364,12 @@ body.search-sheet-open .topbar { z-index: 70; }
 }
 .spur-notice > .icon { color: var(--accent-text); flex: none; }
 .spur-notice-text { flex: 1 1 auto; overflow-wrap: anywhere; }
+
+/* Kachel „Team“: Liste aufklappen */
+.more-toggle { margin-top: 8px; }
+
+/* Kontakte aus dem alten CRM (29_altcrm.sql) */
+.betreuer-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
+.betreuer-line select { width: auto; min-width: 180px; max-width: 100%; }
+.old-crm { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; color: var(--muted); margin-top: 8px; max-height: 420px; overflow-y: auto; }
+.list-more { margin-top: 12px; }

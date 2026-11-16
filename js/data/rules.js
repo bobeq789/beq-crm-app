@@ -27,7 +27,7 @@ export const EXTRA_TABLES = ['card_events', 'card_seen']
 export const OPTIONAL_TABLES = ['project_shares', 'products', 'deals', 'deal_items', 'mailboxes', 'aktivitaeten']
 
 // Nur im Demo-Modus: Dateien an Aufgaben (in Supabase liegen sie im Storage, nicht in einer Tabelle)
-export const DEMO_TABLES = ['files', 'nachfass_aus', 'nutzer_gesehen', 'nutzer_einstellungen', 'mail_spuren']
+export const DEMO_TABLES = ['files', 'nachfass_aus', 'nutzer_gesehen', 'nutzer_einstellungen', 'mail_spuren', 'kontakt_altdaten']
 
 const WITH_UPDATED_AT = new Set(['projects', 'organizations', 'persons', 'meetings', 'cards', 'notes', 'events', 'products', 'deals', 'aktivitaeten'])
 const WITH_CREATED_AT = new Set(['team_members', 'projects', 'stages', 'organizations', 'persons', 'meetings', 'cards', 'card_shares', 'project_shares', 'notes', 'emails', 'products', 'deals', 'deal_items', 'aktivitaeten'])
@@ -37,7 +37,7 @@ const DEFAULTS = {
   projects: { color: '#37BA98', sort: 0, archived: false },
   stages: { sort: 0, probability: null },
   organizations: { website: null, domain: null, address: null, industry: null, labels: [], external_id: null },
-  persons: { org_id: null, position: null, emails: [], phones: [], linkedin_url: null, labels: [], external_id: null },
+  persons: { org_id: null, position: null, emails: [], phones: [], linkedin_url: null, labels: [], external_id: null, betreuer: null, herkunft: null },
   meetings: {
     duration_min: null,
     project_id: null,
@@ -287,6 +287,7 @@ export function cascadeDelete(db, table, id) {
     if (db.project_shares) drop('project_shares', 'project_id')
     unset('meetings', 'project_id')
   }
+  if (table === 'persons' && db.kontakt_altdaten) drop('kontakt_altdaten', 'person_id')
   if (table === 'cards') {
     drop('notes', 'card_id')
     drop('card_shares', 'card_id')

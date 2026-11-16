@@ -701,6 +701,21 @@ export async function ensureFull(table, id) {
 }
 export const searchMeetingSummaries = (q) => api.searchMeetingSummaries(q)
 
+// Block aus dem alten CRM zu einem Kontakt (29_altcrm.sql, nur Team, nie Gäste), erst beim
+// Aufklappen geladen. Liefert den Text, '' wenn es keinen gibt, null bei Fehler.
+const altdatenCache = new Map()
+export async function loadAltdaten(personId) {
+  if (altdatenCache.has(personId)) return altdatenCache.get(personId)
+  try {
+    const text = (await api.fetchAltdaten(personId)) || ''
+    altdatenCache.set(personId, text)
+    return text
+  } catch (err) {
+    toast(errorText(err), { error: true })
+    return null
+  }
+}
+
 // ------------------------------------------------------------
 // Postfächer und Kalender (10_postfaecher.sql)
 // ------------------------------------------------------------
@@ -959,7 +974,19 @@ export async function remove(table, id) {
 // ------------------------------------------------------------
 // Abfragen
 // ------------------------------------------------------------
-const byId = (table, id) => (id ? state.db[table].find((x) => x.id === id) : null)
+// Nachschlagen über ein Verzeichnis je Liste statt Suchen in der ganzen Liste (mit dem alten CRM
+// tausende Kontakte und Firmen). Jede Änderung legt eine neue Liste an (siehe replaceRow, insert),
+// dann entsteht das Verzeichnis beim nächsten Zugriff neu. Listen nie an Ort und Stelle ändern.
+const indexCache = new WeakMap()
+function indexOf(list, build) {
+  let idx = indexCache.get(list)
+  if (!idx) {
+    idx = build(list)
+    indexCache.set(list, idx)
+  }
+  return idx
+}
+const byId = (table, id) => (id ? indexOf(state.db[table], (list) => new Map(list.map((x) => [x.id, x]))).get(id) || null : null)
 export const getProject = (id) => byId('projects', id)
 export const getStage = (id) => byId('stages', id)
 export const getPerson = (id) => byId('persons', id)
@@ -1010,13 +1037,29 @@ export function defaultProjectId() {
 export function notesFor(field, id) {
   return state.db.notes.filter((n) => n[field] === id).sort((a, b) => b.created_at.localeCompare(a.created_at))
 }
+const personsByOrg = (list) => {
+  const m = new Map()
+  list.forEach((p) => p.org_id && m.set(p.org_id, [...(m.get(p.org_id) || []), p]))
+  return m
+}
+const personsByEmail = (list) => {
+  const m = new Map()
+  list.forEach((p) => (p.emails || []).forEach((x) => !m.has(norm(x)) && m.set(norm(x), p)))
+  return m
+}
+const personsByOrgIndex = new WeakMap()
+const personsByEmailIndex = new WeakMap()
 export function personsOfOrg(orgId) {
-  return state.db.persons.filter((p) => p.org_id === orgId).sort((a, b) => a.name.localeCompare(b.name, 'de'))
+  let idx = personsByOrgIndex.get(state.db.persons)
+  if (!idx) personsByOrgIndex.set(state.db.persons, (idx = personsByOrg(state.db.persons)))
+  return [...(idx.get(orgId) || [])].sort((a, b) => a.name.localeCompare(b.name, 'de'))
 }
 export function personByEmail(email) {
   const e = norm(email)
   if (!e) return null
-  return state.db.persons.find((p) => (p.emails || []).some((x) => norm(x) === e)) || null
+  let idx = personsByEmailIndex.get(state.db.persons)
+  if (!idx) personsByEmailIndex.set(state.db.persons, (idx = personsByEmail(state.db.persons)))
+  return idx.get(e) || null
 }
 export function meetingPersons(meetingId) {
   const ids = new Set(state.db.meeting_persons.filter((m) => m.meeting_id === meetingId).map((m) => m.person_id))

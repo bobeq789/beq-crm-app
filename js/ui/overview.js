@@ -227,6 +227,18 @@ function FollowUpTile({ groups, drag }) {
   <//>`
 }
 
+// Liste mit den ersten 8 Einträgen, darunter „Alle n anzeigen“ bzw. „Weniger anzeigen“
+const MORE_LIMIT = 8
+function MoreList({ items, render }) {
+  const [all, setAll] = useState(false)
+  const shown = all ? items : items.slice(0, MORE_LIMIT)
+  return html`<ul class="task-list">${shown.map(render)}</ul>
+    ${items.length > MORE_LIMIT &&
+    html`<button type="button" class="link-btn more-toggle" aria-expanded=${all} onClick=${() => setAll(!all)}>
+      ${all ? 'Weniger anzeigen' : `Alle ${items.length} anzeigen`}
+    </button>`}`
+}
+
 // Kachel „Team“: was Kollegen geändert haben und was bei anderen liegt
 function TeamTile({ drag }) {
   const me = norm(myEmail())
@@ -236,7 +248,6 @@ function TeamTile({ drag }) {
   const fresh = open
     .filter((c) => isNew(c.id))
     .sort((a, b) => Number(isMentioned(b.id)) - Number(isMentioned(a.id)) || lastChange(b).localeCompare(lastChange(a)))
-    .slice(0, 8)
   // Liegt bei anderen: jemand anderes ist zuständig, und ich habe sie angelegt oder weitergegeben.
   // „seit“: letzte Zuweisung an die zuständige Person, sonst das Anlegen.
   const elsewhere = open
@@ -250,19 +261,18 @@ function TeamTile({ drag }) {
       return { card: c, since: h && norm(h.assignee || '') === norm(c.assignee) ? h.at : c.created_at }
     })
     .sort((a, b) => String(a.since).localeCompare(String(b.since)))
+  // Die Zahl zählt immer alle, sichtbar sind zuerst 8, „Alle n anzeigen“ klappt den Rest auf
   return html`<${Tile} title="Team" drag=${drag}>
     <div class="task-group">
       <h3 class="group-title">Neu seit deinem letzten Blick ${fresh.length > 0 && html`<span class="count">${fresh.length}</span>`}</h3>
       ${fresh.length
-        ? html`<ul class="task-list">${fresh.map((c) => html`<${TaskRow} card=${c} key=${c.id} />`)}</ul>`
+        ? html`<${MoreList} items=${fresh} render=${(c) => html`<${TaskRow} card=${c} key=${c.id} />`} />`
         : html`<${Empty}>Keine Änderungen von anderen.<//>`}
     </div>
     <div class="task-group">
       <h3 class="group-title">Liegt bei anderen ${elsewhere.length > 0 && html`<span class="count">${elsewhere.length}</span>`}</h3>
       ${elsewhere.length
-        ? html`<ul class="task-list">
-            ${elsewhere.slice(0, 8).map((x) => html`<${TaskRow} card=${x.card} key=${x.card.id} showSince=${true} sinceText=${sinceLabel(x.since)} />`)}
-          </ul>`
+        ? html`<${MoreList} items=${elsewhere} render=${(x) => html`<${TaskRow} card=${x.card} key=${x.card.id} showSince=${true} sinceText=${sinceLabel(x.since)} />`} />`
         : html`<${Empty}>Gerade liegt nichts bei anderen.<//>`}
     </div>
   <//>`
