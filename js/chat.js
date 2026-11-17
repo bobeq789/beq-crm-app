@@ -329,8 +329,9 @@ async function loadReactions(ids) {
     // Ohne Reaktionen geht der Chat trotzdem
   }
 }
+// Auch für Nachrichten, die erst in dieser Sitzung dazukamen (eigene oder live angekommene),
+// sonst erscheint die Reaktion erst nach dem Neuladen
 function applyReaction(row) {
-  if (!state.chat.reactions.has(row.nachricht_id)) return
   const list = reactionsOf(row.nachricht_id).filter((x) => !(x.email === row.email && x.zeichen === row.zeichen))
   if (row.aktiv) list.push({ email: row.email, zeichen: row.zeichen })
   const reactions = new Map(state.chat.reactions)
