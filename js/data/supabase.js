@@ -533,6 +533,15 @@ export async function createSupabaseApi(config) {
     async disconnectMailbox(id, deleteData) {
       check(await client.rpc('disconnect_mailbox', { target: id, delete_data: !!deleteData }))
     },
+    // Weitere Kalender je Postfach (35_weitere_kalender.sql). Fehlt die Tabelle noch: leere Liste.
+    async mailboxCalendars() {
+      const { data, error } = await client.from('postfach_kalender').select('id,mailbox_id,google_id,name,zugriff,primaer,aktiv').order('name')
+      if (error) return []
+      return data || []
+    },
+    async setMailboxCalendar(id, aktiv) {
+      check(await client.rpc('postfach_kalender_schalten', { p_id: id, p_aktiv: !!aktiv }))
+    },
 
     // Besitzer des Deals an einer Aufgabe, ohne Werte (08_sales.sql)
     async cardDealOwner(cardId) {

@@ -1545,3 +1545,12 @@ body.search-sheet-open .topbar { z-index: 70; }
 .push-kinds legend { font-size: 13px; font-weight: 500; color: var(--muted); margin-bottom: 6px; padding: 0; }
 .push-kinds .check-label { display: flex; justify-content: flex-start; gap: 10px; min-height: 40px; white-space: normal; overflow-wrap: anywhere; font-size: 15px; }
 .push-kinds .check-label input { width: 18px; height: 18px; min-height: 0; margin: 0; padding: 0; flex: none; }
+
+/* Weitere Kalender je Postfach (35_weitere_kalender.sql) */
+.mailbox-calendars { grid-column: 1 / -1; }
+.mailbox-calendars .history-toggle { font-size: 14px; padding: 4px 0; min-height: 36px; }
+.mailbox-calendar-list { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: 2px; }
+.mailbox-calendar-list .check-label { display: flex; gap: 10px; min-height: 40px; white-space: normal; overflow-wrap: anywhere; font-size: 15px; }
+.mailbox-calendar-list .check-label input { width: 18px; height: 18px; min-height: 0; margin: 0; padding: 0; flex: none; }
+.mailbox-calendar-list .muted { margin-left: auto; flex: none; }
+.mailbox-calendar-list li { display: block; border: 0; padding: 0; min-height: 0; }

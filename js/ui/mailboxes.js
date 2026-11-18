@@ -1,11 +1,12 @@
 // Einstellungen: Postfächer und Kalender (10_postfaecher.sql, Edge Function „google-verbinden“).
 // Jede Person verbindet ihre beQ-Postfächer selbst über Google, auch mehrere.
+// Je Postfach lassen sich weitere Kalender des Google-Kontos dazunehmen (35_weitere_kalender.sql).
 // Google schickt danach zurück nach #/einstellungen?postfach=ok|fehler&…, diese Seite meldet das Ergebnis.
 import { html, useEffect } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { fmtRelative, norm } from '../lib/util.js'
 import { useRoute } from '../router.js'
-import { state, isSuperAdmin, myEmail, memberName, update, toast, confirmDialog, connectMailbox, disconnectMailbox, mailboxDataCounts, syncNow } from '../store.js'
+import { state, isSuperAdmin, myEmail, memberName, update, toast, confirmDialog, connectMailbox, disconnectMailbox, mailboxDataCounts, syncNow, loadMailboxCalendars, toggleMailboxCalendar } from '../store.js'
 import { useState } from '../lib/preact.js'
 import { Tile } from './common.js'
 
@@ -107,7 +108,44 @@ function MailboxRow({ box }) {
       ${mine && box.status === 'fehler' && html`<button type="button" class="btn btn-small" onClick=${connectMailbox}>Neu verbinden</button>`}
       ${canManage && html`<button type="button" class="btn btn-small" onClick=${() => askDisconnect(box)}>Trennen</button>`}
     </span>
+    ${mine && active && box.sync_calendar && html`<${MoreCalendars} box=${box} />`}
   </li>`
+}
+
+// Weitere Kalender dieses Google-Kontos: aufklappen, einzeln ankreuzen
+function MoreCalendars({ box }) {
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(null)
+  const all = (state.mailboxCalendars || []).filter((k) => k.mailbox_id === box.id && !k.primaer)
+  const on = all.filter((k) => k.aktiv).length
+  const id = 'kalender-' + box.id
+  const toggle = async (k, value) => {
+    setBusy(k.id)
+    await toggleMailboxCalendar(k, value)
+    setBusy(null)
+  }
+  return html`<div class="mailbox-calendars">
+    <button type="button" class="history-toggle" aria-expanded=${open} aria-controls=${id} onClick=${() => setOpen(!open)}>
+      <${Icon} name="chevron" size=${16} /> Weitere Kalender${on ? ` (${on} an)` : ''}
+    </button>
+    ${open &&
+    html`<div id=${id}>
+      ${all.length
+        ? html`<ul class="mailbox-calendar-list">
+            ${all.map(
+              (k) => html`<li key=${k.id}>
+                <label class="check-label">
+                  <input type="checkbox" checked=${k.aktiv} disabled=${busy === k.id} onChange=${(e) => toggle(k, e.target.checked)} />
+                  <span>${k.name || '[ohne Namen]'}</span>
+                  ${k.zugriff === 'reader' && html`<span class="muted small">nur lesen</span>`}
+                </label>
+              </li>`
+            )}
+          </ul>`
+        : html`<p class="muted small">Noch keine weiteren Kalender bekannt. „Jetzt abgleichen“ holt die Liste aus Google.</p>`}
+      <p class="muted small">Angekreuzte Kalender kommen mit ihren Terminen ins CRM, wie dein Hauptkalender. Sehen können sie auch dein Teamlead und der Super-Admin. Ausschalten nimmt die Termine wieder heraus, in Google bleibt alles.</p>
+    </div>`}
+  </div>`
 }
 
 function SyncButton() {
@@ -119,6 +157,7 @@ function SyncButton() {
     onClick=${async () => {
       setBusy(true)
       await syncNow()
+      await loadMailboxCalendars()
       setBusy(false)
     }}
   >
@@ -128,6 +167,9 @@ function SyncButton() {
 
 export function MailboxTile() {
   useConnectResult()
+  useEffect(() => {
+    loadMailboxCalendars()
+  }, [])
   const me = norm(myEmail())
   // Fremde Postfächer sieht nur der Super-Admin (26_super_admin.sql, in Supabase regelt das die Datenbank)
   const list = (state.db.mailboxes || [])

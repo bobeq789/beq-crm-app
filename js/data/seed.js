@@ -624,6 +624,13 @@ export function buildSeed() {
     mailbox(J, J),
     mailbox('vertrieb@example.com', J, { sync_calendar: false, status: 'fehler', last_sync_at: daysAgo(3), last_error: 'Zugang widerrufen' }),
   ]
+  // Weitere Kalender in Annas Google-Konto (35_weitere_kalender.sql), erfunden, keiner eingeschaltet
+  const annaBox = db.mailboxes.find((b) => b.address === A)
+  db.postfach_kalender = [
+    { google_id: A, name: A, zugriff: 'owner', primaer: true, aktiv: true },
+    { google_id: 'team-vertrieb@group.calendar.example.com', name: 'Team Vertrieb', zugriff: 'writer', primaer: false, aktiv: false },
+    { google_id: 'de.german#holiday@group.v.calendar.example.com', name: 'Feiertage in Deutschland', zugriff: 'reader', primaer: false, aktiv: false },
+  ].map((k) => ({ id: uid(), mailbox_id: annaBox.id, created_at: created, updated_at: created, ...k }))
 
   seedChat(db)
   return db

@@ -47,6 +47,8 @@ export const state = {
   // Persönliche Einstellungen auf allen Geräten (21_nutzer_einstellungen.sql): terminlink,
   // terminsatz, terminlinks je Postfach, kacheln (Anordnung der Übersicht)
   prefs: {},
+  // Weitere Kalender je Postfach (35_weitere_kalender.sql), geladen in den Einstellungen
+  mailboxCalendars: [],
   // Chat (30_chat.sql, js/chat.js): available heißt, die SQL-Datei ist da. rooms aus
   // chat_uebersicht(), messages je Raum (alt nach neu), active ist der gerade offene Raum.
   // threads: Antworten je erster Nachricht, thread: gerade offener Verlauf, reactions: je Nachricht
@@ -853,6 +855,37 @@ export async function openMailAttachment(mail, attachment) {
   }
 }
 
+// Weitere Kalender je Postfach (35_weitere_kalender.sql): Liste laden, einzeln ein- oder ausschalten
+export async function loadMailboxCalendars() {
+  try {
+    state.mailboxCalendars = (await api.mailboxCalendars()) || []
+  } catch {
+    state.mailboxCalendars = []
+  }
+  emit()
+}
+export async function toggleMailboxCalendar(cal, on) {
+  const before = state.mailboxCalendars
+  state.mailboxCalendars = before.map((k) => (k.id === cal.id ? { ...k, aktiv: on } : k))
+  emit()
+  try {
+    await api.setMailboxCalendar(cal.id, on)
+  } catch (err) {
+    state.mailboxCalendars = before
+    emit()
+    toast('Der Kalender ließ sich nicht umschalten. ' + errorText(err), { error: true })
+    return false
+  }
+  if (on) {
+    toast(`„${cal.name}“ kommt jetzt ins CRM.`)
+    await syncNow()
+  } else {
+    toast(`Termine aus „${cal.name}“ sind aus dem CRM genommen. In Google bleibt alles.`)
+    await reload()
+  }
+  return true
+}
+
 // Eigene Postfächer sofort abgleichen
 export async function syncNow() {
   try {
@@ -877,7 +910,7 @@ export function mailboxDataCounts(address) {
   const a = norm(address)
   return {
     mails: state.db.emails.filter((m) => norm(m.mailbox) === a).length,
-    events: state.db.events.filter((e) => norm(e.calendar_id) === a).length,
+    events: state.db.events.filter((e) => eventMailbox(e) === a).length,
   }
 }
 
@@ -1155,9 +1188,11 @@ export function calendars() {
   })
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'de'))
 }
+// Postfach eines Termins: bei weiteren Kalendern steht die Kennung als „<Postfach>#<Kalender>“
+export const eventMailbox = (ev) => norm(String(ev.calendar_id || '').split('#')[0])
 export function isMyEvent(ev) {
   const me = norm(myEmail())
-  return norm(ev.calendar_id) === me || (ev.attendees || []).some((a) => norm(a) === me)
+  return eventMailbox(ev) === me || (ev.attendees || []).some((a) => norm(a) === me)
 }
 export function eventsOfPerson(personId) {
   const person = getPerson(personId)

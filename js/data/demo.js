@@ -566,6 +566,34 @@ export function createDemoApi({ asGuest = false } = {}) {
     async mailAttachmentLink() {
       throw dbError('demo', 'Im Demo-Modus haben Anhänge keinen Inhalt.')
     },
+    // Weitere Kalender je Postfach wie 35_weitere_kalender.sql: nur eigene, Hauptkalender fest
+    async mailboxCalendars() {
+      const own = new Set(db.mailboxes.filter((b) => b.owner === me).map((b) => b.id))
+      return clone((db.postfach_kalender || []).filter((k) => own.has(k.mailbox_id)))
+    },
+    async setMailboxCalendar(id, aktiv) {
+      const k = (db.postfach_kalender || []).find((x) => x.id === id)
+      const box = k && db.mailboxes.find((b) => b.id === k.mailbox_id)
+      if (!k || !box || box.owner !== me || k.primaer) throw notAllowed()
+      k.aktiv = !!aktiv
+      const calId = box.address + '#' + k.google_id
+      db.events = db.events.filter((e) => e.calendar_id !== calId)
+      if (aktiv) {
+        // Im Demo-Modus bringt ein eingeschalteter Kalender zwei erfundene Termine mit
+        const owner = db.team_members.find((t) => t.email === box.owner)
+        const name = `${k.name} (${owner ? owner.name : box.address})`
+        const day = (n, h) => {
+          const d = new Date()
+          d.setDate(d.getDate() + n)
+          d.setHours(h, 0, 0, 0)
+          return d.toISOString()
+        }
+        ;[[1, 9, 'Teamrunde'], [3, 14, 'Abstimmung Woche']].forEach(([n, h, title]) =>
+          db.events.push({ id: crypto.randomUUID(), calendar_id: calId, calendar_name: name, calendar_color: '#27836B', event_id: 'demo-' + crypto.randomUUID(), ical_uid: null, title, start_at: day(n, h), end_at: day(n, h + 1), all_day: false, location: null, meet_url: null, html_link: null, organizer: box.address, attendees: [box.address], description: null, status: 'confirmed', details: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        )
+      }
+      save()
+    },
     async syncNow() {
       const own = db.mailboxes.filter((b) => b.owner === me && b.status === 'aktiv')
       return { ok: true, postfaecher: own.length, ergebnis: own.map((b) => ({ adresse: b.address, termine: 0, mails: 0, mails_fertig: true, fehler: null })) }

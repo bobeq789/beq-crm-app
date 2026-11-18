@@ -367,7 +367,7 @@ export function CalendarPage() {
                 html`<div class="cal-toggles-inline">
                   ${cals.map(
                     (c) => html`<button type="button" class=${'cal-toggle' + (hidden.has(c.id) ? ' off' : '')} aria-pressed=${!hidden.has(c.id)} onClick=${() => toggleCal(c.id)}>
-                      <${Dot} color=${c.color} /> ${firstName(c.name)}
+                      <${Dot} color=${c.color} /> ${String(c.id).includes('#') ? c.name.replace(/ \([^)]*\)$/, '') : firstName(c.name)}
                     </button>`
                   )}
                 </div>`}
