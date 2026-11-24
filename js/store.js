@@ -54,7 +54,7 @@ export const state = {
   // threads: Antworten je erster Nachricht, thread: gerade offener Verlauf, reactions: je Nachricht
   // Mitteilungen aufs Handy (js/push.js): Stand dieses Geräts und Liste der eigenen Geräte
   push: { loaded: false, permission: 'default', here: false, devices: [] },
-  chat: { available: false, rooms: [], messages: new Map(), active: null, threads: new Map(), thread: null, reactions: new Map(), urls: new Map() },
+  chat: { available: false, rooms: [], signedIn: null, online: [], messages: new Map(), active: null, threads: new Map(), thread: null, reactions: new Map(), urls: new Map() },
   loadedAt: 0,
   toasts: [],
   dialog: null,

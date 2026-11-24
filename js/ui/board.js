@@ -253,6 +253,104 @@ function StageMenu({ stage, onRename, onAddAt, label = '' }) {
   </span>`
 }
 
+// Klappliste oben im Board (Wunsch vom 24.11.2026): statt einer Reihe Reiter ein Knopf mit der
+// aktuellen Auswahl. Ein Klick öffnet die Liste: zuerst „Meine Pipeline“ (#/board/meine, eigene
+// Aufgaben aus allen Projekten, js/ui/pipeline.js), darunter die Projekte mit Farbe, Zahl der
+// offenen Aufgaben und dem Zeichen für geteilte Projekte. Projekte ganz ohne Aufgaben (auch ohne
+// archivierte) stehen erst nach „Leere Projekte anzeigen“, gelöscht wird nichts.
+// Liegt wie das Spaltenmenü fest über der Seite. Wird auch von der Pipeline genutzt.
+const PICKER_WIDTH = 320
+export const PIPELINE_ID = 'meine'
+const openCountOf = (id) => state.db.cards.filter((c) => c.project_id === id && isOpen(c)).length
+const hasCards = (id) => state.db.cards.some((c) => c.project_id === id)
+
+export function ProjectPicker({ currentId, pipelineCount = null }) {
+  const [pos, setPos] = useState(null)
+  const [showEmpty, setShowEmpty] = useState(false)
+  const open = !!pos
+  const ref = useRef()
+  const btn = useRef()
+  const close = () => {
+    setPos(null)
+    setShowEmpty(false)
+  }
+  const toggle = () => {
+    if (open) return close()
+    const r = btn.current.getBoundingClientRect()
+    const width = Math.min(PICKER_WIDTH, window.innerWidth - 16)
+    setPos({ top: Math.round(r.bottom + 4), left: Math.round(Math.max(8, Math.min(r.left, window.innerWidth - width - 8))), width })
+  }
+  useEffect(() => {
+    if (!open) return
+    const away = (e) => ref.current && !ref.current.contains(e.target) && close()
+    const esc = (e) => e.key === 'Escape' && (e.stopPropagation(), close())
+    const onScroll = (e) => !(e.target && e.target.closest && e.target.closest('.project-menu')) && close()
+    document.addEventListener('pointerdown', away)
+    document.addEventListener('keydown', esc, true)
+    window.addEventListener('scroll', onScroll, true)
+    window.addEventListener('resize', close)
+    return () => {
+      document.removeEventListener('pointerdown', away)
+      document.removeEventListener('keydown', esc, true)
+      window.removeEventListener('scroll', onScroll, true)
+      window.removeEventListener('resize', close)
+    }
+  }, [open])
+  const all = activeProjects()
+  const filled = all.filter((p) => hasCards(p.id) || p.id === currentId)
+  const empty = all.filter((p) => !filled.includes(p))
+  const isPipeline = currentId === PIPELINE_ID
+  const current = isPipeline ? null : all.find((p) => p.id === currentId)
+  const shared = (p) => projectSharesOf(p.id).length > 0
+  // Escape auch direkt am Knopf (der Fokus liegt dort), falls die Liste gerade erst aufging
+  const onKeyDown = (e) => {
+    if (e.key === 'Escape' && open) {
+      e.stopPropagation()
+      close()
+    }
+  }
+  const go = (path) => {
+    close()
+    navigate(path)
+  }
+  const projectItem = (p) => html`<li key=${p.id} role="option" aria-selected=${p.id === currentId}>
+    <button type="button" class=${p.id === currentId ? 'active' : ''} onClick=${() => go('/board/' + p.id)}>
+      <${Dot} color=${p.color} />
+      <span class="pp-name">${p.name}</span>
+      ${shared(p) && html`<span class="tab-shared" title="Mit Gästen geteilt" aria-label="mit Gästen geteilt"><${Icon} name="users" size=${15} /></span>`}
+      <span class="count">${openCountOf(p.id)}</span>
+      ${p.id === currentId && html`<${Icon} name="check" size=${16} />`}
+    </button>
+  </li>`
+  const label = isPipeline ? 'Meine Pipeline' : current ? current.name : 'Projekt wählen'
+  return html`<span class="project-picker" ref=${ref} onKeyDown=${onKeyDown}>
+    <button type="button" ref=${btn} class="project-picker-btn" aria-haspopup="listbox" aria-expanded=${open} aria-label=${'Board wählen, aktuell ' + label} onClick=${toggle}>
+      ${isPipeline ? html`<${Icon} name="account" size=${18} />` : current && html`<${Dot} color=${current.color} />`}
+      <span class="pp-name">${label}</span>
+      ${isPipeline ? pipelineCount !== null && html`<span class="count">${pipelineCount}</span>` : current && html`<span class="count">${openCountOf(current.id)}</span>`}
+      <span class=${'pp-chevron' + (open ? ' open' : '')}><${Icon} name="chevron" size=${16} /></span>
+    </button>
+    ${open &&
+    html`<ul class="stage-menu project-menu" role="listbox" aria-label="Boards" style=${{ top: pos.top + 'px', left: pos.left + 'px', width: pos.width + 'px', maxHeight: `calc(100vh - ${pos.top + 16}px)` }}>
+      <li role="option" aria-selected=${isPipeline}>
+        <button type="button" class=${isPipeline ? 'active' : ''} onClick=${() => go('/board/' + PIPELINE_ID)}>
+          <${Icon} name="account" size=${16} />
+          <span class="pp-name">Meine Pipeline</span>
+          ${isPipeline && html`<${Icon} name="check" size=${16} />`}
+        </button>
+      </li>
+      <li class="pp-sep" role="presentation">Projekte</li>
+      ${filled.map(projectItem)}
+      ${empty.length > 0 &&
+      (showEmpty
+        ? empty.map(projectItem)
+        : html`<li role="presentation">
+            <button type="button" class="pp-more" onClick=${() => setShowEmpty(true)}>Leere Projekte anzeigen (${empty.length})</button>
+          </li>`)}
+    </ul>`}
+  </span>`
+}
+
 // Gestrichelte Spalte an der Stelle, an der die neue Spalte entsteht
 function NewStageColumn({ onCreate, onCancel }) {
   const [name, setName] = useState('')
@@ -543,21 +641,8 @@ export function Board({ projectId, archiveOpen = false, archiveQuery = '' }) {
 
   return html`<div class="page page-board">
     <${PageHead} kicker="Board" title=${current.name} />
-    <div class="project-tabs" role="tablist" aria-label="Projekte">
-      ${projects.map(
-        (p) => html`<button
-          type="button"
-          role="tab"
-          aria-selected=${p.id === current.id}
-          class=${'tab' + (p.id === current.id ? ' active' : '')}
-          onClick=${() => navigate('/board/' + p.id)}
-        >
-          <${Dot} color=${p.color} />${p.name}
-          ${projectSharesOf(p.id).length > 0 &&
-          html`<span class="tab-shared" title="Mit Gästen geteilt" aria-label="mit Gästen geteilt"><${Icon} name="users" size=${15} /></span>`}
-          <span class="count">${state.db.cards.filter((c) => c.project_id === p.id && isOpen(c)).length}</span>
-        </button>`
-      )}
+    <div class="project-tabs project-bar">
+      <${ProjectPicker} currentId=${current.id} />
       <button type="button" class="tab tab-icon" aria-label="Neues Projekt" title="Neues Projekt" onClick=${newProject}><${Icon} name="plus" size=${18} /></button>
       <button
         type="button"

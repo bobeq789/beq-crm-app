@@ -3,7 +3,7 @@
 // Texte aus Nachrichten immer als Text (NoteText), nie als HTML.
 import { html, useState, useEffect, useRef, useLayoutEffect } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
-import { norm, firstName, fmtTime, fmtDate, fmtSize } from '../lib/util.js'
+import { norm, matches, firstName, fmtTime, fmtDate, fmtSize } from '../lib/util.js'
 import { state, myEmail, memberName, isGuest, isAdmin, openDialog, closeDialog, toast, activeMembers, activeGuests } from '../store.js'
 import { navigate, openOverlay, closeOverlay } from '../router.js'
 import { PageHead, Empty, Avatar, Modal, Field, Segmented, useIsMobile, useOverlay } from './common.js'
@@ -41,6 +41,7 @@ import {
   isImage,
   MAX_CHAT_FILE_BYTES,
   MAX_CHAT_FILES,
+  isOnline,
 } from '../chat.js'
 import { REACTIONS } from '../data/chat_rules.js'
 import { roomPushOn, toggleRoomPush } from '../push.js'
@@ -102,9 +103,15 @@ function RoomList({ activeId }) {
     <input id="chat-suche" type="search" placeholder="Im Chat suchen" value=${query} onInput=${(e) => setQuery(e.target.value)}
       onKeyDown=${(e) => e.key === 'Escape' && query && (e.stopPropagation(), setQuery(''))} />
   </div>`
+  const people = isGuest() ? [] : teamPeopleSignedIn()
   if (searching) {
+    const hits = people.filter((p) => matches(query, p.name, p.email))
     return html`<nav class="chat-list" aria-label="Suche im Chat">
       ${searchBox}
+      ${hits.length > 0 &&
+      html`<h2 class="chat-list-head">Personen</h2>
+        <ul class="chat-items">${hits.map((p) => html`<${PersonItem} person=${p} key=${p.email} />`)}</ul>
+        <h2 class="chat-list-head">Nachrichten</h2>`}
       <${SearchResults} query=${query.trim()} />
     </nav>`
   }
@@ -121,6 +128,9 @@ function RoomList({ activeId }) {
         Archivierte Kanäle (${archived.length})
       </button>
       ${showArchived && html`<ul class="chat-items">${archived.map((r) => html`<${RoomItem} room=${r} active=${r.id === activeId} key=${r.id} />`)}</ul>`}`}
+    ${people.length > 0 &&
+    html`<h2 class="chat-list-head">Team <span class="muted small">${people.filter((p) => isOnline(p.email)).length} online</span></h2>
+      <ul class="chat-items">${people.map((p) => html`<${PersonItem} person=${p} key=${p.email} />`)}</ul>`}
   </nav>`
 }
 
@@ -171,9 +181,49 @@ function Snippet({ text, query }) {
 function RoomIcon({ room }) {
   if (room.art === 'direkt') {
     const other = (room.mitglieder || []).find((e) => norm(e) !== me())
-    return html`<${Avatar} email=${other} />`
+    return html`<${PersonAvatar} email=${other} />`
   }
   return html`<span class="chat-room-icon" aria-hidden="true"><${Icon} name=${room.art === 'gruppe' ? 'users' : room.offen ? 'hash' : 'lock'} size=${18} /></span>`
+}
+
+// Avatar mit Punkt: grün heißt gerade online (die App ist bei der Person offen, 37_team_online.sql)
+function PersonAvatar({ email }) {
+  if (isGuest()) return html`<${Avatar} email=${email} />`
+  const on = isOnline(email)
+  return html`<span class="presence-wrap"><${Avatar} email=${email} /><span class=${'presence-dot' + (on ? ' on' : '')} title=${on ? 'online' : 'nicht online'}></span></span>`
+}
+
+// Wer im Team schon angemeldet ist, ohne dich. Online zuerst, dann nach Namen.
+// Fehlt die Liste (37_team_online.sql noch nicht ausgeführt), alle aktiven Teammitglieder.
+function teamPeopleSignedIn() {
+  const signed = state.chat.signedIn
+  return teamPeople()
+    .filter((p) => !signed || signed.includes(p.email))
+    .sort((a, b) => Number(isOnline(b.email)) - Number(isOnline(a.email)) || a.name.localeCompare(b.name, 'de'))
+}
+
+function PersonItem({ person }) {
+  const [busy, setBusy] = useState(false)
+  const on = isOnline(person.email)
+  const open = async () => {
+    const existing = state.chat.rooms.find((r) => r.art === 'direkt' && (r.mitglieder || []).map(norm).includes(person.email))
+    if (existing) return navigate('/chat/' + existing.id)
+    if (busy) return
+    setBusy(true)
+    try {
+      navigate('/chat/' + (await openDirect(person.email)))
+    } catch (err) {
+      toast(chatErrorText(err), { error: true })
+    }
+    setBusy(false)
+  }
+  return html`<li>
+    <button type="button" class="chat-item chat-person" onClick=${open} aria-label=${person.name + (on ? ', online' : ', nicht online') + ', Nachricht schreiben'}>
+      <${PersonAvatar} email=${person.email} />
+      <span class="chat-item-name">${person.name}</span>
+      <span class=${'chat-presence' + (on ? ' on' : '')}>${on ? 'online' : ''}</span>
+    </button>
+  </li>`
 }
 
 function RoomItem({ room, active }) {

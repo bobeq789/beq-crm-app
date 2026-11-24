@@ -3,7 +3,7 @@
 // Nachrichten seitenweise je Raum. Neue Nachrichten kommen sofort über Supabase Realtime
 // (im Demo-Modus über einen zweiten Tab), dazu jede Minute ein Abgleich der Zahlen.
 // Wer was sieht, regelt die Datenbank. Die App zeigt nur, was sie bekommt.
-import { state, emit, toast, errorText, myEmail, memberName, getApi, confirmDialog } from './store.js'
+import { state, emit, toast, errorText, myEmail, memberName, getApi, confirmDialog, isGuest } from './store.js'
 import { uid, norm, firstName, safeFileName } from './lib/util.js'
 
 const PAGE = 50
@@ -27,6 +27,7 @@ function setChat(patch) {
 // Start, Abgleich, Realtime
 // ------------------------------------------------------------
 let unsubscribe = null
+let leavePresence = null
 let timer = null
 let refreshTimer = null
 const onVisible = () => document.visibilityState === 'visible' && refreshChat()
@@ -35,6 +36,7 @@ export async function startChat() {
   await refreshChat()
   if (!state.chat.available) return
   if (!unsubscribe) unsubscribe = api().chatSubscribe(onRealtime)
+  startPresence()
   if (!timer) timer = setInterval(refreshChat, 60 * 1000)
   document.addEventListener('visibilitychange', onVisible)
   // Mitteilungen aufs Handy: angemeldetes Gerät auffrischen (34_chat_push.sql)
@@ -44,10 +46,27 @@ export async function startChat() {
 export function stopChat() {
   if (unsubscribe) unsubscribe()
   unsubscribe = null
+  if (leavePresence) leavePresence()
+  leavePresence = null
   clearInterval(timer)
   timer = null
   document.removeEventListener('visibilitychange', onVisible)
 }
+
+// ------------------------------------------------------------
+// Wer angemeldet und wer online ist (37_team_online.sql). Nur Teammitglieder, Gäste nie.
+// Online heißt: die App ist gerade irgendwo offen (Supabase Realtime Presence).
+// ------------------------------------------------------------
+async function startPresence() {
+  if (isGuest() || leavePresence || !api().presenceJoin) return
+  leavePresence = api().presenceJoin(norm(myEmail()), (emails) => setChat({ online: [...new Set(emails.map(norm))] }))
+  try {
+    setChat({ signedIn: await api().teamSignedIn() })
+  } catch {
+    // Ohne Liste zeigt der Chat alle aktiven Teammitglieder
+  }
+}
+export const isOnline = (email) => state.chat.online.includes(norm(email))
 
 export async function refreshChat() {
   if (state.auth !== 'ready') return

@@ -1646,3 +1646,30 @@ input.sub-title:hover, input.sub-title:focus { border-color: var(--border); back
 .team-table { min-width: 640px; }
 .team-table td:first-child { min-width: 170px; }
 .team-alert, .stat-alert { color: var(--red); font-weight: 600; }
+
+/* Klappliste der Projekte am Board (ProjectPicker in js/ui/board.js) */
+.project-bar { align-items: center; overflow: visible; }
+.project-picker { position: relative; display: inline-flex; min-width: 0; }
+.project-picker-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; max-width: 100%; padding: 0 14px; border: 0; border-radius: 999px; background: var(--green); color: var(--navy); font: inherit; font-weight: 600; cursor: pointer; }
+.project-picker-btn .pp-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-picker-btn .count { color: var(--navy); opacity: 0.75; }
+.project-menu { list-style: none; margin: 0; padding: 6px; }
+.project-menu li { display: block; }
+.project-menu button { display: flex; align-items: center; gap: 10px; width: 100%; }
+.project-menu button .pp-name { flex: 1; text-align: left; overflow-wrap: anywhere; }
+.project-menu button.active { font-weight: 600; }
+.project-menu .count { color: var(--muted); }
+.pp-chevron { display: inline-flex; transform: rotate(90deg); transition: transform 0.15s; }
+.pp-chevron.open { transform: rotate(-90deg); }
+.project-picker-btn .dot { border: 2px solid var(--navy); }
+.project-menu { overflow-y: auto; }
+.project-menu .pp-sep { padding: 10px 10px 4px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.project-menu button.pp-more { color: var(--accent-text); font-size: 14px; }
+/* Im Chat: wer angemeldet und online ist (37_team_online.sql) */
+button.chat-item.chat-person { width: 100%; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; }
+.presence-wrap { position: relative; display: inline-flex; flex: none; }
+.presence-dot { position: absolute; right: -2px; bottom: -2px; width: 10px; height: 10px; border-radius: 50%; background: var(--surface); box-shadow: inset 0 0 0 2px var(--grey); border: 2px solid var(--surface); box-sizing: content-box; width: 6px; height: 6px; }
+.presence-dot.on { background: var(--green); box-shadow: none; }
+.chat-presence { margin-left: auto; font-size: 13px; color: var(--muted); }
+.chat-presence.on { color: var(--accent-text); font-weight: 500; }
+.chat-list-head .muted { font-weight: 400; text-transform: none; letter-spacing: 0; }

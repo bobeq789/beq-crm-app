@@ -161,6 +161,17 @@ export function createDemoApi({ asGuest = false } = {}) {
       save()
       return clone(row)
     },
+    // Angemeldet und online (37_team_online.sql): im Demo-Modus alle aktiven Teammitglieder ohne
+    // Gäste angemeldet, online du selbst und Mira Hoffmann (erfunden). Gäste bekommen nichts.
+    async teamSignedIn() {
+      if (asGuest) return []
+      return db.team_members.filter((t) => t.active && t.role !== 'gast').map((t) => t.email.toLowerCase())
+    },
+    presenceJoin(email, onSync) {
+      if (asGuest) return () => {}
+      const t = setTimeout(() => onSync([email.toLowerCase(), 'mira.hoffmann@example.com']), 0)
+      return () => clearTimeout(t)
+    },
     // Mitteilungen aufs Handy gibt es im Demo-Modus nicht (kein Push-Dienst, kein Schlüssel)
     async pushKey() {
       return null

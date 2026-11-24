@@ -89,7 +89,7 @@ function TodoTile({ cards, drag }) {
         </div>`
       : null
   const addTask = html`<button type="button" class="link-btn" onClick=${() => openDialog({ kind: 'new-task', title: '' })}><${Icon} name="plus" size=${16} /> Aufgabe</button>`
-  return html`<${Tile} title="Zu erledigen" count=${cards.length} cls="tile-todo" drag=${drag} actions=${addTask}>
+  return html`<${Tile} title="Zu erledigen (Aufgaben)" count=${cards.length} cls="tile-todo" drag=${drag} actions=${addTask}>
     ${cards.length === 0 && html`<${Empty}>Nichts offen. Schön.<//>`}
     ${section('Überfällig und heute', groups.today)}
     ${section('Dringend', groups.urgent)}
@@ -378,7 +378,7 @@ export function Overview() {
     const base = isMobile ? { reihe: mobileOrder, breit: layout.breit } : layout
     saveLayout(moveTile(base, id, target, isMobile))
   })
-  const names = { aufgaben: 'Zu erledigen', team: 'Team', termine: 'Termine heute und morgen', wiedervorlagen: 'Wiedervorlagen', meetings: 'Letzte Meetings' }
+  const names = { aufgaben: 'Zu erledigen (Aufgaben)', team: 'Team', termine: 'Termine heute und morgen', wiedervorlagen: 'Wiedervorlagen', meetings: 'Letzte Meetings' }
   const tileFor = (id) => {
     const d = { onPointerDown: (e) => drag.start(id, e) }
     if (id === 'aufgaben') return html`<${TodoTile} cards=${todo} drag=${d} />`

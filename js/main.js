@@ -3,6 +3,7 @@ import { html, render, useEffect } from './lib/preact.js'
 import { Icon } from './lib/icons.js'
 import { useStore, boot, isDemo, isGuest, isSuperAdmin, state } from './store.js'
 import { useRoute } from './router.js'
+import { local } from './lib/util.js'
 import { Dialogs, Toasts } from './ui/common.js'
 import { Overview, overviewCount } from './ui/overview.js'
 import { Board } from './ui/board.js'
@@ -28,7 +29,6 @@ import { ClaudeConsent } from './ui/claude.js'
 const NAV_TEAM = [
   { key: '', label: 'Übersicht', icon: 'home' },
   { key: 'board', label: 'Board', icon: 'board' },
-  { key: 'pipeline', label: 'Pipeline', icon: 'pipeline' },
   { key: 'chat', label: 'Chat', icon: 'chat' },
   { key: 'sales', label: 'Sales', icon: 'sales' },
   { key: 'kalender', label: 'Kalender', icon: 'calendar' },
@@ -44,9 +44,10 @@ const NAV_GUEST = [
   { key: 'geteilt', label: 'Geteilt', icon: 'share' },
   { key: 'chat', label: 'Chat', icon: 'chat' },
 ]
-// Am Handy unten nur fünf Bereiche und „Mehr“, der Rest steckt hinter „Mehr“. Seit „Meine Pipeline“
-// (36_meine_pipeline.sql) steht dort die eigene Pipeline, die Boards der Projekte unter „Mehr“.
-const MOBILE_MAIN = ['', 'pipeline', 'chat', 'postfach', 'kalender']
+// Am Handy unten nur fünf Bereiche und „Mehr“, der Rest steckt hinter „Mehr“.
+// „Meine Pipeline“ ist kein eigener Bereich mehr (Wunsch vom 24.11.2026): Sie steht im Board als
+// erster Eintrag der Klappliste (#/board/meine). #/pipeline bleibt als alte Adresse (Mitteilungen).
+const MOBILE_MAIN = ['', 'board', 'chat', 'postfach', 'kalender']
 // Am Rechner zwischen 760 und 1279 px stecken diese zusätzlich hinter „Mehr“ (styles.css, .nav-minor)
 const NAV_MINOR = ['meetings', 'firmen', 'team']
 
@@ -77,8 +78,12 @@ function Page({ route }) {
   switch (section) {
     case undefined:
       return html`<${Overview} />`
-    case 'board':
+    case 'board': {
+      // Ohne Projekt in der Adresse: zuletzt gewählt, beim ersten Mal die eigene Pipeline
+      const last = local.get('beqcrm-last-project')
+      if (id === 'meine' || (!id && (!last || last === 'meine'))) return html`<${PipelinePage} params=${route.params} />`
       return html`<${Board} projectId=${id} archiveOpen=${sub === 'archiv'} archiveQuery=${route.params.get('q') || ''} />`
+    }
     case 'chat':
       return html`<${ChatPage} raumId=${id} verlauf=${route.params.get('verlauf')} nachricht=${route.params.get('nachricht')} />`
     case 'pipeline':
@@ -134,7 +139,8 @@ function Shell({ route }) {
   const counts = guest ? { chat: unreadTotal() } : { '': overviewCount(), postfach: state.followUp.newMail.length, chat: unreadTotal() }
   const countText = { '': 'fällig', postfach: 'neu', chat: 'ungelesen' }
   useAppBadge(counts[''] || 0)
-  const section = route.parts[0] || (guest ? 'geteilt' : '')
+  // Die alte Adresse #/pipeline gehört zum Board
+  const section = route.parts[0] === 'pipeline' ? 'board' : route.parts[0] || (guest ? 'geteilt' : '')
   const cardId = route.params.get('karte')
   const eventId = guest ? null : route.params.get('termin')
   const home = guest ? '#/geteilt' : '#/'

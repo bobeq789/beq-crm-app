@@ -12,9 +12,9 @@
 // Die Pipeline anderer sieht nur der Super-Admin (beQ Backoffice, Entscheidung vom 24.11.2026),
 // alle anderen nur ihre eigene.
 // Adresse: #/pipeline?von=<Adresse>&ansicht=vergeben
-import { html, useState } from '../lib/preact.js'
+import { html, useState, useEffect } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
-import { matches, todayStr, endOfWeekStr, norm, firstName } from '../lib/util.js'
+import { matches, todayStr, endOfWeekStr, norm, firstName, local } from '../lib/util.js'
 import {
   state,
   activeMembers,
@@ -42,7 +42,7 @@ import {
 } from '../store.js'
 import { navigate, openCard, setParam } from '../router.js'
 import { PageHead, Modal, Field, ProjectSelect, Avatar, Empty, activityWhen, dialogKinds, useIsMobile } from './common.js'
-import { BoardCard } from './board.js'
+import { BoardCard, ProjectPicker, PIPELINE_ID } from './board.js'
 
 export const PIPELINE_COLUMNS = [
   { kind: 'todo', label: 'To-dos' },
@@ -236,6 +236,8 @@ export function PipelinePage({ params }) {
   const [project, setProject] = useState('')
   const [tab, setTab] = useState('aufgaben')
   const [mobileKind, setMobileKind] = useState('todo')
+  // Im Board gemerkt wie ein Projekt: „Board“ öffnet beim nächsten Mal wieder die Pipeline
+  useEffect(() => local.set('beqcrm-last-project', PIPELINE_ID), [])
 
   const cardMatches = (card) => {
     if (project && card.project_id !== project) return false
@@ -276,7 +278,9 @@ export function PipelinePage({ params }) {
     </div>
     <select value=${project} aria-label="Projekt" onChange=${(e) => setProject(e.target.value)}>
       <option value="">Alle Projekte</option>
-      ${activeProjects().map((p) => html`<option value=${p.id}>${p.name}</option>`)}
+      ${activeProjects()
+        .filter((p) => p.id === project || state.db.cards.some((c) => c.project_id === p.id))
+        .map((p) => html`<option value=${p.id}>${p.name}</option>`)}
     </select>
     <label class="search">
       <${Icon} name="search" size=${18} />
@@ -286,12 +290,14 @@ export function PipelinePage({ params }) {
 
   const newTask = () => openDialog({ kind: 'pipeline-new', person })
   const actions = html`<button type="button" class="btn btn-primary" onClick=${newTask}><${Icon} name="plus" size=${18} /> Neue Aufgabe</button>`
-  const kicker = mode === 'vergeben' ? 'Pipeline · vergeben' : 'Pipeline'
+  const kicker = mode === 'vergeben' ? 'Board · vergeben' : 'Board'
+  const bar = html`<div class="project-tabs project-bar"><${ProjectPicker} currentId=${PIPELINE_ID} pipelineCount=${openCount} /></div>`
 
   if (mobile) {
     const col = PIPELINE_COLUMNS.find((c) => c.kind === mobileKind) || PIPELINE_COLUMNS[0]
     return html`<div class="page page-pipeline">
       <${PageHead} kicker=${kicker} title=${title} />
+      ${bar}
       ${filters}
       <div class="stage-tabs pl-tabs" role="tablist" aria-label="Bereich">
         ${[
@@ -321,6 +327,7 @@ export function PipelinePage({ params }) {
 
   return html`<div class="page page-pipeline">
     <${PageHead} kicker=${kicker} title=${title} actions=${actions} />
+    ${bar}
     ${filters}
     <div class="pl-layout">
       <div class="board pl-board">

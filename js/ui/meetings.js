@@ -50,7 +50,6 @@ function toLocalInput(iso) {
 // ------------------------------------------------------------
 export function MeetingsList() {
   const [query, setQuery] = useState('')
-  const [projectId, setProjectId] = useState('')
   const [summaryHits, setSummaryHits] = useState(new Set())
   const q = query.trim()
 
@@ -76,8 +75,8 @@ export function MeetingsList() {
   }, [q])
 
   const searched = state.db.meetings.filter((m) => !q || matches(q, m.title, participantNames(m)) || summaryHits.has(m.id))
-  const projects = state.db.projects.filter((p) => !p.archived).sort((a, b) => a.sort - b.sort)
-  const list = searched.filter((m) => !projectId || m.project_id === projectId).sort((a, b) => b.held_at.localeCompare(a.held_at))
+  // Keine Reiter je Projekt mehr (Wunsch vom 24.11.2026), das Projekt steht nur noch an der Zeile
+  const list = [...searched].sort((a, b) => b.held_at.localeCompare(a.held_at))
 
   const groups = []
   list.forEach((m) => {
@@ -99,17 +98,7 @@ export function MeetingsList() {
         <input type="search" value=${query} placeholder="Suchen: Titel, Teilnehmer, Inhalt" aria-label="Meetings durchsuchen" onInput=${(e) => setQuery(e.target.value)} />
       </label>
     </div>
-    <div class="project-tabs" role="tablist" aria-label="Projekte">
-      <button type="button" role="tab" aria-selected=${!projectId} class=${'tab' + (!projectId ? ' active' : '')} onClick=${() => setProjectId('')}>
-        Alle <span class="count">${searched.length}</span>
-      </button>
-      ${projects.map(
-        (p) => html`<button type="button" role="tab" aria-selected=${projectId === p.id} class=${'tab' + (projectId === p.id ? ' active' : '')} onClick=${() => setProjectId(p.id)}>
-          <${Dot} color=${p.color} />${p.name} <span class="count">${searched.filter((m) => m.project_id === p.id).length}</span>
-        </button>`
-      )}
-    </div>
-    ${!list.length && html`<${Empty}>${q || projectId ? 'Keine Meetings gefunden.' : 'Noch keine Meetings. Leg das erste an.'}<//>`}
+    ${!list.length && html`<${Empty}>${q ? 'Keine Meetings gefunden.' : 'Noch keine Meetings. Leg das erste an.'}<//>`}
     ${groups.map(
       (g) => html`<section class="month-group" key=${g.label}>
         <h2 class="group-title">${g.label}</h2>

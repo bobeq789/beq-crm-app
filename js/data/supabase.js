@@ -320,6 +320,23 @@ export async function createSupabaseApi(config) {
       if (anhaenge && anhaenge.length) row.anhaenge = anhaenge
       return check(await client.from('chat_nachrichten').insert(row).select().single())
     },
+    // Wer schon angemeldet ist (37_team_online.sql). Fehlt die Funktion noch, null: dann zeigt der
+    // Chat alle aktiven Teammitglieder.
+    async teamSignedIn() {
+      const { data, error } = await client.rpc('team_angemeldet')
+      if (error) return null
+      return (data || []).map((x) => String(typeof x === 'string' ? x : Object.values(x)[0]).toLowerCase())
+    },
+    // Wer gerade online ist: Presence im privaten Realtime-Kanal „crm-online“ (Regeln in
+    // 37_team_online.sql, nur Teammitglieder). onSync bekommt die Adressen aller Verbundenen.
+    presenceJoin(email, onSync) {
+      const channel = client.channel('crm-online', { config: { private: true, presence: { key: email } } })
+      channel.on('presence', { event: 'sync' }, () => onSync(Object.keys(channel.presenceState())))
+      channel.subscribe((status) => {
+        if (status === 'SUBSCRIBED') channel.track({ seit: new Date().toISOString() }).catch(() => {})
+      })
+      return () => client.removeChannel(channel)
+    },
     // Mitteilungen aufs Handy (34_chat_push.sql)
     async pushKey() {
       return check(await client.rpc('push_schluessel'))
