@@ -192,11 +192,27 @@ export async function boot() {
     }
   }
   let session = null
+  // Dauert das Erneuern der gespeicherten Anmeldung länger (schlechtes Netz, supabase-js versucht es
+  // bis zu 30 Sekunden), nach 6 Sekunden „Keine Verbindung“ zeigen. Klappt es danach doch, geht es
+  // von hier aus normal weiter.
+  const startState = state.auth
+  const slow = setTimeout(() => {
+    if (state.auth === startState && api.hasStoredSession && api.hasStoredSession()) {
+      state.auth = 'offline'
+      emit()
+    }
+  }, 6000)
   try {
     session = await api.getSession()
   } catch (err) {
+    clearTimeout(slow)
+    if (err && err.offline) {
+      state.auth = 'offline'
+      return emit()
+    }
     state.authMessage = errorText(err)
   }
+  clearTimeout(slow)
   if (!session) {
     state.auth = 'login'
     return emit()

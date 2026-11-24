@@ -23,7 +23,7 @@ import { ChatPage, chatDialogs } from './ui/chat.js'
 import { unreadTotal } from './chat.js'
 import { Modal, dialogKinds } from './ui/common.js'
 import { openDialog, closeDialog } from './store.js'
-import { Login, SetPassword, NotMember, AuthError, Splash, MfaEnroll, MfaVerify } from './ui/auth.js'
+import { Login, SetPassword, NotMember, AuthError, AuthOffline, Splash, MfaEnroll, MfaVerify } from './ui/auth.js'
 import { ClaudeConsent } from './ui/claude.js'
 
 const NAV_TEAM = [
@@ -222,6 +222,8 @@ function App() {
       return html`<${ClaudeConsent} /><${Toasts} />`
     case 'error':
       return html`<${AuthError} />`
+    case 'offline':
+      return html`<${AuthOffline} />`
     default:
       return html`<${Shell} route=${route} />`
   }

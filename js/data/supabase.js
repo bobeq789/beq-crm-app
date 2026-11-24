@@ -93,11 +93,29 @@ export async function createSupabaseApi(config) {
 
     // ---------- Anmeldung ----------
     async getSession() {
-      const { data } = await client.auth.getSession()
-      if (!data.session) return null
+      const { data, error } = await client.auth.getSession()
+      if (!data.session) {
+        // Anmeldung gespeichert, aber das Erneuern scheiterte am Netz (zum Beispiel nach Tagen
+        // Pause im Funkloch): nicht wie abgemeldet behandeln. supabase-js behält die Anmeldung in
+        // diesem Fall, beim nächsten Versuch mit Netz geht es weiter.
+        if (error && (error.name === 'AuthRetryableFetchError' || error.status === 0 || /fetch|network|load failed/i.test(error.message || ''))) {
+          const offline = new Error('offline')
+          offline.offline = true
+          throw offline
+        }
+        return null
+      }
       const meta = data.session.user.app_metadata || {}
       const providers = meta.providers || (meta.provider ? [meta.provider] : [])
       return { email: data.session.user.email, google: providers.includes('google') }
+    },
+    // Gibt es auf diesem Gerät eine gespeicherte Anmeldung? (für „Keine Verbindung“ statt Anmeldeseite)
+    hasStoredSession() {
+      try {
+        return !!localStorage.getItem('beqcrm-auth')
+      } catch {
+        return false
+      }
     },
     onAuthChange(cb) {
       client.auth.onAuthStateChange((event, session) => cb(event, session ? { email: session.user.email } : null))

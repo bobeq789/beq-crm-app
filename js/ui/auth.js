@@ -352,6 +352,25 @@ export function AuthError() {
   <//>`
 }
 
+// Anmeldung ist gespeichert, aber gerade kein Netz (Wunsch vom 24.11.2026: am Handy nicht wie
+// abgemeldet wirken). Sobald wieder Netz da ist, lädt die App von selbst neu.
+export function AuthOffline() {
+  useEffect(() => {
+    const retry = () => location.reload()
+    window.addEventListener('online', retry)
+    const timer = setInterval(() => navigator.onLine && retry(), 20000)
+    return () => {
+      window.removeEventListener('online', retry)
+      clearInterval(timer)
+    }
+  }, [])
+  return html`<${AuthShell}>
+    <h1 class="auth-title">Keine Verbindung</h1>
+    <p class="auth-text">Du bist weiter angemeldet. Sobald dein Gerät wieder Netz hat, geht es von selbst weiter.</p>
+    <button type="button" class="btn btn-primary btn-block" onClick=${() => location.reload()}>Noch einmal versuchen</button>
+  <//>`
+}
+
 export function Splash() {
   return html`<div class="splash" aria-busy="true"><img src="img/logo-dunkel.svg" alt="beQ CRM" width="152" height="38" /></div>`
 }
