@@ -45,6 +45,7 @@ export function buildSeed() {
     ['Pilotkunden', '#34495A'],
     ['Events', '#27836B'],
     ['Allgemein', '#5B6B75'],
+    ['Vertrieb Anna', '#BFEADF'],
   ]
   const P = {}
   const S = {}

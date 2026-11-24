@@ -9,6 +9,8 @@ const PATHS = {
   // Meine Pipeline: Trichter
   pipeline: 'M3 5h18l-7 8v6l-4 2v-8z',
   meetings: 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z',
+  // Eigene Pipeline in der Klappliste des Boards
+  star: 'M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z',
   contacts: 'M12 12.5a4.25 4.25 0 1 0 0-8.5 4.25 4.25 0 0 0 0 8.5zM4 21a8 8 0 0 1 16 0',
   orgs: 'M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16M15 9h4a1 1 0 0 1 1 1v11M2 21h20M8 8h3M8 12h3M8 16h3',
   plus: 'M12 5v14M5 12h14',

@@ -264,6 +264,25 @@ const openCountOf = (id) => state.db.cards.filter((c) => c.project_id === id && 
 const hasCards = (id) => state.db.cards.some((c) => c.project_id === id)
 export const projectArea = (p) => (p && p.bereich === 'intern' ? 'intern' : 'sales')
 
+// Eigene Pipelines (Wunsch vom 24.11.2026): am Namen erkannt, ohne eigenes Feld in der Datenbank.
+// Wörter aus der Mail-Adresse (vor dem @, getrennt an Punkt, Strich, Unterstrich) und aus dem Namen
+// im Team. Steht eines davon als ganzes Wort im Namen der Pipeline, ist es eine eigene, zum
+// Beispiel „Vertrieb Sebastian“ für Sebastian Ruppert. Umlaute zählen wie ae, oe, ue.
+const plainWords = (s) =>
+  String(s || '')
+    .toLowerCase()
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+    .replace(/ß/g, 'ss')
+    .split(/[^a-z]+/)
+    .filter((w) => w.length >= 3)
+export function ownWords(email, name) {
+  const local = String(email || '').split('@')[0]
+  return new Set([...plainWords(local), ...plainWords(name)])
+}
+export const isOwnProject = (p, words) => !!p && plainWords(p.name).some((w) => words.has(w))
+
 export function ProjectPicker({ currentId, person = null, pipelineCount = null }) {
   const [pos, setPos] = useState(null)
   const [showEmpty, setShowEmpty] = useState(false)
@@ -297,7 +316,10 @@ export function ProjectPicker({ currentId, person = null, pipelineCount = null }
     }
   }, [open])
   const all = activeProjects()
-  const filled = all.filter((p) => hasCards(p.id) || p.id === currentId)
+  const mine = ownWords(myEmail(), memberName(myEmail()))
+  const own = (p) => isOwnProject(p, mine)
+  // Eigene Pipelines stehen immer da, auch leer
+  const filled = all.filter((p) => hasCards(p.id) || p.id === currentId || own(p))
   const empty = all.filter((p) => !filled.includes(p))
   const isPipeline = currentId === PIPELINE_ID
   const current = isPipeline ? null : all.find((p) => p.id === currentId)
@@ -329,6 +351,7 @@ export function ProjectPicker({ currentId, person = null, pipelineCount = null }
     <button type="button" class=${p.id === currentId ? 'active' : ''} onClick=${() => go('/board/' + p.id)}>
       <${Dot} color=${p.color} />
       <span class="pp-name">${p.name}</span>
+      ${own(p) && html`<span class="pp-star" title="Deine Pipeline" aria-label="deine Pipeline"><${Icon} name="star" size=${14} /></span>`}
       ${shared(p) && html`<span class="tab-shared" title="Mit Gästen geteilt" aria-label="mit Gästen geteilt"><${Icon} name="users" size=${15} /></span>`}
       <span class="count">${openCountOf(p.id)}</span>
       ${p.id === currentId && html`<${Icon} name="check" size=${16} />`}
@@ -341,13 +364,16 @@ export function ProjectPicker({ currentId, person = null, pipelineCount = null }
       <button type="button" class=${active ? 'active' : ''} onClick=${() => go(path)}>
         <${Icon} name="account" size=${16} />
         <span class="pp-name">${personLabel(t)}</span>
+        ${t.email === me && html`<span class="pp-star" title="Deine Pipeline" aria-label="deine Pipeline"><${Icon} name="star" size=${14} /></span>`}
         <span class="count">${pipelineOpenCount(t.email)}</span>
         ${active && html`<${Icon} name="check" size=${16} />`}
       </button>
     </li>`
   }
+  // Eigene zuerst, sonst die Reihenfolge der Pipelines
+  const ownFirst = (list) => [...list.filter(own), ...list.filter((p) => !own(p))]
   const intern = filled.filter((p) => projectArea(p) === 'intern')
-  const sales = filled.filter((p) => projectArea(p) === 'sales')
+  const sales = ownFirst(filled.filter((p) => projectArea(p) === 'sales'))
   const label = isPipeline ? (viewingPerson ? personLabel(viewingPerson) : 'Meine Pipeline') : current ? current.name : 'Pipeline wählen'
   return html`<span class="project-picker" ref=${ref} onKeyDown=${onKeyDown}>
     <button type="button" ref=${btn} class="project-picker-btn" aria-haspopup="listbox" aria-expanded=${open} aria-label=${'Board wählen, aktuell ' + label} onClick=${toggle}>
@@ -359,8 +385,10 @@ export function ProjectPicker({ currentId, person = null, pipelineCount = null }
     ${open &&
     html`<ul class="stage-menu project-menu" role="listbox" aria-label="Boards" style=${{ top: pos.top + 'px', left: pos.left + 'px', width: pos.width + 'px', maxHeight: `calc(100vh - ${pos.top + 16}px)` }}>
       <li class="pp-sep" role="presentation">Intern</li>
-      ${people.map(personItem)}
-      ${intern.map(projectItem)}
+      ${people.filter((t) => t.email === me).map(personItem)}
+      ${intern.filter(own).map(projectItem)}
+      ${people.filter((t) => t.email !== me).map(personItem)}
+      ${intern.filter((p) => !own(p)).map(projectItem)}
       <li class="pp-sep" role="presentation">Extern / Sales</li>
       ${sales.map(projectItem)}
       ${!sales.length && html`<li class="pp-empty muted small" role="presentation">Noch keine Sales-Pipeline.</li>`}
