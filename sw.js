@@ -4,7 +4,7 @@
 // Anfragen an Supabase (andere Adresse) laufen nie über den Cache.
 // Zeigt Mitteilungen aus dem Chat an (34_chat_push.sql, Edge Function „chat-push“) und öffnet beim
 // Antippen die App an der richtigen Stelle.
-const VERSION = 'beqcrm-v38'
+const VERSION = 'beqcrm-v39'
 const FILES = [
   './',
   'index.html',
@@ -86,8 +86,11 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url)
   // Nur eigene Dateien, nur GET. Supabase und alles Fremde gehen direkt ins Netz.
   if (req.method !== 'GET' || url.origin !== self.location.origin) return
+  // „no-cache“: immer kurz beim Server nachfragen (ETag, meist nur „304 unverändert“). Sonst hält der
+  // Browser Dateien von GitHub Pages bis zu 10 Minuten (max-age=600) und zeigt nach dem
+  // Veröffentlichen noch die alte Fassung (gefunden am 24.11.2026).
   event.respondWith(
-    fetch(req)
+    fetch(req, { cache: 'no-cache' })
       .then((res) => {
         if (res.ok) {
           const copy = res.clone()
