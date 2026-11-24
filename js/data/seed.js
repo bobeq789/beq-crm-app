@@ -53,8 +53,10 @@ export function buildSeed() {
     const id = uid()
     P[name] = id
     S[name] = {}
-    // Bereich wie in 40_pipeline_bereich.sql: Allgemein, Events und Pilotkunden intern
-    const bereich = ['Allgemein', 'Events', 'Pilotkunden'].includes(name) ? 'intern' : 'sales'
+    // Bereich (40_pipeline_bereich.sql): „Allgemein“ ist intern und wird am Ende von buildSeed auf
+    // „Intern <Vorname>“ verteilt (seedInternBoards()). Im Demo-Modus bleiben Events und
+    // Pilotkunden als Sales-Pipelines stehen, damit die Klappliste etwas zeigt.
+    const bereich = name === 'Allgemein' ? 'intern' : 'sales'
     db.projects.push({ id, name, color, bereich, sort: i + 1, archived: false, created_at: created, updated_at: created })
     SETTINGS.defaultStages.forEach((st, j) => {
       const sid = uid()
@@ -690,7 +692,38 @@ export function buildSeed() {
 
   seedPipeline(db, K, today)
   seedChat(db)
+  seedInternBoards(db, created)
   return db
+}
+
+// Je Person eine interne Pipeline „Intern <Vorname>“ wie im echten CRM (Entscheidung vom
+// 24.11.2026). Die Deals aus „Allgemein“ ziehen zur zuständigen Person (ohne Zuständige zu Anna),
+// in die Spalte gleicher Art. „Allgemein“ wird danach archiviert.
+function seedInternBoards(db, created) {
+  const general = db.projects.find((x) => x.name === 'Allgemein')
+  if (!general) return
+  const colors = ['#5B6B75', '#27836B', '#34495A']
+  const boards = {}
+  DEMO_TEAM.filter((t) => t.role !== 'gast').forEach((t, i) => {
+    const id = uid()
+    db.projects.push({ id, name: 'Intern ' + t.name.split(' ')[0], color: colors[i % colors.length], bereich: 'intern', sort: 10 + i, archived: false, created_at: created, updated_at: created })
+    const stages = {}
+    SETTINGS.defaultStages.forEach((st, j) => {
+      const sid = uid()
+      stages[st.kind] = sid
+      db.stages.push({ id: sid, project_id: id, name: st.name, kind: st.kind, sort: j + 1, created_at: created })
+    })
+    boards[t.email] = { id, stages }
+  })
+  const kindOf = Object.fromEntries(db.stages.filter((x) => x.project_id === general.id).map((x) => [x.id, x.kind]))
+  db.cards
+    .filter((c) => c.project_id === general.id)
+    .forEach((c) => {
+      const b = boards[c.assignee] || boards[A]
+      c.project_id = b.id
+      c.stage_id = b.stages[kindOf[c.stage_id] || 'todo']
+    })
+  general.archived = true
 }
 
 // Meine Pipeline (36_meine_pipeline.sql), alles erfunden: weitere Zuständige, „vergeben von“,

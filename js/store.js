@@ -1244,10 +1244,37 @@ export function cardKind(card) {
   const s = getStage(card.stage_id)
   return s ? s.kind : 'todo'
 }
+// Eigene Pipelines (Wunsch vom 24.11.2026): am Namen erkannt, ohne eigenes Feld in der Datenbank.
+// Wörter aus der Mail-Adresse (vor dem @, getrennt an Punkt, Strich, Unterstrich) und aus dem Namen
+// im Team. Steht eines davon als ganzes Wort im Namen der Pipeline, ist es eine eigene, zum
+// Beispiel „Vertrieb Sebastian“ oder „Intern Sebastian“ für Sebastian Ruppert. Umlaute zählen wie
+// ae, oe, ue.
+const plainWords = (s) =>
+  String(s || '')
+    .toLowerCase()
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+    .replace(/ß/g, 'ss')
+    .split(/[^a-z]+/)
+    .filter((w) => w.length >= 3)
+export function ownWords(email, name) {
+  const local = String(email || '').split('@')[0]
+  return new Set([...plainWords(local), ...plainWords(name)])
+}
+export const isOwnProject = (p, words) => !!p && plainWords(p.name).some((w) => words.has(w))
+export const projectArea = (p) => (p && p.bereich === 'intern' ? 'intern' : 'sales')
+// Interne Pipeline einer Person („Intern <Vorname>“, Entscheidung vom 24.11.2026), sonst null
+export function internProjectOf(email) {
+  const words = ownWords(email, memberName(email))
+  return activeProjects().find((p) => projectArea(p) === 'intern' && isOwnProject(p, words)) || null
+}
+// Vorgabe für neue Deals: die eigene interne Pipeline, sonst „Allgemein“ (ältere Stände), sonst die erste
 export function defaultProjectId() {
   const list = activeProjects()
-  const allgemein = list.find((p) => p.name === SETTINGS.defaultProjectName)
-  return (allgemein || list[0] || {}).id || null
+  const own = myEmail() ? internProjectOf(myEmail()) : null
+  const fallback = list.find((p) => p.name === SETTINGS.defaultProjectName)
+  return (own || fallback || list[0] || {}).id || null
 }
 export function notesFor(field, id) {
   return state.db.notes.filter((n) => n[field] === id).sort((a, b) => b.created_at.localeCompare(a.created_at))

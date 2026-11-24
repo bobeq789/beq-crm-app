@@ -1,13 +1,12 @@
 // Einstieg der App: Rahmen (Kopfleiste, Navigation), Seitenwahl, Fenster über der Seite, Service Worker
 import { html, render, useEffect } from './lib/preact.js'
 import { Icon } from './lib/icons.js'
-import { useStore, boot, isDemo, isGuest, isSuperAdmin, state } from './store.js'
+import { useStore, boot, isDemo, isGuest, isSuperAdmin, state, getCard, internProjectOf, myEmail } from './store.js'
 import { useRoute } from './router.js'
 import { local } from './lib/util.js'
 import { Dialogs, Toasts } from './ui/common.js'
 import { Overview, overviewCount } from './ui/overview.js'
 import { Board } from './ui/board.js'
-import { PipelinePage } from './ui/pipeline.js'
 import { TeamPage } from './ui/team.js'
 import { CardPanel } from './ui/card.js'
 import { CalendarPage, EventPanel } from './ui/calendar.js'
@@ -45,8 +44,9 @@ const NAV_GUEST = [
   { key: 'chat', label: 'Chat', icon: 'chat' },
 ]
 // Am Handy unten nur fünf Bereiche und „Mehr“, der Rest steckt hinter „Mehr“.
-// „Meine Pipeline“ ist kein eigener Bereich mehr (Wunsch vom 24.11.2026): Sie steht im Board als
-// erster Eintrag der Klappliste (#/board/meine). #/pipeline bleibt als alte Adresse (Mitteilungen).
+// „Meine Pipeline“ / „Pipeline von …“ gibt es nicht mehr (Entscheidung vom 24.11.2026): Jede Person
+// hat das Board „Intern <Name>“. Die alten Adressen #/pipeline und #/board/meine (Mitteilungen, Links)
+// öffnen dieses Board, mit ?karte= das Board der Karte (pipelineTarget()).
 const MOBILE_MAIN = ['', 'board', 'chat', 'postfach', 'kalender']
 // Am Rechner zwischen 760 und 1279 px stecken diese zusätzlich hinter „Mehr“ (styles.css, .nav-minor)
 const NAV_MINOR = ['meetings', 'firmen', 'team']
@@ -67,6 +67,15 @@ function NavMore() {
 dialogKinds['nav-more'] = NavMore
 Object.assign(dialogKinds, chatDialogs)
 
+// Ziel der alten Adressen #/pipeline und #/board/meine: mit ?karte= das Board der Karte, sonst
+// „Intern <Name>“ der Person aus ?von= (ohne: ich), sonst das zuletzt gewählte oder erste Board
+function pipelineTarget(params) {
+  const card = params.get('karte') ? getCard(params.get('karte')) : null
+  if (card) return card.project_id
+  const own = internProjectOf(params.get('von') || myEmail())
+  return own ? own.id : null
+}
+
 function Page({ route }) {
   const [section, id, sub] = route.parts
   // Gäste sehen nur „Geteilt“, den Chat (Kanäle, in die sie eingeladen sind) und die Einstellungen
@@ -79,15 +88,15 @@ function Page({ route }) {
     case undefined:
       return html`<${Overview} />`
     case 'board': {
-      // Ohne Projekt in der Adresse: zuletzt gewählt, beim ersten Mal die eigene Pipeline
+      // Ohne Projekt in der Adresse: zuletzt gewählt, beim ersten Mal das eigene „Intern <Name>“
       const last = local.get('beqcrm-last-project')
-      if (id === 'meine' || (!id && (!last || last === 'meine'))) return html`<${PipelinePage} params=${route.params} />`
+      if (id === 'meine' || (!id && (!last || last === 'meine'))) return html`<${Board} projectId=${pipelineTarget(route.params)} />`
       return html`<${Board} projectId=${id} archiveOpen=${sub === 'archiv'} archiveQuery=${route.params.get('q') || ''} />`
     }
     case 'chat':
       return html`<${ChatPage} raumId=${id} verlauf=${route.params.get('verlauf')} nachricht=${route.params.get('nachricht')} />`
     case 'pipeline':
-      return html`<${PipelinePage} params=${route.params} />`
+      return html`<${Board} projectId=${pipelineTarget(route.params)} />`
     case 'team':
       return html`<${TeamPage} />`
     case 'sales':

@@ -1673,7 +1673,16 @@ input.sub-title:hover, input.sub-title:focus { border-color: var(--border); back
 .project-menu { overflow-y: auto; }
 .project-menu .pp-empty { padding: 4px 10px 8px; }
 .project-menu .pp-star { display: inline-flex; color: var(--accent-text); flex: none; }
-.project-menu .pp-sep { padding: 10px 10px 4px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+/* Gruppen der Klappliste (Übersicht, Intern, Extern / Sales) als Balken in Navy, damit man sie
+   auf einen Blick trennt (Wunsch vom 24.11.2026). Im Dunkelmodus Navy 3 auf Navy 2. */
+.project-menu .pp-sep {
+  margin: 10px 0 4px; padding: 7px 10px; border-radius: 6px;
+  background: var(--navy); color: var(--white);
+  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.project-menu .pp-sep:first-child { margin-top: 0; }
+:root[data-theme="dark"] .project-menu .pp-sep { background: var(--navy-3); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .project-menu .pp-sep { background: var(--navy-3); } }
 .project-menu button.pp-more { color: var(--accent-text); font-size: 14px; }
 /* Im Chat: wer angemeldet und online ist (37_team_online.sql) */
 button.chat-item.chat-person { width: 100%; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; }

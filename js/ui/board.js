@@ -3,10 +3,12 @@ import { html, useState, useEffect, useRef } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { SETTINGS } from '../settings.js'
 import { matches, local, fmtEuro, fmtDate, norm, firstName } from '../lib/util.js'
-import { pipelinePeople, pipelineOpenCount } from './pipeline.js'
 import {
   state,
   activeProjects,
+  projectArea,
+  ownWords,
+  isOwnProject,
   stagesOf,
   getProject,
   getPerson,
@@ -252,38 +254,20 @@ function StageMenu({ stage, onRename, onAddAt, label = '' }) {
 
 // Klappliste oben im Board (Wunsch vom 24.11.2026): statt einer Reihe Reiter ein Knopf mit der
 // aktuellen Auswahl. Die Liste hat zwei Gruppen (40_pipeline_bereich.sql):
-//   „Intern“: Meine Pipeline (#/board/meine, js/ui/pipeline.js), die Pipelines der Kollegen, die
-//     man sehen darf (pipelinePeople(), #/board/meine?von=<Adresse>), und Projekte mit bereich intern
+//   „Intern“: Projekte mit bereich intern, je Person eines („Intern <Vorname>“, Entscheidung vom
+//     24.11.2026, ersetzt „Meine Pipeline“ und „Pipeline von …“)
 //   „Extern / Sales“: Projekte mit bereich sales (ohne Angabe ebenfalls Sales)
+// Eigene Pipelines (am Namen erkannt) stehen in jeder Gruppe oben mit Sternchen, auch leer.
 // Je Projekt Farbe, Zahl der offenen Aufgaben und das Zeichen für geteilte Projekte. Projekte ganz
 // ohne Aufgaben (auch ohne archivierte) stehen erst nach „Leere Pipelines anzeigen“, gelöscht
 // wird nichts. Liegt wie das Spaltenmenü fest über der Seite. Wird auch von der Pipeline genutzt.
 const PICKER_WIDTH = 320
-export const PIPELINE_ID = 'meine'
 const openCountOf = (id) => state.db.cards.filter((c) => c.project_id === id && isOpen(c)).length
 const hasCards = (id) => state.db.cards.some((c) => c.project_id === id)
-export const projectArea = (p) => (p && p.bereich === 'intern' ? 'intern' : 'sales')
+// projectArea, ownWords, isOwnProject stehen in store.js (dort braucht sie die Vorgabe für neue Deals)
+export { projectArea, ownWords, isOwnProject }
 
-// Eigene Pipelines (Wunsch vom 24.11.2026): am Namen erkannt, ohne eigenes Feld in der Datenbank.
-// Wörter aus der Mail-Adresse (vor dem @, getrennt an Punkt, Strich, Unterstrich) und aus dem Namen
-// im Team. Steht eines davon als ganzes Wort im Namen der Pipeline, ist es eine eigene, zum
-// Beispiel „Vertrieb Sebastian“ für Sebastian Ruppert. Umlaute zählen wie ae, oe, ue.
-const plainWords = (s) =>
-  String(s || '')
-    .toLowerCase()
-    .replace(/ä/g, 'ae')
-    .replace(/ö/g, 'oe')
-    .replace(/ü/g, 'ue')
-    .replace(/ß/g, 'ss')
-    .split(/[^a-z]+/)
-    .filter((w) => w.length >= 3)
-export function ownWords(email, name) {
-  const local = String(email || '').split('@')[0]
-  return new Set([...plainWords(local), ...plainWords(name)])
-}
-export const isOwnProject = (p, words) => !!p && plainWords(p.name).some((w) => words.has(w))
-
-export function ProjectPicker({ currentId, person = null, pipelineCount = null }) {
+export function ProjectPicker({ currentId }) {
   const [pos, setPos] = useState(null)
   const [showEmpty, setShowEmpty] = useState(false)
   const open = !!pos
@@ -321,25 +305,7 @@ export function ProjectPicker({ currentId, person = null, pipelineCount = null }
   // Eigene Pipelines stehen immer da, auch leer
   const filled = all.filter((p) => hasCards(p.id) || p.id === currentId || own(p))
   const empty = all.filter((p) => !filled.includes(p))
-  const isPipeline = currentId === PIPELINE_ID
-  const current = isPipeline ? null : all.find((p) => p.id === currentId)
-  const me = norm(myEmail())
-  const viewing = isPipeline ? norm(person || me) : null
-  // Pipelines von Personen: ich zuerst, dann die anderen nach Namen. Vorname reicht, außer zwei
-  // Personen heißen gleich.
-  const people = pipelinePeople()
-    .map((t) => ({ email: norm(t.email), name: t.name || t.email }))
-    .sort((a, b) => Number(b.email === me) - Number(a.email === me) || a.name.localeCompare(b.name, 'de'))
-  // „Meine Pipeline“ steht immer da, auch wenn ich nicht in der Liste bin (zum Beispiel als Gast)
-  if (!people.some((t) => t.email === me)) people.unshift({ email: me, name: memberName(me) || me })
-  const firstNames = people.map((t) => firstName(t.name))
-  // Auch die eigene mit Namen („Pipeline von Sebastian“, Wunsch vom 24.11.2026), das Sternchen zeigt,
-  // dass es die eigene ist. Ohne Namen im Team bleibt es „Meine Pipeline“.
-  const personLabel = (t) => {
-    if (t.email === me && (!t.name || t.name === t.email)) return 'Meine Pipeline'
-    return 'Pipeline von ' + (firstNames.filter((f) => f === firstName(t.name)).length > 1 ? t.name : firstName(t.name))
-  }
-  const viewingPerson = people.find((t) => t.email === viewing)
+  const current = all.find((p) => p.id === currentId)
   const shared = (p) => projectSharesOf(p.id).length > 0
   // Escape auch direkt am Knopf (der Fokus liegt dort), falls die Liste gerade erst aufging
   const onKeyDown = (e) => {
@@ -362,38 +328,23 @@ export function ProjectPicker({ currentId, person = null, pipelineCount = null }
       ${p.id === currentId && html`<${Icon} name="check" size=${16} />`}
     </button>
   </li>`
-  const personItem = (t) => {
-    const active = isPipeline && viewing === t.email
-    const path = '/board/' + PIPELINE_ID + (t.email === me ? '' : '?von=' + encodeURIComponent(t.email))
-    return html`<li key=${'p-' + t.email} role="option" aria-selected=${active}>
-      <button type="button" class=${active ? 'active' : ''} onClick=${() => go(path)}>
-        <${Icon} name="account" size=${16} />
-        <span class="pp-name">${personLabel(t)}</span>
-        ${t.email === me && html`<span class="pp-star" title="Deine Pipeline" aria-label="deine Pipeline"><${Icon} name="star" size=${14} /></span>`}
-        <span class="count">${pipelineOpenCount(t.email)}</span>
-        ${active && html`<${Icon} name="check" size=${16} />`}
-      </button>
-    </li>`
-  }
   // Eigene zuerst, sonst die Reihenfolge der Pipelines
   const ownFirst = (list) => [...list.filter(own), ...list.filter((p) => !own(p))]
-  const intern = filled.filter((p) => projectArea(p) === 'intern')
+  const intern = ownFirst(filled.filter((p) => projectArea(p) === 'intern'))
   const sales = ownFirst(filled.filter((p) => projectArea(p) === 'sales'))
-  const label = isPipeline ? personLabel(viewingPerson || people.find((t) => t.email === me)) : current ? current.name : 'Pipeline wählen'
+  const label = current ? current.name : 'Pipeline wählen'
   return html`<span class="project-picker" ref=${ref} onKeyDown=${onKeyDown}>
     <button type="button" ref=${btn} class="project-picker-btn" aria-haspopup="listbox" aria-expanded=${open} aria-label=${'Board wählen, aktuell ' + label} onClick=${toggle}>
-      ${isPipeline ? html`<${Icon} name="account" size=${18} />` : current && html`<${Dot} color=${current.color} />`}
+      ${current && html`<${Dot} color=${current.color} />`}
       <span class="pp-name">${label}</span>
-      ${isPipeline ? pipelineCount !== null && html`<span class="count">${pipelineCount}</span>` : current && html`<span class="count">${openCountOf(current.id)}</span>`}
+      ${current && html`<span class="count">${openCountOf(current.id)}</span>`}
       <span class=${'pp-chevron' + (open ? ' open' : '')}><${Icon} name="chevron" size=${16} /></span>
     </button>
     ${open &&
     html`<ul class="stage-menu project-menu" role="listbox" aria-label="Boards" style=${{ top: pos.top + 'px', left: pos.left + 'px', width: pos.width + 'px', maxHeight: `calc(100vh - ${pos.top + 16}px)` }}>
       <li class="pp-sep" role="presentation">Intern</li>
-      ${people.filter((t) => t.email === me).map(personItem)}
-      ${intern.filter(own).map(projectItem)}
-      ${people.filter((t) => t.email !== me).map(personItem)}
-      ${intern.filter((p) => !own(p)).map(projectItem)}
+      ${intern.map(projectItem)}
+      ${!intern.length && html`<li class="pp-empty muted small" role="presentation">Noch keine interne Pipeline.</li>`}
       <li class="pp-sep" role="presentation">Extern / Sales</li>
       ${sales.map(projectItem)}
       ${!sales.length && html`<li class="pp-empty muted small" role="presentation">Noch keine Sales-Pipeline.</li>`}

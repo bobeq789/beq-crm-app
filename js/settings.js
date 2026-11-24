@@ -32,5 +32,6 @@ export const SETTINGS = {
     { value: '#BFEADF', label: 'Grün hell' },
     { value: '#5B6B75', label: 'Schiefer' },
   ],
+  // Rückfall für neue Deals, wenn es keine eigene „Intern <Vorname>“ gibt (defaultProjectId() in store.js)
   defaultProjectName: 'Allgemein',
 }
