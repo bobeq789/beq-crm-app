@@ -498,6 +498,10 @@ export async function createSupabaseApi(config) {
       check(await client.from('card_seen').upsert({ card_id: cardId, email: email.toLowerCase(), seen_at: new Date().toISOString() }, { onConflict: 'card_id,email' }))
     },
     // Marken „Neu“ (und später „@ dich“)
+    // Deals, die mir jemand seit meinem letzten Blick gegeben hat (43_team_kachel.sql)
+    async cardGiven() {
+      return check(await client.rpc('my_card_given'))
+    },
     async cardFlags() {
       return check(await client.rpc('my_card_flags'))
     },

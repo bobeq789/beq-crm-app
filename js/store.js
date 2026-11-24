@@ -37,6 +37,8 @@ export const state = {
   flags: new Map(),
   // Letzte Zuweisung je Karte: card_id → { actor, at, assignee } (für „Von dir vergeben“, seit wann)
   handovers: new Map(),
+  // Deals, die mir seit meinem letzten Blick gegeben wurden (43_team_kachel.sql)
+  given: new Map(),
   // Zählt hoch, wenn neue Verlaufseinträge ohne Kartenänderung dazukommen (zum Beispiel Dateien)
   historyTick: 0,
   // Follow-up (20_follow_up.sql), nur eigene Postfächer: „Antwort da“ je Aufgabe, neue Mails im
@@ -561,10 +563,18 @@ export async function reload(throwErrors = false) {
 export async function loadFlags() {
   // Ohne Verlauf (zum Beispiel 03_verlauf.sql oder 04_zustaendig.sql noch nicht ausgeführt)
   // gibt es einfach keine Marken und kein „seit“ bei „Von dir vergeben“
-  const [flags, handovers] = await Promise.all([api.cardFlags().catch(() => []), api.handovers().catch(() => [])])
+  // Ohne 43_team_kachel.sql gibt es „Dir neu gegeben“ einfach noch nicht
+  const [flags, handovers, given] = await Promise.all([
+    api.cardFlags().catch(() => []),
+    api.handovers().catch(() => []),
+    api.cardGiven ? api.cardGiven().catch(() => []) : [],
+  ])
   state.flags = new Map((flags || []).map((r) => [r.card_id, r]))
   state.handovers = new Map((handovers || []).map((r) => [r.card_id, r]))
+  state.given = new Map((given || []).map((r) => [r.card_id, r]))
 }
+// Mir seit meinem letzten Blick gegeben (Kachel „Team“): { actor, at, art } oder null
+export const givenToMe = (cardId) => (state.given && state.given.get(cardId)) || null
 export const isNew = (cardId) => !!(state.flags.get(cardId) || {}).is_new
 // Jemand anderes als ich ist zuständig (dann zeigen Karten und Listen ein Kürzel)
 export const assignedToOther = (card) => !!card.assignee && norm(card.assignee) !== norm(myEmail())
@@ -576,6 +586,7 @@ export const isMentioned = (cardId) => !!(state.flags.get(cardId) || {}).mention
 export async function markCardSeen(cardId) {
   if (state.flags.has(cardId)) {
     state.flags.delete(cardId)
+    if (state.given) state.given.delete(cardId)
     emit()
   }
   try {

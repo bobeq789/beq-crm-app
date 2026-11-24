@@ -510,6 +510,32 @@ export function cardFlags(db, email, teamSince) {
   return [...flags.values()]
 }
 
+// Wie my_card_given() in 43_team_kachel.sql: Deals, die mir jemand anderes seit meinem letzten
+// Blick gegeben hat (zuständig gesetzt, als weitere Person eingetragen oder für mich angelegt)
+export function cardGiven(db, email, teamSince) {
+  const me = String(email || '').toLowerCase()
+  const since = new Date(teamSince || Date.now())
+  since.setHours(0, 0, 0, 0)
+  const seen = new Map(db.card_seen.filter((s) => s.email === me).map((s) => [s.card_id, s.seen_at]))
+  const out = new Map()
+  db.card_events.forEach((e) => {
+    if (!e.actor || e.actor.toLowerCase() === me || new Date(e.at) < since) return
+    const s = seen.get(e.card_id)
+    if (s && e.at <= s) return
+    const card = db.cards.find((c) => c.id === e.card_id)
+    if (!card) return
+    const detail = String(e.detail || '').toLowerCase()
+    let art = null
+    if (e.kind === 'zustaendig' && detail === me) art = 'zustaendig'
+    else if (e.kind === 'mitzustaendig_dazu' && detail === me) art = 'mitzustaendig'
+    else if (e.kind === 'angelegt' && (String(card.assignee || '').toLowerCase() === me || (card.mitzustaendig || []).map((x) => x.toLowerCase()).includes(me))) art = 'angelegt'
+    if (!art) return
+    const prev = out.get(e.card_id)
+    if (!prev || e.at > prev.at || (e.at === prev.at && prev.art === 'angelegt')) out.set(e.card_id, { card_id: e.card_id, actor: e.actor.toLowerCase(), at: e.at, art })
+  })
+  return [...out.values()]
+}
+
 // Was ein Gast sehen darf (wie die Regeln in 01_schema.sql)
 export function guestView(db, email) {
   const me = String(email || '').toLowerCase()

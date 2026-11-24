@@ -16,6 +16,8 @@ import {
   isMentioned,
   flagOf,
   lastHandover,
+  givenToMe,
+  memberName,
   nextActivity,
   allActivities,
   isMyActivity,
@@ -239,23 +241,29 @@ function MoreList({ items, render }) {
     </button>`}`
 }
 
-// Kachel „Team“ (Entscheidung vom 24.11.2026: nur was mich betrifft)
-// „Neu seit deinem letzten Blick“: Kollegen haben etwas geändert an Aufgaben, die mich betreffen
-// (ich bin zuständig oder mitzuständig, ich habe sie vergeben oder bin erwähnt). „Von dir vergeben“: dieselbe Regel wie „Von mir vergeben“ in der
-// Pipeline (cards.vergeben_von, 36_meine_pipeline.sql), also nur echte Weitergaben.
+// Kachel „Team“ (Entscheidungen vom 24.11.2026): nur, was andere für mich getan haben, keine bloßen
+// Änderungen mehr (die doppelten sich mit „Zu erledigen“).
+//   „Du wurdest erwähnt“: ungelesene @Erwähnung von jemand anderem (my_card_flags().mentioned)
+//   „Dir neu gegeben“: seit meinem letzten Blick an mich gegeben oder für mich angelegt (my_card_given(),
+//     43_team_kachel.sql), ohne die schon unter „erwähnt“
+//   „Von dir vergeben“: dieselbe Regel wie „Von mir vergeben“ in der Pipeline (cards.vergeben_von)
+// concernsMe() bleibt für die Pipeline anderer und andere Stellen.
 export function concernsMe(card, me = norm(myEmail())) {
   if (isCardOf(card, me)) return true
   if (norm(card.vergeben_von || '') === me) return true
   return isMentioned(card.id)
 }
+// Kurz am Deal: von wem und wann, „dazu“ heißt als weitere zuständige Person
+const givenText = (g) => `von ${firstName(memberName(g.actor) || g.actor)}${g.art === 'mitzustaendig' ? ', dazu' : ''}, ${fmtRelative(g.at)}`
 function TeamTile({ drag }) {
   const me = norm(myEmail())
   const open = state.db.cards.filter(isOpen)
   const lastChange = (c) => String((flagOf(c.id) || {}).last_change || '')
-  // Erwähnungen („@ dich“) stehen oben, sonst zuletzt geändert zuerst
-  const fresh = open
-    .filter((c) => isNew(c.id) && concernsMe(c, me))
-    .sort((a, b) => Number(isMentioned(b.id)) - Number(isMentioned(a.id)) || lastChange(b).localeCompare(lastChange(a)))
+  const mentioned = open.filter((c) => isMentioned(c.id)).sort((a, b) => lastChange(b).localeCompare(lastChange(a)))
+  const given = open
+    .filter((c) => !isMentioned(c.id) && givenToMe(c.id))
+    .map((c) => ({ card: c, g: givenToMe(c.id) }))
+    .sort((a, b) => String(b.g.at).localeCompare(String(a.g.at)))
   // Von dir vergeben: jemand anderes ist Hauptperson, und ich habe sie zuletzt an sie gegeben.
   // „seit“: letzte Zuweisung an die zuständige Person, sonst das Anlegen.
   const elsewhere = open
@@ -268,10 +276,16 @@ function TeamTile({ drag }) {
   // Die Zahl zählt immer alle, sichtbar sind zuerst 8, „Alle n anzeigen“ klappt den Rest auf
   return html`<${Tile} title="Team" drag=${drag}>
     <div class="task-group">
-      <h3 class="group-title">Neu seit deinem letzten Blick ${fresh.length > 0 && html`<span class="count">${fresh.length}</span>`}</h3>
-      ${fresh.length
-        ? html`<${MoreList} items=${fresh} render=${(c) => html`<${TaskRow} card=${c} key=${c.id} />`} />`
-        : html`<${Empty}>Keine Änderungen von anderen an deinen Deals.<//>`}
+      <h3 class="group-title">Du wurdest erwähnt ${mentioned.length > 0 && html`<span class="count">${mentioned.length}</span>`}</h3>
+      ${mentioned.length
+        ? html`<${MoreList} items=${mentioned} render=${(c) => html`<${TaskRow} card=${c} key=${c.id} />`} />`
+        : html`<${Empty}>Niemand hat dich neu erwähnt.<//>`}
+    </div>
+    <div class="task-group">
+      <h3 class="group-title">Dir neu gegeben ${given.length > 0 && html`<span class="count">${given.length}</span>`}</h3>
+      ${given.length
+        ? html`<${MoreList} items=${given} render=${(x) => html`<${TaskRow} card=${x.card} key=${x.card.id} showSince=${true} sinceText=${givenText(x.g)} />`} />`
+        : html`<${Empty}>Dir hat niemand etwas Neues gegeben.<//>`}
     </div>
     <div class="task-group">
       <h3 class="group-title">Von dir vergeben ${elsewhere.length > 0 && html`<span class="count">${elsewhere.length}</span>`}</h3>

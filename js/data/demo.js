@@ -34,6 +34,7 @@ import {
   cardEventsFor,
   noteEventsFor,
   cardFlags,
+  cardGiven,
   archiveOldDone,
   activityAreaSuggestion,
   subtaskEventsFor,
@@ -526,6 +527,11 @@ export function createDemoApi({ asGuest = false } = {}) {
       save()
     },
     // Marken „Neu“ (und später „@ dich“)
+    async cardGiven() {
+      if (asGuest) return []
+      const self = db.team_members.find((t) => t.email === me)
+      return cardGiven(db, me, self && self.created_at)
+    },
     async cardFlags() {
       const source = asGuest ? guestView(db, me) : db
       const self = db.team_members.find((t) => t.email === me)
