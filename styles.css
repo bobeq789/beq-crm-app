@@ -1677,3 +1677,31 @@ button.chat-item.chat-person { width: 100%; border: 0; background: none; font: i
 .cal-name { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
 .cal-empty-hint { font-size: 12px; font-weight: 400; color: var(--muted); line-height: 1.2; }
 .cal-toggles .cal-toggle:has(.cal-empty-hint) { min-height: 44px; border-radius: 12px; }
+/* Klappliste mit Häkchen (MultiSelect in ui/common.js), zum Beispiel „Weitere zuständig“ */
+.multi-select { position: relative; }
+.multi-select-btn {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 44px; padding: 9px 12px;
+  font: inherit; font-size: 16px; text-align: left; cursor: pointer;
+  background: var(--input-bg); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.multi-select-btn:focus-visible { outline: none; border-color: var(--green); }
+.multi-select-btn.is-empty .multi-select-text { color: var(--faint); }
+.multi-select-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.multi-select-list {
+  position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 4px); max-height: 280px; overflow-y: auto;
+  list-style: none; margin: 0; padding: 6px; background: var(--raised); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.multi-select-item { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 8px; border-radius: var(--radius-sm); cursor: pointer; }
+.multi-select-item:hover { background: var(--hover); }
+.multi-select-item input { width: 18px; min-height: 0; height: 18px; margin: 0; accent-color: var(--green); }
+/* Deal in Abschnitten (Wunsch vom 24.11.2026): Überblick, Wert und Status, Aktivitäten,
+   Beschreibung, Notizen, Dateien, Verlauf. Flächen in Karte (#F1F4F6), im Dunkelmodus Navy 2. */
+.deal-section { background: var(--surface); border-radius: 10px; padding: 16px; margin-top: 14px; }
+.deal-section > .field:last-child, .deal-section > :last-child { margin-bottom: 0; }
+.deal-section-title, .deal-section .section-title {
+  margin: 0 0 12px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent-text);
+}
+.deal-section .section-title .count { text-transform: none; letter-spacing: 0; }
+.deal-section .field-grid + .field-grid { margin-top: 4px; }
+.deal-section textarea, .deal-section input, .deal-section select, .deal-section .multi-select-btn { background: var(--input-bg); }
+.act-explain { margin: -6px 0 10px; }

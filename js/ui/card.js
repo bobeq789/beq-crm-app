@@ -31,14 +31,9 @@ import {
   answerFor,
   activeMembers,
   setCoAssignees,
-  subtasksOf,
-  createSubtask,
-  toggleSubtask,
-  canDeleteSubtask,
-  deleteSubtask,
 } from '../store.js'
 import { closeCard } from '../router.js'
-import { Field, PriorityPicker, ProjectSelect, EntityPicker, Notes, Dot, LinkText, brandSafe, LabelPicker, Labels, useOverlay } from './common.js'
+import { Field, MultiSelect, PriorityPicker, ProjectSelect, EntityPicker, Notes, Dot, LinkText, brandSafe, LabelPicker, Labels, useOverlay } from './common.js'
 import { History } from './history.js'
 import { CardFiles } from './files.js'
 import { CardDeal } from './deal.js'
@@ -74,37 +69,31 @@ function ShareRow({ card }) {
   </div>`
 }
 
-// Zuständig als Knöpfe: „Niemand“, „Ich“, dann das Team, dann Gäste. Ein Tipp speichert.
-// Gäste sehen nur „Niemand“, „Ich“ und das Team (sie dürfen keinem anderen Gast zuweisen).
-function AssigneePicker({ card }) {
+// Zuständig als Klappliste (Wunsch vom 24.11.2026, vorher Knöpfe): „Niemand“, „Ich“, dann das
+// Team, dann Gäste. Eine Auswahl speichert. Gäste sehen nur „Niemand“, „Ich“ und das Team (sie
+// dürfen keinem anderen Gast zuweisen).
+function AssigneePicker({ card, id = 'card-assignee' }) {
   const me = norm(myEmail())
   const current = norm(card.assignee || '')
   const guestMode = isGuest()
   const byName = (a, b) => a.name.localeCompare(b.name, 'de')
   const others = state.db.team_members.filter((t) => t.active && norm(t.email) !== me)
-  const options = [
-    { value: null, label: 'Niemand' },
-    { value: myEmail(), label: 'Ich' },
-    ...others.filter((t) => t.role !== 'gast').sort(byName).map((t) => ({ value: t.email, label: t.name })),
-    ...(guestMode ? [] : others.filter((t) => t.role === 'gast').sort(byName).map((t) => ({ value: t.email, label: t.name, guest: true }))),
-  ]
+  const team = others.filter((t) => t.role !== 'gast').sort(byName)
+  const guests = guestMode ? [] : others.filter((t) => t.role === 'gast').sort(byName)
   // Zuständig ist jemand, der nicht mehr aktiv ist: trotzdem anzeigen
-  if (current && current !== me && !options.some((o) => o.value && norm(o.value) === current)) {
-    options.push({ value: card.assignee, label: memberName(card.assignee) })
+  const missing = current && current !== me && !others.some((t) => norm(t.email) === current)
+  const value = !current ? '' : current === me ? me : current
+  const onChange = (e) => {
+    const v = e.target.value
+    if (norm(v) !== current) assignCard(card, v || null)
   }
-  return html`<div class="chips assignee-picker" role="group" aria-label="Zuständig">
-    ${options.map((o) => {
-      const on = o.value ? norm(o.value) === current : !current
-      return html`<button
-        type="button"
-        class=${'chip-btn' + (on ? ' active' : '')}
-        aria-pressed=${on}
-        onClick=${() => !on && assignCard(card, o.value)}
-      >
-        ${o.label}${o.guest && html`<span class="chip-note">Gast</span>`}
-      </button>`
-    })}
-  </div>`
+  return html`<select id=${id} class="assignee-select" value=${value} onChange=${onChange}>
+    <option value="">Niemand</option>
+    <option value=${me}>Ich</option>
+    ${team.map((t) => html`<option value=${norm(t.email)}>${t.name}</option>`)}
+    ${guests.length > 0 && html`<optgroup label="Gäste">${guests.map((t) => html`<option value=${norm(t.email)}>${t.name}</option>`)}</optgroup>`}
+    ${missing && html`<option value=${current}>${memberName(card.assignee)}</option>`}
+  </select>`
 }
 
 // Weitere Zuständige (36_meine_pipeline.sql): nur Teammitglieder, nie Gäste, nie die Hauptperson.
@@ -122,101 +111,18 @@ function CoAssigneePicker({ card }) {
     if (!on && list.length >= MAX_CO) return toast(`Höchstens ${MAX_CO} weitere Zuständige je Deal.`, { error: true })
     setCoAssignees(card, on ? list.filter((x) => x !== e) : [...list, e])
   }
-  return html`<${Field} label="Weitere zuständig">
-    <div class="chips co-assignee-picker" role="group" aria-label="Weitere zuständig">
-      ${options.map((t) => {
-        const e = norm(t.email)
-        const on = list.includes(e)
-        return html`<button type="button" class=${'chip-btn' + (on ? ' active' : '')} aria-pressed=${on} onClick=${() => toggle(e, on)}>
-          ${on && html`<${Icon} name="check" size=${14} />`} ${e === me ? 'Ich' : t.name}
-        </button>`
-      })}
-    </div>
+  return html`<${Field} label="Weitere zuständig" htmlFor="card-co-assignees">
+    <${MultiSelect}
+      id="card-co-assignees"
+      label="Weitere zuständig"
+      empty="Niemand weiter"
+      options=${options.map((t) => ({ value: norm(t.email), label: norm(t.email) === me ? 'Ich' : t.name }))}
+      value=${list}
+      onToggle=${(e, on) => toggle(e, on)}
+    />
   <//>`
 }
 
-// Unteraufgaben (36_meine_pipeline.sql): Checkliste mit Haken, optional zuständig und fällig.
-// Gäste haken nur ab. Wer jemandem eine Unteraufgabe gibt, bringt die Aufgabe in dessen Pipeline.
-function SubtaskRow({ u, guest }) {
-  const [titel, setTitel] = useState(u.titel)
-  useEffect(() => setTitel(u.titel), [u.titel])
-  const done = !!u.erledigt_at
-  const save = () => {
-    const t = titel.trim()
-    if (!t) setTitel(u.titel)
-    else if (t !== u.titel) update('unteraufgaben', u.id, { titel: t })
-  }
-  const remove = async () => {
-    const ok = await confirmDialog({ title: 'Punkt der Checkliste löschen?', text: `„${u.titel}“ ist danach weg. Erledigtes besser abhaken.`, confirmLabel: 'Löschen', danger: true })
-    if (ok) deleteSubtask(u)
-  }
-  return html`<li class=${'sub-item' + (done ? ' sub-done' : '')}>
-    <button
-      type="button"
-      class=${'check' + (done ? ' checked' : '')}
-      aria-pressed=${done}
-      aria-label=${(done ? 'Wieder öffnen: ' : 'Abhaken: ') + u.titel}
-      title=${done ? 'Wieder öffnen' : 'Abhaken'}
-      onClick=${() => toggleSubtask(u)}
-    >
-      <${Icon} name="check" size=${16} />
-    </button>
-    ${guest
-      ? html`<span class="sub-title">${u.titel}</span>`
-      : html`<input
-          class="sub-title"
-          value=${titel}
-          aria-label="Punkt der Checkliste"
-          onInput=${(e) => setTitel(e.target.value)}
-          onBlur=${save}
-          onKeyDown=${(e) => e.key === 'Enter' && e.target.blur()}
-        />`}
-    <span class="sub-meta">
-      ${guest
-        ? u.zustaendig && html`<span class="muted small">${firstName(memberName(u.zustaendig))}</span>`
-        : html`<select class="sub-who" value=${u.zustaendig || ''} aria-label=${'Zuständig für „' + u.titel + '“'} onChange=${(e) => update('unteraufgaben', u.id, { zustaendig: e.target.value || null })}>
-            <option value="">Niemand</option>
-            ${activeMembers().map((t) => html`<option value=${norm(t.email)}>${norm(t.email) === norm(myEmail()) ? 'Ich' : t.name}</option>`)}
-            ${u.zustaendig && !activeMembers().some((t) => norm(t.email) === u.zustaendig) && html`<option value=${u.zustaendig}>${memberName(u.zustaendig)}</option>`}
-          </select>`}
-      ${guest
-        ? u.faellig && html`<span class="muted small">${fmtDate(u.faellig)}</span>`
-        : html`<input class="sub-due" type="date" value=${u.faellig || ''} aria-label=${'Fällig für „' + u.titel + '“'} onChange=${(e) => update('unteraufgaben', u.id, { faellig: e.target.value || null })} />`}
-      ${canDeleteSubtask(u) &&
-      html`<button type="button" class="icon-btn small" aria-label=${'Löschen: ' + u.titel} title="Löschen" onClick=${remove}><${Icon} name="trash" size=${15} /></button>`}
-    </span>
-  </li>`
-}
-
-function Subtasks({ card, guest = false }) {
-  const [titel, setTitel] = useState('')
-  const list = subtasksOf(card.id)
-  if (guest && !list.length) return null
-  const done = list.filter((u) => u.erledigt_at).length
-  const add = async (e) => {
-    e.preventDefault()
-    const t = titel.trim()
-    if (!t) return
-    setTitel('')
-    await createSubtask(card.id, { titel: t })
-  }
-  return html`<section class="subtasks">
-    <div class="act-head">
-      <h3 class="section-title">Checkliste ${list.length > 0 && html`<span class="count">${done} von ${list.length}</span>`}</h3>
-    </div>
-    ${list.length > 0 && html`<ul class="sub-list">${list.map((u) => html`<${SubtaskRow} key=${u.id} u=${u} guest=${guest} />`)}</ul>`}
-    ${!guest &&
-    html`<form class="sub-add" onSubmit=${add}>
-      <${Icon} name="plus" size=${16} />
-      <input value=${titel} placeholder="Punkt hinzufügen" aria-label="Neuer Punkt der Checkliste" maxlength="300" onInput=${(e) => setTitel(e.target.value)} />
-      ${titel.trim() && html`<button type="submit" class="btn btn-small btn-primary">Hinzufügen</button>`}
-    </form>`}
-  </section>`
-}
-
-// Unter dem Kontakt der Aufgabe (Nachtrag „Anrufen“, B7, B4): „Anrufen“ für bis zu zwei Nummern
-// (bei zwei steht die Nummer selbst auf dem Knopf) und „Mail schreiben“. Mit eigenem Postfach
-// öffnet das Mailfenster, sonst (Gäste, kein Postfach) das Mailprogramm über mailto.
 function ContactActions({ person }) {
   if (!person) return null
   const phones = (person.phones || []).filter((x) => telHref(x)).slice(0, 2)
@@ -279,21 +185,13 @@ function TrackedMailNotice({ card }) {
   </div>`
 }
 
+// Spalte als Klappliste (Wunsch vom 24.11.2026, vorher Knöpfe)
 function StagePicker({ card }) {
   const stages = stagesOf(card.project_id)
-  return html`<${Field} label="Spalte">
-    <div class="stage-picker" role="group" aria-label="Spalte">
-      ${stages.map(
-        (s) => html`<button
-          type="button"
-          class=${'chip-btn' + (s.id === card.stage_id ? ' active' : '')}
-          aria-pressed=${s.id === card.stage_id}
-          onClick=${() => s.id !== card.stage_id && update('cards', card.id, { stage_id: s.id })}
-        >
-          ${s.name}
-        </button>`
-      )}
-    </div>
+  return html`<${Field} label="Spalte" htmlFor="card-stage">
+    <select id="card-stage" value=${card.stage_id} onChange=${(e) => e.target.value !== card.stage_id && update('cards', card.id, { stage_id: e.target.value })}>
+      ${stages.map((s) => html`<option value=${s.id}>${s.name}</option>`)}
+    </select>
   <//>`
 }
 
@@ -323,12 +221,11 @@ function GuestCard({ card }) {
       ${(card.labels || []).length > 0 && html`<dt>Labels</dt><dd><${Labels} labels=${card.labels} /></dd>`}
     </dl>
     <${StagePicker} card=${card} />
-    <${Field} label="Zuständig"><${AssigneePicker} card=${card} /><//>
+    <${Field} label="Zuständig" htmlFor="card-assignee"><${AssigneePicker} card=${card} /><//>
     <div class="field-grid">
       <${DueField} card=${card} />
       <${Field} label="Dringlichkeit"><${PriorityPicker} value=${card.priority} onChange=${(v) => update('cards', card.id, { priority: v })} /><//>
     </div>
-    <${Subtasks} card=${card} guest=${true} />
     <${ActivitySection} list=${activitiesOfCard(card.id)} here="card" target=${{ card_id: card.id }} card=${card} />
     <${CardFiles} card=${card} />
     <${History} card=${card} />
@@ -415,63 +312,82 @@ export function CardPanel({ id }) {
     ></textarea>
     <${AnswerNotice} card=${card} />
     <${TrackedMailNotice} card=${card} />
-    <${ShareRow} card=${card} />
     ${card.archived &&
     html`<p class="notice">
       Dieser Deal liegt im Archiv. Du findest ihn auf dem Board unter „Erledigt“ über den Link „Archiv“.
       „Aus dem Archiv holen“ unten holt sie zurück.
     </p>`}
 
-    <${StagePicker} card=${card} />
-    <${Field} label="Zuständig"><${AssigneePicker} card=${card} /><//>
-    <${CoAssigneePicker} card=${card} />
-    ${card.vergeben_von && norm(card.vergeben_von) !== norm(card.assignee || '') &&
-    html`<p class="muted small handed-by">Vergeben von ${norm(card.vergeben_von) === norm(myEmail()) ? 'dir' : memberName(card.vergeben_von)}</p>`}
+    ${/* Abschnitte (Wunsch vom 24.11.2026): Überblick, Wert und Status, Aktivitäten, dann Beschreibung,
+      Notizen, Dateien und Verlauf. Jeder Abschnitt als Fläche mit Überschrift. */ ''}
+    <section class="deal-section" aria-labelledby="deal-sec-overview">
+      <h3 class="deal-section-title" id="deal-sec-overview">Überblick</h3>
+      <div class="field-grid">
+        <${StagePicker} card=${card} />
+        <${Field} label="Pipeline" htmlFor="card-project">
+          <${ProjectSelect} id="card-project" value=${card.project_id} onChange=${changeProject} />
+        <//>
+        <${Field} label="Zuständig" htmlFor="card-assignee"><${AssigneePicker} card=${card} /><//>
+        <${CoAssigneePicker} card=${card} />
+        <${DueField} card=${card} />
+        <${Field} label="Dringlichkeit">
+          <${PriorityPicker} value=${card.priority} onChange=${(v) => set({ priority: v })} />
+        <//>
+      </div>
+      ${card.vergeben_von && norm(card.vergeben_von) !== norm(card.assignee || '') &&
+      html`<p class="muted small handed-by">Vergeben von ${norm(card.vergeben_von) === norm(myEmail()) ? 'dir' : memberName(card.vergeben_von)}</p>`}
+      <div class="field-grid">
+        <${Field} label="Kontakt" htmlFor="card-person">
+          <${EntityPicker} kind="person" inputId="card-person" value=${card.person_id} onChange=${changePerson} placeholder="Kontakt suchen oder neu anlegen" />
+          <${ContactActions} person=${getPerson(card.person_id)} />
+        <//>
+        <${Field} label="Firma" htmlFor="card-org">
+          <${EntityPicker} kind="org" inputId="card-org" value=${card.org_id} onChange=${(v) => set({ org_id: v })} placeholder="Firma suchen oder neu anlegen" />
+        <//>
+      </div>
+      <${Field} label="Labels">
+        <${LabelPicker} value=${card.labels} inputId="card-label" onChange=${(labels) => set({ labels })} />
+      <//>
+      <${ShareRow} card=${card} />
+    </section>
 
-    <div class="field-grid">
-      <${Field} label="Pipeline" htmlFor="card-project">
-        <${ProjectSelect} id="card-project" value=${card.project_id} onChange=${changeProject} />
-      <//>
-      <${DueField} card=${card} />
-      <${Field} label="Dringlichkeit">
-        <${PriorityPicker} value=${card.priority} onChange=${(v) => set({ priority: v })} />
-      <//>
-      <${Field} label="Kontakt" htmlFor="card-person">
-        <${EntityPicker} kind="person" inputId="card-person" value=${card.person_id} onChange=${changePerson} placeholder="Kontakt suchen oder neu anlegen" />
-        <${ContactActions} person=${getPerson(card.person_id)} />
-      <//>
-      <${Field} label="Firma" htmlFor="card-org">
-        <${EntityPicker} kind="org" inputId="card-org" value=${card.org_id} onChange=${(v) => set({ org_id: v })} placeholder="Firma suchen oder neu anlegen" />
-      <//>
-    </div>
+    <section class="deal-section deal-section-sales">
+      <${CardDeal} card=${card} />
+    </section>
 
-    <${Field} label="Labels">
-      <${LabelPicker} value=${card.labels} inputId="card-label" onChange=${(labels) => set({ labels })} />
-    <//>
+    <section class="deal-section">
+      <${ActivitySection} list=${activitiesOfCard(card.id)} here="card" target=${{ card_id: card.id }} card=${card} />
+    </section>
 
-    <${Field} label="Beschreibung" htmlFor="card-desc">
+    <section class="deal-section" aria-labelledby="deal-sec-desc">
+      <h3 class="deal-section-title" id="deal-sec-desc">Beschreibung</h3>
       <textarea
         id="card-desc"
         rows="4"
+        aria-labelledby="deal-sec-desc"
         value=${description}
         placeholder="Details, Links, nächste Schritte"
         onInput=${(e) => setDescription(e.target.value)}
         onBlur=${saveDescription}
       ></textarea>
-    <//>
+      ${meeting &&
+      html`<p class="meeting-origin">
+        <${Icon} name="meetings" size=${16} /> Aus dem Meeting <a href=${'#/meetings/' + meeting.id}>„${meeting.title}“</a> vom ${fmtDate(meeting.held_at)}
+      </p>`}
+    </section>
 
-    ${meeting &&
-    html`<p class="meeting-origin">
-      <${Icon} name="meetings" size=${16} /> Aus dem Meeting <a href=${'#/meetings/' + meeting.id}>„${meeting.title}“</a> vom ${fmtDate(meeting.held_at)}
-    </p>`}
+    <section class="deal-section" aria-labelledby="deal-sec-notes">
+      <h3 class="deal-section-title" id="deal-sec-notes">Notizen</h3>
+      <${Notes} field="card_id" id=${card.id} />
+    </section>
 
-    <${Subtasks} card=${card} />
-    <${ActivitySection} list=${activitiesOfCard(card.id)} here="card" target=${{ card_id: card.id }} card=${card} />
-    <${CardDeal} card=${card} />
-    <${CardFiles} card=${card} />
-    <${History} card=${card} />
-    <h3 class="section-title">Notizen</h3>
-    <${Notes} field="card_id" id=${card.id} />
+    <section class="deal-section">
+      <${CardFiles} card=${card} />
+    </section>
+
+    <section class="deal-section">
+      <${History} card=${card} />
+    </section>
 
     <div class="panel-foot">
       <span class="muted small">Angelegt von ${memberName(card.created_by) || 'unbekannt'} ${fmtRelative(card.created_at)}</span>

@@ -29,6 +29,10 @@ import {
   activityKind,
   activityText,
   completeActivity,
+  getCard,
+  sharesOf,
+  projectSharesOf,
+  activeGuests,
 } from '../store.js'
 import { mentionPeople, parseMentions, NoteText } from './mentions.js'
 import { openCard } from '../router.js'
@@ -621,9 +625,20 @@ export function LabelPicker({ value, onChange, inputId }) {
 
 // ------------------------------------------------------------
 // Notizen an Aufgaben, Kontakten, Firmen und Meetings
-// „Nur intern“ versteckt eine Notiz vor Gästen. Gäste ändern nur ihre eigenen Notizen.
+// „Nur für das Team“ versteckt eine Notiz vor Gästen. Gäste ändern nur ihre eigenen Notizen.
+// Der Schalter steht nur da, wo Gäste überhaupt mitlesen können (Wunsch vom 24.11.2026): an einem
+// Deal, der selbst oder dessen Pipeline mit einem Gast geteilt ist, an Kontakten und Firmen nur,
+// wenn es Gäste im Team gibt. Sonst ist ohnehin alles nur im Team.
 // ------------------------------------------------------------
-function NoteItem({ note }) {
+export function guestsCanSee(field, id) {
+  if (field === 'card_id') {
+    const card = getCard(id)
+    return !!card && (sharesOf(id).length > 0 || projectSharesOf(card.project_id).length > 0)
+  }
+  if (field === 'meeting_id') return false
+  return activeGuests().length > 0
+}
+function NoteItem({ note, guestRelevant }) {
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState(note.content)
   const guest = isGuest()
@@ -656,18 +671,19 @@ function NoteItem({ note }) {
       : html`<div class="note-content"><${NoteText} text=${note.content} mentions=${note.mentions} /></div>`}
     <div class="note-meta">
       <span>
-        ${note.internal && html`<span class="note-lock" title="Nur intern, für Gäste unsichtbar"><${Icon} name="lock" size=${14} /> Nur intern · </span>`}
+        ${note.internal && guestRelevant && html`<span class="note-lock" title="Nur für das Team, Gäste sehen diese Notiz nicht"><${Icon} name="lock" size=${14} /> Nur Team · </span>`}
         ${memberName(note.author) || 'Unbekannt'}${note.via === 'claude' ? ' über Claude' : ''} · ${fmtRelative(note.created_at)}${edited ? ' · bearbeitet' : ''}
       </span>
       ${!editing &&
       html`<span class="note-actions">
         ${!guest &&
+        guestRelevant &&
         html`<button
           type="button"
           class="icon-btn small"
           aria-pressed=${!!note.internal}
-          aria-label=${note.internal ? 'Für Gäste sichtbar machen' : 'Nur intern'}
-          title=${note.internal ? 'Für Gäste sichtbar machen' : 'Nur intern'}
+          aria-label=${note.internal ? 'Für Gäste sichtbar machen' : 'Nur für das Team'}
+          title=${note.internal ? 'Für Gäste sichtbar machen' : 'Nur für das Team'}
           onClick=${() => update('notes', note.id, { internal: !note.internal })}
         >
           <${Icon} name=${note.internal ? 'lock' : 'lockOpen'} size=${16} />
@@ -684,6 +700,7 @@ export function Notes({ field, id }) {
   const [internal, setInternal] = useState(false)
   const area = useRef(null)
   const guest = isGuest()
+  const guestRelevant = !guest && guestsCanSee(field, id)
   const list = notesFor(field, id)
   // Erwähnungen nur an Aufgaben und nicht bei „Nur intern“
   const people = field === 'card_id' ? mentionPeople(id) : null
@@ -691,7 +708,7 @@ export function Notes({ field, id }) {
   const save = async () => {
     const content = text.trim()
     if (!content) return
-    const isInternal = guest ? false : internal
+    const isInternal = guestRelevant ? internal : false
     const mentions = people && !isInternal ? parseMentions(content, people.all) : []
     setText('')
     await saveNote({ content, [field]: id, internal: isInternal, mentions })
@@ -732,20 +749,20 @@ export function Notes({ field, id }) {
         )}
       </div>`}
       <div class="form-actions">
-        ${!guest &&
+        ${guestRelevant &&
         html`<button
           type="button"
           class=${'chip-btn' + (internal ? ' active' : '')}
           aria-pressed=${internal}
-          title="Nur intern: Gäste sehen diese Notiz nicht"
+          title="Nur für das Team: Gäste sehen diese Notiz nicht"
           onClick=${() => setInternal(!internal)}
         >
-          <${Icon} name=${internal ? 'lock' : 'lockOpen'} size=${16} /> Nur intern
+          <${Icon} name=${internal ? 'lock' : 'lockOpen'} size=${16} /> Nur Team
         </button>`}
         <button type="button" class="btn btn-primary" disabled=${!text.trim()} onClick=${save}>Notiz speichern</button>
       </div>
     </div>
-    ${list.length ? html`<ul class="note-list">${list.map((n) => html`<${NoteItem} note=${n} key=${n.id} />`)}</ul>` : null}
+    ${list.length ? html`<ul class="note-list">${list.map((n) => html`<${NoteItem} note=${n} guestRelevant=${guestRelevant} key=${n.id} />`)}</ul>` : null}
   </div>`
 }
 
@@ -760,4 +777,47 @@ export function useIsMobile() {
     return () => mq.removeEventListener('change', fn)
   }, [])
   return mobile
+}
+
+// Klappliste mit Häkchen für mehrere Werte (Wunsch vom 24.11.2026, zum Beispiel „Weitere zuständig“).
+// Knopf zeigt die Auswahl, ein Klick öffnet die Liste darunter. Ein Häkchen speichert sofort.
+// Schließt bei Klick daneben und mit Escape (hält die Taste an, damit das Fenster offen bleibt).
+// options: [{ value, label }], value: Liste gewählter Werte, onToggle(value, warAn)
+let multiSelectSeq = 0
+export function MultiSelect({ options, value, onToggle, label, empty = 'Niemand', id }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef()
+  const listId = useRef('multi-' + ++multiSelectSeq).current
+  useEffect(() => {
+    if (!open) return
+    const away = (e) => ref.current && !ref.current.contains(e.target) && setOpen(false)
+    document.addEventListener('pointerdown', away)
+    return () => document.removeEventListener('pointerdown', away)
+  }, [open])
+  const chosen = options.filter((o) => value.includes(o.value))
+  const summary = chosen.length ? chosen.map((o) => o.label).join(', ') : empty
+  const onKeyDown = (e) => {
+    if (e.key === 'Escape' && open) {
+      e.stopPropagation()
+      setOpen(false)
+    }
+  }
+  return html`<div class="multi-select" ref=${ref} onKeyDown=${onKeyDown}>
+    <button type="button" id=${id} class=${'multi-select-btn' + (chosen.length ? '' : ' is-empty')} aria-haspopup="listbox" aria-expanded=${open} aria-controls=${listId} aria-label=${label + ': ' + summary} onClick=${() => setOpen(!open)}>
+      <span class="multi-select-text">${summary}</span>
+      <span class=${'pp-chevron' + (open ? ' open' : '')}><${Icon} name="chevron" size=${16} /></span>
+    </button>
+    ${open &&
+    html`<ul class="multi-select-list" id=${listId} role="listbox" aria-multiselectable="true" aria-label=${label}>
+      ${options.map((o) => {
+        const on = value.includes(o.value)
+        return html`<li key=${o.value} role="option" aria-selected=${on}>
+          <label class="check-label multi-select-item">
+            <input type="checkbox" checked=${on} onChange=${() => onToggle(o.value, on)} />
+            <span>${o.label}</span>
+          </label>
+        </li>`
+      })}
+    </ul>`}
+  </div>`
 }

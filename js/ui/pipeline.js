@@ -62,40 +62,21 @@ function personOf(param) {
   return activeMembers().find((t) => norm(t.email) === e) ? e : norm(myEmail())
 }
 
-// Kurzer Hinweis auf der Karte, warum sie in dieser Pipeline steht
-function subtaskNote(subs, forWhom) {
-  if (subs.length === 1) return `Checkliste für ${forWhom}: „${subs[0].titel}“`
-  return `${subs.length} Punkte der Checkliste für ${forWhom}`
-}
-
-// Aufgaben der Pipeline mit Hinweis. mode: 'zustaendig' oder 'vergeben'
+// Deals der Pipeline mit Hinweis. mode: 'zustaendig' oder 'vergeben'. Die Checkliste
+// (unteraufgaben) zeigt die App seit dem 24.11.2026 nicht mehr (Entscheidung: nur Aktivitäten).
 export function pipelineCards(person, mode) {
   const p = norm(person)
-  const self = p === norm(myEmail())
-  const openSubs = (state.db.unteraufgaben || []).filter((u) => !u.erledigt_at && u.zustaendig)
   const out = []
   state.db.cards.forEach((card) => {
     if (card.archived) return
-    const subs = openSubs.filter((u) => u.card_id === card.id)
     if (mode === 'vergeben') {
-      if (norm(card.vergeben_von || '') === p && card.assignee && norm(card.assignee) !== p) {
-        out.push({ card, note: null })
-        return
-      }
-      const given = subs.filter((u) => norm(u.created_by || '') === p && norm(u.zustaendig) !== p)
-      if (given.length) {
-        const names = [...new Set(given.map((u) => firstName(memberName(u.zustaendig))))].join(', ')
-        out.push({ card, note: subtaskNote(given, names) })
-      }
+      if (norm(card.vergeben_von || '') === p && card.assignee && norm(card.assignee) !== p) out.push({ card, note: null })
       return
     }
     if (isCardOf(card, p)) {
       const co = norm(card.assignee || '') !== p && (card.mitzustaendig || []).map(norm).includes(p)
       out.push({ card, note: co ? 'Mitzuständig' : null })
-      return
     }
-    const mine = subs.filter((u) => norm(u.zustaendig) === p)
-    if (mine.length) out.push({ card, note: subtaskNote(mine, self ? 'dich' : firstName(memberName(p))) })
   })
   return out
 }
@@ -382,7 +363,7 @@ function NewTaskDialog({ d }) {
           <input id="pl-due" type="date" value=${due} onInput=${(e) => setDue(e.target.value)} />
         <//>
       </div>
-      <p class="muted small">Weitere Zuständige, Checkliste und Aktivitäten trägst du danach im Deal ein.</p>
+      <p class="muted small">Weitere Zuständige und Aktivitäten trägst du danach im Deal ein.</p>
       <div class="form-actions">
         <button type="button" class="btn" onClick=${closeDialog}>Abbrechen</button>
         <button type="submit" class="btn btn-primary" disabled=${!title.trim() || busy}>${norm(assignee) === norm(myEmail()) ? 'Anlegen' : 'Vergeben'}</button>

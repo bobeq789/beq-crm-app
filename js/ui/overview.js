@@ -241,14 +241,12 @@ function MoreList({ items, render }) {
 
 // Kachel „Team“ (Entscheidung vom 24.11.2026: nur was mich betrifft)
 // „Neu seit deinem letzten Blick“: Kollegen haben etwas geändert an Aufgaben, die mich betreffen
-// (ich bin zuständig oder mitzuständig, ich habe sie vergeben, ich habe dort eine offene
-// Unteraufgabe oder bin erwähnt). „Von dir vergeben“: dieselbe Regel wie „Von mir vergeben“ in der
+// (ich bin zuständig oder mitzuständig, ich habe sie vergeben oder bin erwähnt). „Von dir vergeben“: dieselbe Regel wie „Von mir vergeben“ in der
 // Pipeline (cards.vergeben_von, 36_meine_pipeline.sql), also nur echte Weitergaben.
 export function concernsMe(card, me = norm(myEmail())) {
   if (isCardOf(card, me)) return true
   if (norm(card.vergeben_von || '') === me) return true
-  if (isMentioned(card.id)) return true
-  return (state.db.unteraufgaben || []).some((u) => u.card_id === card.id && !u.erledigt_at && norm(u.zustaendig || '') === me)
+  return isMentioned(card.id)
 }
 function TeamTile({ drag }) {
   const me = norm(myEmail())

@@ -40,7 +40,6 @@ import {
   lastOfKindHint,
   answerFor,
   cardHolders,
-  subtasksOf,
 } from '../store.js'
 import { navigate, openCard } from '../router.js'
 import { PageHead, Dot, Avatar, PrioBadge, DueBadge, NewBadge, Modal, Field, Empty, Labels, ActivityBadge, dialogKinds, useIsMobile, Segmented } from './common.js'
@@ -59,8 +58,6 @@ export function BoardCard({ card, draggable, viewer = null, showProject = false,
   const project = showProject ? getProject(card.project_id) : null
   const who = norm(viewer || myEmail())
   const others = cardHolders(card).filter((e) => e !== who)
-  const subs = subtasksOf(card.id)
-  const subsDone = subs.filter((u) => u.erledigt_at).length
   return html`<li
     class="board-card"
     draggable=${draggable}
@@ -85,7 +82,6 @@ export function BoardCard({ card, draggable, viewer = null, showProject = false,
         <${DueBadge} due=${card.due_date} done=${isDone} />
         ${sharesOf(card.id).length > 0 && html`<span class="bc-notes" title="Mit einem Gast geteilt"><${Icon} name="share" size=${14} /></span>`}
         ${noteCount > 0 && html`<span class="bc-notes" title=${noteCount + (noteCount === 1 ? ' Notiz' : ' Notizen')}><${Icon} name="note" size=${14} />${noteCount}</span>`}
-        ${subs.length > 0 && html`<span class=${'bc-notes' + (subsDone === subs.length ? ' bc-subs-done' : '')} title=${`Checkliste: ${subsDone} von ${subs.length} erledigt`}><${Icon} name="check" size=${14} />${subsDone}/${subs.length}</span>`}
         ${card.archived && html`<span class="badge">Archiv</span>`}
         ${!isDone && html`<${ActivityBadge} cardId=${card.id} />`}
         <${DealBadge} card=${card} />

@@ -242,6 +242,7 @@ export function ActivitySection({ list, here, target, card }) {
         <h3 class="section-title">Aktivitäten ${open.length > 0 && html`<span class="count">${open.length}</span>`}</h3>
         ${add}
       </div>
+      <p class="muted small act-explain">Nächste Schritte mit Datum: Anruf, Mail, Termin, To-do oder Wiedervorlage. Sie stehen in der Übersicht und in der Pipeline der zuständigen Person.</p>
       ${body}
     </section>`
   }
