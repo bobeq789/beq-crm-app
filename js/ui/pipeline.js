@@ -95,6 +95,9 @@ export function pipelineCards(person, mode) {
   return out
 }
 
+// Offene Deals in der Pipeline einer Person (Zahl in der Klappliste des Boards)
+export const pipelineOpenCount = (person) => pipelineCards(person, 'zustaendig').filter((x) => cardKind(x.card) !== 'done').length
+
 // Offene Aktivitäten der Pipeline. mode wie oben.
 export function pipelineActivities(person, mode) {
   const p = norm(person)
@@ -265,10 +268,6 @@ export function PipelinePage({ params }) {
     <${ActivityList} title="Aktivitäten Sales" list=${sales} mode=${mode} empty=${emptyActs} />`
 
   const filters = html`<div class="board-filters pl-filters">
-    ${pipelinePeople().length > 1 &&
-    html`<select value=${person} aria-label="Pipeline von" onChange=${(e) => setParam('von', norm(e.target.value) === norm(myEmail()) ? null : e.target.value, true)}>
-      ${pipelinePeople().map((t) => html`<option value=${norm(t.email)}>${norm(t.email) === norm(myEmail()) ? 'Meine Pipeline' : 'Pipeline von ' + t.name}</option>`)}
-    </select>`}
     <div class="segmented" role="group" aria-label="Ansicht">
       <button type="button" class=${mode === 'zustaendig' ? 'active' : ''} aria-pressed=${mode === 'zustaendig'} onClick=${() => setParam('ansicht', null, true)}>Zuständig</button>
       <button type="button" class=${mode === 'vergeben' ? 'active' : ''} aria-pressed=${mode === 'vergeben'} onClick=${() => setParam('ansicht', 'vergeben', true)}>${givenLabel}</button>
@@ -288,7 +287,7 @@ export function PipelinePage({ params }) {
   const newTask = () => openDialog({ kind: 'pipeline-new', person })
   const actions = html`<button type="button" class="btn btn-primary" onClick=${newTask}><${Icon} name="plus" size=${18} /> Neuer Deal</button>`
   const kicker = mode === 'vergeben' ? 'Board · vergeben' : 'Board'
-  const bar = html`<div class="project-tabs project-bar"><${ProjectPicker} currentId=${PIPELINE_ID} pipelineCount=${openCount} /></div>`
+  const bar = html`<div class="project-tabs project-bar"><${ProjectPicker} currentId=${PIPELINE_ID} person=${person} pipelineCount=${mode === 'zustaendig' ? openCount : null} /></div>`
 
   if (mobile) {
     const col = PIPELINE_COLUMNS.find((c) => c.kind === mobileKind) || PIPELINE_COLUMNS[0]

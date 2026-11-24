@@ -2,7 +2,8 @@
 import { html, useState, useEffect, useRef } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { SETTINGS } from '../settings.js'
-import { matches, local, fmtEuro, fmtDate, norm } from '../lib/util.js'
+import { matches, local, fmtEuro, fmtDate, norm, firstName } from '../lib/util.js'
+import { pipelinePeople, pipelineOpenCount } from './pipeline.js'
 import {
   state,
   activeProjects,
@@ -250,17 +251,20 @@ function StageMenu({ stage, onRename, onAddAt, label = '' }) {
 }
 
 // Klappliste oben im Board (Wunsch vom 24.11.2026): statt einer Reihe Reiter ein Knopf mit der
-// aktuellen Auswahl. Ein Klick öffnet die Liste: zuerst „Meine Pipeline“ (#/board/meine, eigene
-// Aufgaben aus allen Projekten, js/ui/pipeline.js), darunter die Projekte mit Farbe, Zahl der
-// offenen Aufgaben und dem Zeichen für geteilte Projekte. Projekte ganz ohne Aufgaben (auch ohne
-// archivierte) stehen erst nach „Leere Projekte anzeigen“, gelöscht wird nichts.
-// Liegt wie das Spaltenmenü fest über der Seite. Wird auch von der Pipeline genutzt.
+// aktuellen Auswahl. Die Liste hat zwei Gruppen (40_pipeline_bereich.sql):
+//   „Intern“: Meine Pipeline (#/board/meine, js/ui/pipeline.js), die Pipelines der Kollegen, die
+//     man sehen darf (pipelinePeople(), #/board/meine?von=<Adresse>), und Projekte mit bereich intern
+//   „Extern / Sales“: Projekte mit bereich sales (ohne Angabe ebenfalls Sales)
+// Je Projekt Farbe, Zahl der offenen Aufgaben und das Zeichen für geteilte Projekte. Projekte ganz
+// ohne Aufgaben (auch ohne archivierte) stehen erst nach „Leere Pipelines anzeigen“, gelöscht
+// wird nichts. Liegt wie das Spaltenmenü fest über der Seite. Wird auch von der Pipeline genutzt.
 const PICKER_WIDTH = 320
 export const PIPELINE_ID = 'meine'
 const openCountOf = (id) => state.db.cards.filter((c) => c.project_id === id && isOpen(c)).length
 const hasCards = (id) => state.db.cards.some((c) => c.project_id === id)
+export const projectArea = (p) => (p && p.bereich === 'intern' ? 'intern' : 'sales')
 
-export function ProjectPicker({ currentId, pipelineCount = null }) {
+export function ProjectPicker({ currentId, person = null, pipelineCount = null }) {
   const [pos, setPos] = useState(null)
   const [showEmpty, setShowEmpty] = useState(false)
   const open = !!pos
@@ -297,6 +301,18 @@ export function ProjectPicker({ currentId, pipelineCount = null }) {
   const empty = all.filter((p) => !filled.includes(p))
   const isPipeline = currentId === PIPELINE_ID
   const current = isPipeline ? null : all.find((p) => p.id === currentId)
+  const me = norm(myEmail())
+  const viewing = isPipeline ? norm(person || me) : null
+  // Pipelines von Personen: ich zuerst, dann die anderen nach Namen. Vorname reicht, außer zwei
+  // Personen heißen gleich.
+  const people = pipelinePeople()
+    .map((t) => ({ email: norm(t.email), name: t.name || t.email }))
+    .sort((a, b) => Number(b.email === me) - Number(a.email === me) || a.name.localeCompare(b.name, 'de'))
+  // „Meine Pipeline“ steht immer da, auch wenn ich nicht in der Liste bin (zum Beispiel als Gast)
+  if (!people.some((t) => t.email === me)) people.unshift({ email: me, name: memberName(me) || me })
+  const firstNames = people.map((t) => firstName(t.name))
+  const personLabel = (t) => (t.email === me ? 'Meine Pipeline' : 'Pipeline von ' + (firstNames.filter((f) => f === firstName(t.name)).length > 1 ? t.name : firstName(t.name)))
+  const viewingPerson = people.find((t) => t.email === viewing)
   const shared = (p) => projectSharesOf(p.id).length > 0
   // Escape auch direkt am Knopf (der Fokus liegt dort), falls die Liste gerade erst aufging
   const onKeyDown = (e) => {
@@ -318,7 +334,21 @@ export function ProjectPicker({ currentId, pipelineCount = null }) {
       ${p.id === currentId && html`<${Icon} name="check" size=${16} />`}
     </button>
   </li>`
-  const label = isPipeline ? 'Meine Pipeline' : current ? current.name : 'Pipeline wählen'
+  const personItem = (t) => {
+    const active = isPipeline && viewing === t.email
+    const path = '/board/' + PIPELINE_ID + (t.email === me ? '' : '?von=' + encodeURIComponent(t.email))
+    return html`<li key=${'p-' + t.email} role="option" aria-selected=${active}>
+      <button type="button" class=${active ? 'active' : ''} onClick=${() => go(path)}>
+        <${Icon} name="account" size=${16} />
+        <span class="pp-name">${personLabel(t)}</span>
+        <span class="count">${pipelineOpenCount(t.email)}</span>
+        ${active && html`<${Icon} name="check" size=${16} />`}
+      </button>
+    </li>`
+  }
+  const intern = filled.filter((p) => projectArea(p) === 'intern')
+  const sales = filled.filter((p) => projectArea(p) === 'sales')
+  const label = isPipeline ? (viewingPerson ? personLabel(viewingPerson) : 'Meine Pipeline') : current ? current.name : 'Pipeline wählen'
   return html`<span class="project-picker" ref=${ref} onKeyDown=${onKeyDown}>
     <button type="button" ref=${btn} class="project-picker-btn" aria-haspopup="listbox" aria-expanded=${open} aria-label=${'Board wählen, aktuell ' + label} onClick=${toggle}>
       ${isPipeline ? html`<${Icon} name="account" size=${18} />` : current && html`<${Dot} color=${current.color} />`}
@@ -328,15 +358,12 @@ export function ProjectPicker({ currentId, pipelineCount = null }) {
     </button>
     ${open &&
     html`<ul class="stage-menu project-menu" role="listbox" aria-label="Boards" style=${{ top: pos.top + 'px', left: pos.left + 'px', width: pos.width + 'px', maxHeight: `calc(100vh - ${pos.top + 16}px)` }}>
-      <li role="option" aria-selected=${isPipeline}>
-        <button type="button" class=${isPipeline ? 'active' : ''} onClick=${() => go('/board/' + PIPELINE_ID)}>
-          <${Icon} name="account" size=${16} />
-          <span class="pp-name">Meine Pipeline</span>
-          ${isPipeline && html`<${Icon} name="check" size=${16} />`}
-        </button>
-      </li>
-      <li class="pp-sep" role="presentation">Pipelines</li>
-      ${filled.map(projectItem)}
+      <li class="pp-sep" role="presentation">Intern</li>
+      ${people.map(personItem)}
+      ${intern.map(projectItem)}
+      <li class="pp-sep" role="presentation">Extern / Sales</li>
+      ${sales.map(projectItem)}
+      ${!sales.length && html`<li class="pp-empty muted small" role="presentation">Noch keine Sales-Pipeline.</li>`}
       ${empty.length > 0 &&
       (showEmpty
         ? empty.map(projectItem)
@@ -855,6 +882,24 @@ function ProjectSettings({ d }) {
         onBlur=${() => name.trim() && name.trim() !== project.name && update('projects', project.id, { name: name.trim() })}
         onKeyDown=${(e) => e.key === 'Enter' && e.target.blur()}
       />
+    <//>
+    <${Field} label="Bereich" hint="Bestimmt, unter welcher Überschrift die Pipeline in der Klappliste oben steht.">
+      <div class="segmented" role="radiogroup" aria-label="Bereich">
+        ${[
+          ['intern', 'Intern'],
+          ['sales', 'Extern / Sales'],
+        ].map(
+          ([value, text]) => html`<button
+            type="button"
+            role="radio"
+            aria-checked=${projectArea(project) === value}
+            class=${projectArea(project) === value ? 'active' : ''}
+            onClick=${() => projectArea(project) !== value && update('projects', project.id, { bereich: value })}
+          >
+            ${text}
+          </button>`
+        )}
+      </div>
     <//>
     <${Field} label="Farbe">
       <div class="swatches" role="radiogroup" aria-label="Farbe">

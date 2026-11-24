@@ -1668,6 +1668,7 @@ input.sub-title:hover, input.sub-title:focus { border-color: var(--border); back
 .pp-chevron.open { transform: rotate(-90deg); }
 .project-picker-btn .dot { border: 2px solid var(--navy); }
 .project-menu { overflow-y: auto; }
+.project-menu .pp-empty { padding: 4px 10px 8px; }
 .project-menu .pp-sep { padding: 10px 10px 4px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 .project-menu button.pp-more { color: var(--accent-text); font-size: 14px; }
 /* Im Chat: wer angemeldet und online ist (37_team_online.sql) */

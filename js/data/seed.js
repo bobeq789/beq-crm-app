@@ -52,7 +52,9 @@ export function buildSeed() {
     const id = uid()
     P[name] = id
     S[name] = {}
-    db.projects.push({ id, name, color, sort: i + 1, archived: false, created_at: created, updated_at: created })
+    // Bereich wie in 40_pipeline_bereich.sql: Allgemein, Events und Pilotkunden intern
+    const bereich = ['Allgemein', 'Events', 'Pilotkunden'].includes(name) ? 'intern' : 'sales'
+    db.projects.push({ id, name, color, bereich, sort: i + 1, archived: false, created_at: created, updated_at: created })
     SETTINGS.defaultStages.forEach((st, j) => {
       const sid = uid()
       S[name][st.kind] = sid
