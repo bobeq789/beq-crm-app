@@ -9,7 +9,7 @@ import { html } from '../lib/preact.js'
 import { todayStr, endOfWeekStr, addDays, norm } from '../lib/util.js'
 import { state, activeMembers, activeProjects, cardKind, isCardOf, activityHolder, isSuperAdmin } from '../store.js'
 import { navigate } from '../router.js'
-import { PageHead, Tile, Empty, Dot } from './common.js'
+import { PageHead, Tile, Empty, Dot, Avatar } from './common.js'
 
 function Stat({ label, value, sub, main = false, alert = false }) {
   return html`<div class=${'stat' + (main ? ' stat-main' : '')}>
@@ -84,7 +84,7 @@ export function TeamPage() {
           <tbody>
             ${people.map(
               (p) => html`<tr key=${p.member.email}>
-                <td><button type="button" class="ct-link" title="Pipeline öffnen" onClick=${() => navigate('/board/meine', { von: norm(p.member.email) })}>${p.member.name}</button></td>
+                <td><button type="button" class="ct-link" title="Pipeline öffnen" onClick=${() => navigate('/board/meine', { von: norm(p.member.email) })}><${Avatar} email=${p.member.email} /> ${p.member.name}</button></td>
                 ${num(p.open)}${num(p.overdue, true)}${num(p.week)}${num(p.waiting)}
                 <td class=${'ct-num' + (p.actsOverdue > 0 ? ' team-alert' : '')}>${p.acts}${p.actsOverdue > 0 ? ` (${p.actsOverdue} überfällig)` : ''}</td>
                 ${num(p.done)}

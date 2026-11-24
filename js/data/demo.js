@@ -161,6 +161,29 @@ export function createDemoApi({ asGuest = false } = {}) {
       save()
       return clone(row)
     },
+    // Profilfotos (38_profilfotos.sql): im Demo-Modus als Bild direkt am Teammitglied (data:-Adresse)
+    async profilePhotoUrls() {
+      return {}
+    },
+    async uploadProfilePhoto(blob) {
+      if (asGuest) throw notAllowed()
+      const url = await new Promise((resolve, reject) => {
+        const r = new FileReader()
+        r.onload = () => resolve(r.result)
+        r.onerror = reject
+        r.readAsDataURL(blob)
+      })
+      const t = db.team_members.find((x) => x.email.toLowerCase() === me.toLowerCase())
+      if (t) t.foto = url
+      save()
+      return url
+    },
+    async removeProfilePhoto() {
+      if (asGuest) throw notAllowed()
+      const t = db.team_members.find((x) => x.email.toLowerCase() === me.toLowerCase())
+      if (t) t.foto = null
+      save()
+    },
     // Angemeldet und online (37_team_online.sql): im Demo-Modus alle aktiven Teammitglieder ohne
     // Gäste angemeldet, online du selbst und Mira Hoffmann (erfunden). Gäste bekommen nichts.
     async teamSignedIn() {

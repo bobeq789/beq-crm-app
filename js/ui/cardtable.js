@@ -7,7 +7,7 @@ import { Icon } from '../lib/icons.js'
 import { fmtEuro, fmtDate, firstName } from '../lib/util.js'
 import { getPerson, getOrg, getStage, memberName, dealOf } from '../store.js'
 import { openCard } from '../router.js'
-import { DueBadge, PrioBadge, Empty, useIsMobile } from './common.js'
+import { DueBadge, PrioBadge, Empty, useIsMobile, Avatar } from './common.js'
 
 const PAGE = 100
 const PRIO_RANK = { hoch: 0, mittel: 1, niedrig: 2 }
@@ -117,7 +117,7 @@ export function CardTable({ cards }) {
               ${sub(c) && html`<span class="ct-sub">${sub(c)}</span>`}
             </td>
             <td>${(getStage(c.stage_id) || {}).name || ''}</td>
-            <td>${who(c)}</td>
+            <td class="ct-who">${c.assignee && html`<${Avatar} email=${c.assignee} />`} ${who(c)}</td>
             <td><${DueBadge} due=${c.due_date} done=${isDone(c)} /></td>
             <td><${PrioBadge} priority=${c.priority} /></td>
             <td class="ct-num">${dealText(c)}</td>

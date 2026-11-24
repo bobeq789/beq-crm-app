@@ -4,6 +4,9 @@ import { Icon } from '../lib/icons.js'
 import { norm, fmtEuro } from '../lib/util.js'
 import { parseEuro } from './deal.js'
 import {
+  setProfilePhoto,
+  removeProfilePhoto,
+  avatarUrl,
   state,
   isDemo,
   isAdmin,
@@ -18,13 +21,16 @@ import {
   confirmDialog,
   resetDemo,
   toast,
+  errorText,
+  myEmail,
   savePrefs,
   terminSatz,
   normalizeLink,
   myActiveMailboxes,
   DEFAULT_TERMINSATZ,
 } from '../store.js'
-import { PageHead, Tile, Segmented, Field } from './common.js'
+import { PageHead, Tile, Segmented, Field, Avatar } from './common.js'
+import { squareJpeg } from '../lib/image.js'
 import { MailboxTile } from './mailboxes.js'
 import { ClaudeTile } from './claude.js'
 import {
@@ -91,6 +97,7 @@ function TeamAdmin() {
     <ul class="team-list">
       ${list.map(
         (t) => html`<li class=${t.active ? '' : 'inactive'} key=${t.id}>
+          <${Avatar} email=${t.email} />
           <span class="team-who">
             <strong>${t.name}</strong>
             <span class="muted small">${t.email}${t.super_admin ? ' · Super-Admin' : ''}</span>
@@ -351,6 +358,54 @@ function PushTile() {
   <//>`
 }
 
+// Profilfoto (38_profilfotos.sql): Bild auswählen, die App schneidet quadratisch zu und
+// verkleinert auf 256 Pixel (ohne Zusatzdaten wie Aufnahmeort), dann hochladen. Gäste nicht.
+function ProfilePhotoTile() {
+  const [busy, setBusy] = useState(false)
+  const me = myEmail()
+  const has = !!avatarUrl(me)
+  const pick = async (e) => {
+    const file = e.target.files && e.target.files[0]
+    e.target.value = ''
+    if (!file) return
+    if (!/^image\//.test(file.type)) return toast('Bitte ein Bild auswählen (JPG, PNG oder HEIC).', { error: true })
+    setBusy(true)
+    try {
+      const blob = await squareJpeg(file, 256)
+      await setProfilePhoto(blob)
+      toast('Profilfoto gespeichert')
+    } catch (err) {
+      toast(err && err.message === 'bild' ? 'Das Bild ließ sich nicht lesen. Bitte ein anderes Foto nehmen (JPG oder PNG).' : errorText(err), { error: true })
+    }
+    setBusy(false)
+  }
+  const drop = async () => {
+    setBusy(true)
+    try {
+      await removeProfilePhoto()
+      toast('Profilfoto entfernt')
+    } catch (err) {
+      toast(errorText(err), { error: true })
+    }
+    setBusy(false)
+  }
+  return html`<${Tile} title="Profilfoto">
+    <div class="profile-photo">
+      <${Avatar} email=${me} size="lg" />
+      <div>
+        <p class="muted small">Dein Foto erscheint überall, wo dein Name steht: auf Karten, im Chat, an Notizen und im Team. Sehen können es nur Teammitglieder, Gäste nicht.</p>
+        <div class="settings-actions">
+          <label class=${'btn btn-primary' + (busy ? ' disabled' : '')}>
+            <${Icon} name="plus" size=${18} /> ${has ? 'Anderes Foto' : 'Foto auswählen'}
+            <input type="file" accept="image/*" class="sr-only" disabled=${busy} onChange=${pick} />
+          </label>
+          ${has && html`<button type="button" class="btn" disabled=${busy} onClick=${drop}><${Icon} name="trash" size=${18} /> Entfernen</button>`}
+        </div>
+      </div>
+    </div>
+  <//>`
+}
+
 export function SettingsPage() {
   const me = state.me || {}
   const theme = getTheme()
@@ -385,6 +440,7 @@ export function SettingsPage() {
       </div>
     <//>
 
+    ${!isGuest() && html`<${ProfilePhotoTile} />`}
     ${state.chat.available && html`<${PushTile} key=${state.prefsLoaded ? 'geladen' : 'leer'} />`}
     ${!isGuest() && html`<${MailboxTile} />`}
     ${!isGuest() && html`<${TerminlinkTile} key=${state.prefsLoaded ? 'geladen' : 'leer'} />`}

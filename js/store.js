@@ -54,6 +54,7 @@ export const state = {
   // threads: Antworten je erster Nachricht, thread: gerade offener Verlauf, reactions: je Nachricht
   // Mitteilungen aufs Handy (js/push.js): Stand dieses Geräts und Liste der eigenen Geräte
   push: { loaded: false, permission: 'default', here: false, devices: [] },
+  avatarUrls: {},
   chat: { available: false, rooms: [], signedIn: null, online: [], messages: new Map(), active: null, threads: new Map(), thread: null, reactions: new Map(), urls: new Map() },
   loadedAt: 0,
   toasts: [],
@@ -283,6 +284,7 @@ async function enterApp() {
   state.auth = 'ready'
   emit()
   loadPrefs()
+  loadAvatarUrls()
   startFollowUp()
   import('./chat.js').then((m) => m.startChat()).catch(() => {})
   await autoConnectMailbox()
@@ -524,6 +526,8 @@ export async function reload(throwErrors = false) {
       state.db.emails.forEach((m) => state.full.emails.add(m.id))
     }
     state.loadedAt = Date.now()
+    // Neues Profilfoto bei jemandem im Team: Links nachladen (38_profilfotos.sql)
+    if (state.auth === 'ready' && state.db.team_members.some((t) => t.foto && !t.foto.startsWith('data:') && !state.avatarUrls[t.foto])) loadAvatarUrls()
     emit()
     if (state.auth === 'ready') refreshFollowUp()
   } catch (err) {
@@ -1045,6 +1049,41 @@ export const getEvent = (id) => byId('events', id)
 export function member(email) {
   if (!email) return null
   return state.db.team_members.find((t) => norm(t.email) === norm(email)) || null
+}
+// Profilfotos (38_profilfotos.sql): Link zum Foto eines Teammitglieds oder null (dann Kürzel).
+// In Supabase signierte Links für eine Stunde, alle 50 Minuten neu. Gäste sehen keine Fotos.
+export function avatarUrl(email) {
+  const m = member(email)
+  const f = m && m.foto
+  if (!f) return null
+  if (f.startsWith('data:')) return f
+  return state.avatarUrls[f] || null
+}
+let avatarTimer = null
+export async function loadAvatarUrls() {
+  if (!api || !api.profilePhotoUrls || isGuest()) return
+  const paths = [...new Set(state.db.team_members.map((t) => t.foto).filter((f) => f && !f.startsWith('data:')))]
+  try {
+    state.avatarUrls = await api.profilePhotoUrls(paths)
+    emit()
+  } catch {
+    // Ohne Links zeigt die App weiter die Kürzel
+  }
+  clearInterval(avatarTimer)
+  avatarTimer = setInterval(loadAvatarUrls, 50 * 60 * 1000)
+}
+export async function setProfilePhoto(blob) {
+  const path = await api.uploadProfilePhoto(blob)
+  const t = state.db.team_members.find((x) => norm(x.email) === norm(myEmail()))
+  if (t) t.foto = path
+  await loadAvatarUrls()
+  emit()
+}
+export async function removeProfilePhoto() {
+  await api.removeProfilePhoto()
+  const t = state.db.team_members.find((x) => norm(x.email) === norm(myEmail()))
+  if (t) t.foto = null
+  emit()
 }
 export function memberName(email) {
   const m = member(email)

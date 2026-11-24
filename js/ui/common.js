@@ -29,6 +29,7 @@ import {
   activityKind,
   activityText,
   completeActivity,
+  avatarUrl,
   getCard,
   sharesOf,
   projectSharesOf,
@@ -90,8 +91,11 @@ export function Dot({ color }) {
   return html`<span class="dot" data-c=${(color || '').toUpperCase()} style=${{ background: color }}></span>`
 }
 
+// Rund: Profilfoto, wenn es eins gibt (38_profilfotos.sql), sonst die Initialen
 export function Avatar({ email, name, size = 'sm' }) {
   const label = name || memberName(email)
+  const url = email ? avatarUrl(email) : null
+  if (url) return html`<img class=${'avatar avatar-img avatar-' + size} src=${url} alt="" title=${label} loading="lazy" />`
   return html`<span class=${'avatar avatar-' + size} title=${label}>${initials(label)}</span>`
 }
 
@@ -672,7 +676,7 @@ function NoteItem({ note, guestRelevant }) {
     <div class="note-meta">
       <span>
         ${note.internal && guestRelevant && html`<span class="note-lock" title="Nur für das Team, Gäste sehen diese Notiz nicht"><${Icon} name="lock" size=${14} /> Nur Team · </span>`}
-        ${memberName(note.author) || 'Unbekannt'}${note.via === 'claude' ? ' über Claude' : ''} · ${fmtRelative(note.created_at)}${edited ? ' · bearbeitet' : ''}
+        <${Avatar} email=${note.author} /> ${memberName(note.author) || 'Unbekannt'}${note.via === 'claude' ? ' über Claude' : ''} · ${fmtRelative(note.created_at)}${edited ? ' · bearbeitet' : ''}
       </span>
       ${!editing &&
       html`<span class="note-actions">

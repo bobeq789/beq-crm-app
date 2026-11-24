@@ -3,6 +3,7 @@ import { html, useState, useEffect } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { fmtDate, fmtRelative, firstName, norm } from '../lib/util.js'
 import { fetchCardEvents, memberName, myEmail, state } from '../store.js'
+import { Avatar } from './common.js'
 
 const PRIO = { hoch: 'Hoch', mittel: 'Mittel', niedrig: 'Niedrig' }
 
@@ -128,6 +129,7 @@ export function History({ card }) {
         : html`<ul class="history-list">
             ${events.map(
               (e) => html`<li key=${e.id}>
+                ${e.actor ? html`<${Avatar} email=${e.actor} />` : html`<span class="avatar avatar-sm avatar-auto" aria-hidden="true"></span>`}
                 <span class="history-text">${eventSentence(e)}${e.via === 'claude' && html` <span class="via-claude">über Claude</span>`}</span>
                 <span class="muted small" title=${new Date(e.at).toLocaleString('de-DE')}>${fmtRelative(e.at)}</span>
               </li>`

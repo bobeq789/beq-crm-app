@@ -1705,3 +1705,16 @@ button.chat-item.chat-person { width: 100%; border: 0; background: none; font: i
 .deal-section .field-grid + .field-grid { margin-top: 4px; }
 .deal-section textarea, .deal-section input, .deal-section select, .deal-section .multi-select-btn { background: var(--input-bg); }
 .act-explain { margin: -6px 0 10px; }
+/* Profilfotos (38_profilfotos.sql) */
+img.avatar-img { display: inline-block; object-fit: cover; padding: 0; background: var(--surface); }
+.avatar-lg { width: 72px; height: 72px; font-size: 26px; }
+.profile-photo { display: flex; gap: 16px; align-items: flex-start; }
+.profile-photo .settings-actions { margin-top: 8px; }
+.profile-photo label.btn { cursor: pointer; }
+.profile-photo label.btn.disabled { opacity: 0.6; pointer-events: none; }
+.history-list li { display: flex; align-items: flex-start; gap: 8px; }
+.history-list li .history-text { flex: 1; }
+.avatar-auto { background: var(--border); }
+.ct-who { white-space: nowrap; }
+.ct-who .avatar, .team-table .ct-link .avatar, .note-meta .avatar { vertical-align: middle; margin-right: 4px; }
+.team-list li > .avatar { flex: none; }

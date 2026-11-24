@@ -320,6 +320,28 @@ export async function createSupabaseApi(config) {
       if (anhaenge && anhaenge.length) row.anhaenge = anhaenge
       return check(await client.from('chat_nachrichten').insert(row).select().single())
     },
+    // Profilfotos (38_profilfotos.sql): signierte Links für eine Stunde, hochladen in den eigenen
+    // Ordner, setzen über profilfoto_setzen() (gibt den alten Pfad zurück, die alte Datei fliegt raus).
+    async profilePhotoUrls(paths) {
+      if (!paths.length) return {}
+      const { data, error } = await client.storage.from('profilfotos').createSignedUrls(paths, 3600)
+      if (error) return {}
+      return Object.fromEntries((data || []).filter((x) => x.signedUrl && !x.error).map((x) => [x.path, x.signedUrl]))
+    },
+    async uploadProfilePhoto(blob) {
+      const { data: auth } = await client.auth.getUser()
+      if (!auth || !auth.user) throw new Error('session')
+      const path = `${auth.user.id}/${Date.now()}.jpg`
+      const { error } = await client.storage.from('profilfotos').upload(path, blob, { contentType: 'image/jpeg', upsert: false })
+      if (error) throw error
+      const old = check(await client.rpc('profilfoto_setzen', { p_pfad: path }))
+      if (old && old !== path) await client.storage.from('profilfotos').remove([old]).catch(() => {})
+      return path
+    },
+    async removeProfilePhoto() {
+      const old = check(await client.rpc('profilfoto_setzen', { p_pfad: null }))
+      if (old) await client.storage.from('profilfotos').remove([old]).catch(() => {})
+    },
     // Wer schon angemeldet ist (37_team_online.sql). Fehlt die Funktion noch, null: dann zeigt der
     // Chat alle aktiven Teammitglieder.
     async teamSignedIn() {
