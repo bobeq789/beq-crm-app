@@ -2,7 +2,9 @@
 import { html, useState, useEffect } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { fmtDateTime, fmtSize, htmlToText, splitQuoted, gmailUrl } from '../lib/util.js'
-import { state, emailsOfPersons, ensureFull, personByEmail, memberName, member, isOwnMailbox, canOpenAttachments, openMailAttachment, spurFor } from '../store.js'
+import { state, emailsOfPersons, ensureFull, personByEmail, memberName, member, isOwnMailbox, canOpenAttachments, openMailAttachment, spurFor, confirmDialog, toast, importGeminiMeeting, geminiMeetingOf } from '../store.js'
+import { isGeminiMail, parseGeminiMail } from '../lib/gemini.js'
+import { navigate } from '../router.js'
 import { Empty, LinkText } from './common.js'
 
 const PAGE = 10
@@ -50,6 +52,40 @@ function shortLink(url) {
   return s.length > 48 ? s.slice(0, 47) + '…' : s
 }
 const times = (n) => (n === 1 ? 'einmal' : `${n}×`)
+
+// Notizen von Gemini: „Als Meeting übernehmen“ (41_meeting_gemini.sql). Nur in eigenen Postfächern,
+// nur wenn der Text geladen ist und eine Zusammenfassung enthält. Schon übernommen: Link zum Meeting.
+export function GeminiImport({ mail }) {
+  const [busy, setBusy] = useState(false)
+  if (!isGeminiMail(mail) || !isOwnMailbox(mail.mailbox) || !state.full.emails.has(mail.id)) return null
+  const done = geminiMeetingOf(mail)
+  if (done)
+    return html`<div class="gemini-box">
+      <${Icon} name="check" size=${16} />
+      <span>Als Meeting übernommen.</span>
+      <a class="link-btn" href=${'#/meetings/' + done.id}>Meeting öffnen</a>
+    </div>`
+  if (!parseGeminiMail(mail)) return null
+  const run = async () => {
+    const ok = await confirmDialog({
+      title: 'Als Meeting übernehmen?',
+      text: 'Zusammenfassung und nächste Schritte von Gemini werden ein Meeting im CRM. Das Meeting sieht danach das ganze Team, Gäste nicht. Die Mail selbst bleibt privat.',
+      confirmLabel: 'Übernehmen',
+    })
+    if (!ok) return
+    setBusy(true)
+    const res = await importGeminiMeeting(mail)
+    setBusy(false)
+    if (res.error) return toast(res.error, { error: true })
+    toast(res.event ? 'Meeting angelegt, mit Zeit und Teilnehmern aus dem Termin.' : 'Meeting angelegt.', {
+      action: { label: 'Öffnen', run: () => navigate('/meetings/' + res.meeting.id) },
+    })
+  }
+  return html`<div class="gemini-box">
+    <span>Notizen von Gemini zu einem Meeting.</span>
+    <button type="button" class="btn btn-small btn-primary" disabled=${busy} onClick=${run}><${Icon} name="meetings" size=${16} /> ${busy ? 'Wird übernommen …' : 'Als Meeting übernehmen'}</button>
+  </div>`
+}
 
 export function SpurBadges({ mail }) {
   const s = spurFor(mail)
@@ -122,6 +158,7 @@ function EmailRow({ mail }) {
                 ${showQuoted ? 'Zitierten Verlauf ausblenden' : 'Zitierten Verlauf anzeigen'}
               </button>
               ${showQuoted && html`<div class="prose quoted"><${LinkText} text=${parts.quoted} /></div>`}`}`}
+      <${GeminiImport} mail=${mail} />
       <${MailAttachments} mail=${mail} />
       <${SpurBox} mail=${mail} />
       <div class="mail-foot">

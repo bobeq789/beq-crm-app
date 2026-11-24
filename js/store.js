@@ -5,6 +5,7 @@ import { useState, useEffect } from './lib/preact.js'
 import { SETTINGS } from './settings.js'
 import { uid, local, todayStr, addDays, fmtDate, firstName, initials, norm, safeFileName } from './lib/util.js'
 import { prepareInsert, prepareUpdate, afterInsert, afterUpdate, cascadeDelete, emptyDb, recalcDeal, isClosedDeal, activityAreaSuggestion, touchCard } from './data/rules.js'
+import { parseGeminiMail, sameTitle } from './lib/gemini.js'
 import { createDemoApi } from './data/demo.js'
 import { createSupabaseApi } from './data/supabase.js'
 
@@ -953,6 +954,54 @@ export async function removeCalendarSub(id) {
   }
   await reload()
   return true
+}
+
+// ------------------------------------------------------------
+// Notizen von Gemini als Meeting (41_meeting_gemini.sql, lib/gemini.js)
+// Nur aus eigenen Postfächern und nur auf Klick, weil Mails privat sind und Meetings das Team sieht.
+// Passt ein Termin (gleicher Titel, Beginn bis 20 Stunden vor der Mail), kommen Zeit, Dauer und
+// Teilnehmer von dort, bekannte Kontakte werden verknüpft. Dieselbe Mail wird nie zweimal zum Meeting.
+// ------------------------------------------------------------
+export const geminiExternalId = (mail) => 'gemini:' + (mail.message_id || mail.id)
+export const geminiMeetingOf = (mail) => (state.db.meetings || []).find((m) => m.external_id === geminiExternalId(mail)) || null
+
+export function geminiEventFor(mail, title) {
+  const sent = Date.parse(mail.sent_at || '') || Date.now()
+  return (
+    state.db.events
+      .filter((e) => {
+        const start = Date.parse(e.start_at)
+        return sameTitle(e.title, title) && start <= sent + 3600000 && start >= sent - 20 * 3600000
+      })
+      .sort((a, b) => Math.abs(sent - Date.parse(a.end_at || a.start_at)) - Math.abs(sent - Date.parse(b.end_at || b.start_at)))[0] || null
+  )
+}
+
+export async function importGeminiMeeting(mail) {
+  if (!isOwnMailbox(mail.mailbox)) return { error: 'Übernehmen geht nur aus deinem eigenen Postfach.' }
+  const existing = geminiMeetingOf(mail)
+  if (existing) return { meeting: existing }
+  const parsed = parseGeminiMail(mail)
+  if (!parsed) return { error: 'In dieser Mail steht keine Zusammenfassung von Gemini.' }
+  const ev = geminiEventFor(mail, parsed.title)
+  const people = ev ? (ev.attendees || []).map(norm) : []
+  const persons = [...new Set(people.map((a) => personByEmail(a)).filter(Boolean).map((p) => p.id))]
+  const guestNames = new Map(((ev && ev.details && ev.details.gaeste) || []).map((g) => [norm(g.email), g.name]))
+  const extra = people.filter((a) => !personByEmail(a) && !member(a)).map((a) => guestNames.get(a) || a)
+  const minutes = ev && ev.end_at ? Math.round((Date.parse(ev.end_at) - Date.parse(ev.start_at)) / 60000) : null
+  const meeting = await insert('meetings', {
+    title: parsed.title,
+    held_at: ev ? ev.start_at : mail.sent_at || new Date().toISOString(),
+    duration_min: minutes && minutes > 0 && !ev.all_day ? minutes : null,
+    summary: parsed.summary,
+    action_items: parsed.nextSteps,
+    extra_names: extra,
+    source: 'gemini',
+    external_id: geminiExternalId(mail),
+  })
+  if (!meeting) return { error: 'Das Meeting ließ sich nicht anlegen. Bitte gleich noch einmal versuchen.' }
+  for (const personId of persons) await insert('meeting_persons', { meeting_id: meeting.id, person_id: personId })
+  return { meeting, event: ev }
 }
 
 // Eigene Postfächer sofort abgleichen

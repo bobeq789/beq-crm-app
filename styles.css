@@ -1354,6 +1354,9 @@ body.search-sheet-open .topbar { z-index: 70; }
 .badge.spur-badge .icon { flex: none; }
 .badge.spur-badge.spur-open { color: var(--text); }
 .badge.spur-badge.spur-click { background: var(--today-bg); color: var(--today-text); font-weight: 600; }
+.gemini-box { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; background: var(--raised); border-radius: var(--radius-sm); padding: 10px 12px; margin: 10px 0; font-size: 14px; }
+.gemini-box > span { flex: 1 1 180px; }
+.mail.open .gemini-box { background: var(--surface); }
 .spur-box { background: var(--raised); border-radius: var(--radius-sm); padding: 10px 12px; margin: 10px 0; font-size: 14px; }
 .mail.open .spur-box { background: var(--surface); }
 .spur-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }

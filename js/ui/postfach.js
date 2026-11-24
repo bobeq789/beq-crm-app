@@ -35,7 +35,7 @@ import {
   savePrefs,
 } from '../store.js'
 import { PageHead, Segmented, Empty, LinkText, Modal, Field, dialogKinds, useIsMobile } from './common.js'
-import { MailAttachments, attachmentsOf, SpurBadges, SpurBox, SPUR_HINT } from './emails.js'
+import { MailAttachments, attachmentsOf, SpurBadges, SpurBox, SPUR_HINT, GeminiImport } from './emails.js'
 
 const PAGE = 60
 const MAX_FILES = 18 * 1024 * 1024
@@ -126,6 +126,7 @@ function MailReader({ mail, onBack }) {
       mail.provider_id &&
       html`<a class="btn btn-small" href=${gmailUrl(mail.mailbox, mail.provider_id)} target="_blank" rel="noopener noreferrer"><${Icon} name="external" size=${16} /> In Gmail</a>`}
     </div>
+    <${GeminiImport} mail=${mail} />
     <${MailAttachments} mail=${mail} cls="pf-attachments" />
     <${SpurBox} mail=${mail} />
     <div class="pf-body">

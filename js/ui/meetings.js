@@ -119,6 +119,7 @@ export function MeetingsList() {
                     ${project && html`<span class="meta-item"><${Dot} color=${project.color} />${project.name}</span>`}
                     ${names.length > 0 && html`<span class="meta-item muted">${names.slice(0, 3).join(', ')}${names.length > 3 ? ` +${names.length - 3}` : ''}</span>`}
                     ${m.source === 'fireflies' && html`<span class="badge">Fireflies</span>`}
+                    ${m.source === 'gemini' && html`<span class="badge">Gemini</span>`}
                   </span>
                 </span>
                 <${Icon} name="chevron" size=${18} cls="row-chevron" />
@@ -404,7 +405,7 @@ export function MeetingDetail({ id }) {
     <div class="detail-meta">
       ${meeting.duration_min && html`<span class="meta-item"><${Icon} name="clock" size=${16} /> ${meeting.duration_min} Minuten</span>`}
       ${project && html`<span class="meta-item"><${Dot} color=${project.color} />${project.name}</span>`}
-      <span class="badge">${meeting.source === 'fireflies' ? 'aus Fireflies' : 'von Hand angelegt'}</span>
+      <span class="badge">${meeting.source === 'fireflies' ? 'aus Fireflies' : meeting.source === 'gemini' ? 'aus Notizen von Gemini' : 'von Hand angelegt'}</span>
     </div>
     <div class="detail-grid">
       <div class="col-main">

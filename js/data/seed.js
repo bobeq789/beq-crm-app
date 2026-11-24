@@ -499,6 +499,48 @@ export function buildSeed() {
     db.email_persons.push({ id: uid(), email_id: id, person_id: person.id })
   })
 
+  // Notizen von Gemini zum Termin „Pilotplanung Klinikverbund Auental“ (41_meeting_gemini.sql),
+  // Aufbau wie die echten Mails, Inhalt erfunden
+  const geminiBody = [
+    'Besprechungsnotizen öffnen',
+    'Diese Notizen wurden von Gemini erstellt und',
+    'kann Fehler enthalten.',
+    '',
+    'Zusammenfassung',
+    'Anna Berger, Jonas Keller und das Team des Klinikverbunds planten den Pilot auf Station 3. Die Montagepunkte sind abgestimmt, der Datenschutz wird vor dem Start mit dem Datenschutzbeauftragten geklärt.',
+    '',
+    'Der Start ist für Mitte Januar vorgesehen.',
+    '',
+    'Empfohlene nächste Schritte',
+    '[Anna Berger] Datenschutz: Unterlagen zum Datenschutz an den Klinikverbund schicken.',
+    '[Jonas Keller] Montage: Termin für die Begehung von Station 3 vereinbaren.',
+    '',
+    'Ist der Inhalt dieser E\u2011Mail hilfreich?',
+    'E\u2011Mail war nicht hilfreich E\u2011Mail war hilfreich',
+    'Google LLC, 1600 Ampitheatre Parkway, Mountain View, CA 94043, USA',
+  ].join('\n')
+  db.emails.push({
+    id: uid(),
+    message_id: '<demo-gemini@example.com>',
+    thread_id: 'tg1',
+    mailbox: A,
+    provider_id: 'demo-gemini',
+    direction: 'in',
+    from_email: 'gemini-notes@google.com',
+    from_name: 'Gemini',
+    to_emails: [A],
+    cc_emails: [],
+    subject: 'Notizen: „Pilotplanung Klinikverbund Auental“',
+    sent_at: daysAgo(1, 11, 5),
+    body: geminiBody,
+    attachments: [],
+    attachment_list: [],
+    snippet: 'Zusammenfassung Anna Berger, Jonas Keller und das Team des Klinikverbunds planten den Pilot auf Station 3.',
+    labels: ['INBOX'],
+    mailboxes: [A],
+    created_at: daysAgo(1, 11, 6),
+  })
+
   // Mail-Verfolgung (27_mail_spur.sql) an drei Mails von Anna: geöffnet und geklickt, nur
   // geöffnet, noch nicht geöffnet
   const spur = (subject, events, links = []) => {
