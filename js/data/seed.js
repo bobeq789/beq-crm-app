@@ -590,7 +590,7 @@ export function buildSeed() {
     recalcDeal(db, deal.id)
   })
 
-  // Anna hat zwei Aufgaben an Mira weitergegeben (Kachel „Team“, „Liegt bei anderen“)
+  // Anna hat zwei Aufgaben an Mira weitergegeben (Kachel „Team“, „Von dir vergeben“)
   ;[
     ['Datenschutzunterlagen an Klinikverbund senden', 50],
     ['Schulung für Installationspartner planen', 80],

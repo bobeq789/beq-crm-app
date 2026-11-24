@@ -34,7 +34,7 @@ export const state = {
   full: { meetings: new Set(), emails: new Set() },
   // Marken je Karte: { is_new, mentioned, last_change } (aus dem Verlauf)
   flags: new Map(),
-  // Letzte Zuweisung je Karte: card_id → { actor, at, assignee } (für „Liegt bei anderen“)
+  // Letzte Zuweisung je Karte: card_id → { actor, at, assignee } (für „Von dir vergeben“, seit wann)
   handovers: new Map(),
   // Zählt hoch, wenn neue Verlaufseinträge ohne Kartenänderung dazukommen (zum Beispiel Dateien)
   historyTick: 0,
@@ -537,7 +537,7 @@ export async function reload(throwErrors = false) {
 // ------------------------------------------------------------
 export async function loadFlags() {
   // Ohne Verlauf (zum Beispiel 03_verlauf.sql oder 04_zustaendig.sql noch nicht ausgeführt)
-  // gibt es einfach keine Marken und keine Liste „Liegt bei anderen“
+  // gibt es einfach keine Marken und kein „seit“ bei „Von dir vergeben“
   const [flags, handovers] = await Promise.all([api.cardFlags().catch(() => []), api.handovers().catch(() => [])])
   state.flags = new Map((flags || []).map((r) => [r.card_id, r]))
   state.handovers = new Map((handovers || []).map((r) => [r.card_id, r]))

@@ -647,7 +647,7 @@ export function createDemoApi({ asGuest = false } = {}) {
       return d ? d.owner : null
     },
 
-    // Letzte Zuweisung je Karte (für „Liegt bei anderen“)
+    // Letzte Zuweisung je Karte (für „Von dir vergeben“, seit wann)
     async handovers() {
       return clone(lastHandovers(asGuest ? guestView(db, me) : db))
     },

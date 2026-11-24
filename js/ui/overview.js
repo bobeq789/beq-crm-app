@@ -239,23 +239,29 @@ function MoreList({ items, render }) {
     </button>`}`
 }
 
-// Kachel „Team“: was Kollegen geändert haben und was bei anderen liegt
+// Kachel „Team“ (Entscheidung vom 24.11.2026: nur was mich betrifft)
+// „Neu seit deinem letzten Blick“: Kollegen haben etwas geändert an Aufgaben, die mich betreffen
+// (ich bin zuständig oder mitzuständig, ich habe sie vergeben, ich habe dort eine offene
+// Unteraufgabe oder bin erwähnt). „Von dir vergeben“: dieselbe Regel wie „Von mir vergeben“ in der
+// Pipeline (cards.vergeben_von, 36_meine_pipeline.sql), also nur echte Weitergaben.
+export function concernsMe(card, me = norm(myEmail())) {
+  if (isCardOf(card, me)) return true
+  if (norm(card.vergeben_von || '') === me) return true
+  if (isMentioned(card.id)) return true
+  return (state.db.unteraufgaben || []).some((u) => u.card_id === card.id && !u.erledigt_at && norm(u.zustaendig || '') === me)
+}
 function TeamTile({ drag }) {
   const me = norm(myEmail())
   const open = state.db.cards.filter(isOpen)
   const lastChange = (c) => String((flagOf(c.id) || {}).last_change || '')
   // Erwähnungen („@ dich“) stehen oben, sonst zuletzt geändert zuerst
   const fresh = open
-    .filter((c) => isNew(c.id))
+    .filter((c) => isNew(c.id) && concernsMe(c, me))
     .sort((a, b) => Number(isMentioned(b.id)) - Number(isMentioned(a.id)) || lastChange(b).localeCompare(lastChange(a)))
-  // Liegt bei anderen: jemand anderes ist zuständig, und ich habe sie angelegt oder weitergegeben.
+  // Von dir vergeben: jemand anderes ist Hauptperson, und ich habe sie zuletzt an sie gegeben.
   // „seit“: letzte Zuweisung an die zuständige Person, sonst das Anlegen.
   const elsewhere = open
-    .filter((c) => {
-      if (!c.assignee || norm(c.assignee) === me) return false
-      const h = lastHandover(c.id)
-      return norm(c.created_by || '') === me || (h && norm(h.actor || '') === me)
-    })
+    .filter((c) => c.assignee && norm(c.assignee) !== me && norm(c.vergeben_von || '') === me)
     .map((c) => {
       const h = lastHandover(c.id)
       return { card: c, since: h && norm(h.assignee || '') === norm(c.assignee) ? h.at : c.created_at }
@@ -267,13 +273,13 @@ function TeamTile({ drag }) {
       <h3 class="group-title">Neu seit deinem letzten Blick ${fresh.length > 0 && html`<span class="count">${fresh.length}</span>`}</h3>
       ${fresh.length
         ? html`<${MoreList} items=${fresh} render=${(c) => html`<${TaskRow} card=${c} key=${c.id} />`} />`
-        : html`<${Empty}>Keine Änderungen von anderen.<//>`}
+        : html`<${Empty}>Keine Änderungen von anderen an deinen Aufgaben.<//>`}
     </div>
     <div class="task-group">
-      <h3 class="group-title">Liegt bei anderen ${elsewhere.length > 0 && html`<span class="count">${elsewhere.length}</span>`}</h3>
+      <h3 class="group-title">Von dir vergeben ${elsewhere.length > 0 && html`<span class="count">${elsewhere.length}</span>`}</h3>
       ${elsewhere.length
         ? html`<${MoreList} items=${elsewhere} render=${(x) => html`<${TaskRow} card=${x.card} key=${x.card.id} showSince=${true} sinceText=${sinceLabel(x.since)} />`} />`
-        : html`<${Empty}>Gerade liegt nichts bei anderen.<//>`}
+        : html`<${Empty}>Gerade hast du nichts an andere vergeben.<//>`}
     </div>
   <//>`
 }
