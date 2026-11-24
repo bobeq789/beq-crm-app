@@ -41,13 +41,13 @@ function Intro({ fullProjects }) {
   const projectNames = fullProjects.map((p) => `„${p.name}“`)
   return html`<div class="shared-intro">
     <p>
-      ${who} ${verb} hier Aufgaben mit dir.
-      ${fullProjects.length === 1 && ` Das Projekt ${projectNames[0]} siehst du ganz, auch neue Aufgaben.`}
-      ${fullProjects.length > 1 && ` Die Projekte ${joinNames(projectNames)} siehst du ganz, auch neue Aufgaben.`}
+      ${who} ${verb} hier Deals mit dir.
+      ${fullProjects.length === 1 && ` Die Pipeline ${projectNames[0]} siehst du ganz, auch neue Deals.`}
+      ${fullProjects.length > 1 && ` Die Pipelines ${joinNames(projectNames)} siehst du ganz, auch neue Deals.`}
     </p>
     <p class="muted">
       Du kannst Notizen schreiben und Spalte, Dringlichkeit, Fälligkeit und Zuständig ändern.
-      ${fullProjects.length > 0 && ' In ganz geteilten Projekten legst du mit „+“ selbst Aufgaben an.'}
+      ${fullProjects.length > 0 && ' In ganz geteilten Pipelines legst du mit „+“ selbst Deals an.'}
     </p>
   </div>`
 }
@@ -59,7 +59,7 @@ function AddRow({ project, onDone }) {
     const t = title.trim()
     if (!t) return onDone()
     const saved = await createCard({ title: t, project_id: project.id, assignee: myEmail() })
-    if (saved) toast('Aufgabe angelegt')
+    if (saved) toast('Deal angelegt')
     setTitle('')
     onDone()
   }
@@ -73,8 +73,8 @@ function AddRow({ project, onDone }) {
     <input
       type="text"
       value=${title}
-      placeholder=${`Neue Aufgabe in „${project.name}“`}
-      aria-label=${`Neue Aufgabe in „${project.name}“`}
+      placeholder=${`Neuer Deal in „${project.name}“`}
+      aria-label=${`Neuer Deal in „${project.name}“`}
       ref=${(el) => el && !el.dataset.focused && ((el.dataset.focused = '1'), el.focus())}
       onInput=${(e) => setTitle(e.target.value)}
       onKeyDown=${(e) => e.key === 'Escape' && onDone()}
@@ -91,14 +91,14 @@ function ProjectGroup({ project, cards, full }) {
   </span>`
   const actions =
     full &&
-    html`<button type="button" class="icon-btn" aria-label=${`Neue Aufgabe in „${project.name}“`} title="Neue Aufgabe" onClick=${() => setAdding(true)}>
+    html`<button type="button" class="icon-btn" aria-label=${`Neuer Deal in „${project.name}“`} title="Neuer Deal" onClick=${() => setAdding(true)}>
       <${Icon} name="plus" />
     </button>`
   return html`<${Tile} title=${title} count=${cards.length} actions=${actions}>
     ${adding && html`<${AddRow} project=${project} onDone=${() => setAdding(false)} />`}
     ${cards.length
       ? html`<ul class="task-list">${cards.map((c) => html`<${TaskRow} card=${c} key=${c.id} />`)}</ul>`
-      : !adding && html`<${Empty}>Noch keine Aufgaben. Mit „+“ legst du die erste an.<//>`}
+      : !adding && html`<${Empty}>Noch keine Deals. Mit „+“ legst du den ersten an.<//>`}
   <//>`
 }
 
@@ -124,7 +124,7 @@ export function SharedPage() {
     html`<${Tile} title="Für dich" count=${forMe.length}>
       ${forMe.length
         ? html`<ul class="task-list">${forMe.map((c) => html`<${TaskRow} card=${c} key=${c.id} />`)}</ul>`
-        : html`<${Empty}>Gerade bist du für keine offene Aufgabe zuständig und niemand hat dich erwähnt.<//>`}
+        : html`<${Empty}>Gerade bist du für keinen offenen Deal zuständig und niemand hat dich erwähnt.<//>`}
     <//>`}
     ${groups.map((g) => html`<${ProjectGroup} key=${g.project.id} project=${g.project} cards=${g.cards} full=${g.full} />`)}
   </div>`

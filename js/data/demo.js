@@ -76,9 +76,9 @@ export function createDemoApi({ asGuest = false } = {}) {
   }
   const checkSubtask = (row, old = null) => {
     if (row.zustaendig && (!old || row.zustaendig !== old.zustaendig) && !isTeamAddress(db, row.zustaendig)) {
-      throw dbError('23514', 'Zuständig für eine Unteraufgabe können nur Teammitglieder sein.')
+      throw dbError('23514', 'Zuständig für einen Punkt der Checkliste können nur Teammitglieder sein.')
     }
-    if (!old && db.unteraufgaben.filter((u) => u.card_id === row.card_id).length >= 100) throw dbError('23514', 'Höchstens 100 Unteraufgaben je Aufgabe.')
+    if (!old && db.unteraufgaben.filter((u) => u.card_id === row.card_id).length >= 100) throw dbError('23514', 'Höchstens 100 Punkte auf der Checkliste je Deal.')
   }
   // Deal gewonnen oder verloren: Aufgabe nach „Erledigt“ (wie 28_deal_abschluss.sql), mit Verlauf
   const moveClosedDeal = (oldDeal, deal) => {

@@ -66,7 +66,7 @@ export function TeamPage() {
 
   return html`<div class="page page-team">
     <${PageHead} kicker="Team" title="Team-Überblick" />
-    <p class="muted">Aufgaben aller Projekte ohne Archiv. Nur du siehst diese Seite. Aufgaben mit mehreren Zuständigen zählen bei jeder Person.</p>
+    <p class="muted">Deals aller Pipelines ohne Archiv. Nur du siehst diese Seite. Deals mit mehreren Zuständigen zählen bei jeder Person.</p>
     <div class="stats">
       <${Stat} main=${true} label="Offen" value=${total.open} sub="ohne Erledigt" />
       <${Stat} label="Überfällig" value=${total.overdue} alert=${true} sub="Fälligkeit vorbei" />
@@ -95,16 +95,16 @@ export function TeamPage() {
       </div>
     <//>
 
-    <${Tile} title="Je Projekt">
+    <${Tile} title="Je Pipeline">
       <div class="card-table-wrap">
         <table class="sales-table team-table">
           <thead>
-            <tr><th>Projekt</th><th>Offen</th><th>Überfällig</th><th>Diese Woche</th><th>Wartet</th><th>Ohne Zuständige</th><th>Erledigt (7 Tage)</th></tr>
+            <tr><th>Pipeline</th><th>Offen</th><th>Überfällig</th><th>Diese Woche</th><th>Wartet</th><th>Ohne Zuständige</th><th>Erledigt (7 Tage)</th></tr>
           </thead>
           <tbody>
             ${projects.map(
               (p) => html`<tr key=${p.project.id}>
-                <td><button type="button" class="ct-link" title="Board öffnen" onClick=${() => navigate('/board/' + p.project.id)}><${Dot} color=${p.project.color} /> ${p.project.name}</button></td>
+                <td><button type="button" class="ct-link" title="Pipeline öffnen" onClick=${() => navigate('/board/' + p.project.id)}><${Dot} color=${p.project.color} /> ${p.project.name}</button></td>
                 ${num(p.open)}${num(p.overdue, true)}${num(p.week)}${num(p.waiting)}${num(p.nobody, true)}${num(p.done)}
               </tr>`
             )}

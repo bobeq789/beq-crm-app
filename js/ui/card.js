@@ -68,8 +68,8 @@ function ShareRow({ card }) {
     </div>
     <p class="muted small">
       ${shares.length
-        ? 'Geteilt: Der Gast sieht diese Aufgabe mit Kontakt, Firma und Notizen. Notizen mit „Nur intern“, Mails, Meetings und andere Aufgaben bleiben verborgen.'
-        : 'Nur das Team sieht diese Aufgabe.'}
+        ? 'Geteilt: Der Gast sieht diesen Deal mit Kontakt, Firma und Notizen. Notizen mit „Nur intern“, Mails, Meetings und andere Deals bleiben verborgen.'
+        : 'Nur das Team sieht diesen Deal.'}
     </p>
   </div>`
 }
@@ -119,7 +119,7 @@ function CoAssigneePicker({ card }) {
   list.filter((e) => !options.some((t) => norm(t.email) === e)).forEach((e) => options.push({ email: e, name: memberName(e) }))
   if (!options.length) return null
   const toggle = (e, on) => {
-    if (!on && list.length >= MAX_CO) return toast(`Höchstens ${MAX_CO} weitere Zuständige je Aufgabe.`, { error: true })
+    if (!on && list.length >= MAX_CO) return toast(`Höchstens ${MAX_CO} weitere Zuständige je Deal.`, { error: true })
     setCoAssignees(card, on ? list.filter((x) => x !== e) : [...list, e])
   }
   return html`<${Field} label="Weitere zuständig">
@@ -147,7 +147,7 @@ function SubtaskRow({ u, guest }) {
     else if (t !== u.titel) update('unteraufgaben', u.id, { titel: t })
   }
   const remove = async () => {
-    const ok = await confirmDialog({ title: 'Unteraufgabe löschen?', text: `„${u.titel}“ ist danach weg. Erledigtes besser abhaken.`, confirmLabel: 'Löschen', danger: true })
+    const ok = await confirmDialog({ title: 'Punkt der Checkliste löschen?', text: `„${u.titel}“ ist danach weg. Erledigtes besser abhaken.`, confirmLabel: 'Löschen', danger: true })
     if (ok) deleteSubtask(u)
   }
   return html`<li class=${'sub-item' + (done ? ' sub-done' : '')}>
@@ -166,7 +166,7 @@ function SubtaskRow({ u, guest }) {
       : html`<input
           class="sub-title"
           value=${titel}
-          aria-label="Unteraufgabe"
+          aria-label="Punkt der Checkliste"
           onInput=${(e) => setTitel(e.target.value)}
           onBlur=${save}
           onKeyDown=${(e) => e.key === 'Enter' && e.target.blur()}
@@ -202,13 +202,13 @@ function Subtasks({ card, guest = false }) {
   }
   return html`<section class="subtasks">
     <div class="act-head">
-      <h3 class="section-title">Unteraufgaben ${list.length > 0 && html`<span class="count">${done} von ${list.length}</span>`}</h3>
+      <h3 class="section-title">Checkliste ${list.length > 0 && html`<span class="count">${done} von ${list.length}</span>`}</h3>
     </div>
     ${list.length > 0 && html`<ul class="sub-list">${list.map((u) => html`<${SubtaskRow} key=${u.id} u=${u} guest=${guest} />`)}</ul>`}
     ${!guest &&
     html`<form class="sub-add" onSubmit=${add}>
       <${Icon} name="plus" size=${16} />
-      <input value=${titel} placeholder="Unteraufgabe hinzufügen" aria-label="Neue Unteraufgabe" maxlength="300" onInput=${(e) => setTitel(e.target.value)} />
+      <input value=${titel} placeholder="Punkt hinzufügen" aria-label="Neuer Punkt der Checkliste" maxlength="300" onInput=${(e) => setTitel(e.target.value)} />
       ${titel.trim() && html`<button type="submit" class="btn btn-small btn-primary">Hinzufügen</button>`}
     </form>`}
   </section>`
@@ -238,9 +238,9 @@ function ContactActions({ person }) {
 
 function PanelFrame({ card, project, children }) {
   return html`<div class="backdrop" onClick=${closeCard}>
-    <aside class="panel" role="dialog" aria-modal="true" aria-label=${'Aufgabe ' + (card ? card.title : '')} onClick=${(e) => e.stopPropagation()}>
+    <aside class="panel" role="dialog" aria-modal="true" aria-label=${'Deal ' + (card ? card.title : '')} onClick=${(e) => e.stopPropagation()}>
       <div class="panel-head">
-        <div class="kicker">${project && html`<${Dot} color=${project.color} />`}Aufgabe${project ? ' · ' : ''}${project ? brandSafe(project.name) : ''}</div>
+        <div class="kicker">${project && html`<${Dot} color=${project.color} />`}Deal${project ? ' · ' : ''}${project ? brandSafe(project.name) : ''}</div>
         <button type="button" class="icon-btn" aria-label="Schließen" onClick=${closeCard}><${Icon} name="x" /></button>
       </div>
       <div class="panel-body">${children}</div>
@@ -355,7 +355,7 @@ export function CardPanel({ id }) {
   useOverlay(closeCard)
 
   if (!card) {
-    return html`<${PanelFrame} card=${null} project=${null}><p class="empty">Diese Aufgabe gibt es nicht mehr.</p><//>`
+    return html`<${PanelFrame} card=${null} project=${null}><p class="empty">Diesen Deal gibt es nicht mehr.</p><//>`
   }
   if (isGuest()) return html`<${GuestCard} card=${card} />`
 
@@ -391,11 +391,11 @@ export function CardPanel({ id }) {
   }
 
   const del = async () => {
-    const ok = await confirmDialog({ title: 'Aufgabe löschen?', text: `„${card.title}“ und ihre Notizen sind danach weg.`, confirmLabel: 'Löschen', danger: true })
+    const ok = await confirmDialog({ title: 'Deal löschen?', text: `„${card.title}“ und seine Notizen sind danach weg.`, confirmLabel: 'Löschen', danger: true })
     if (!ok) return
     closeCard()
     await remove('cards', card.id)
-    toast('Aufgabe gelöscht')
+    toast('Deal gelöscht')
   }
 
   return html`<${PanelFrame} card=${card} project=${project}>
@@ -418,7 +418,7 @@ export function CardPanel({ id }) {
     <${ShareRow} card=${card} />
     ${card.archived &&
     html`<p class="notice">
-      Diese Aufgabe liegt im Archiv. Du findest sie auf dem Board unter „Erledigt“ über den Link „Archiv“.
+      Dieser Deal liegt im Archiv. Du findest ihn auf dem Board unter „Erledigt“ über den Link „Archiv“.
       „Aus dem Archiv holen“ unten holt sie zurück.
     </p>`}
 
@@ -429,7 +429,7 @@ export function CardPanel({ id }) {
     html`<p class="muted small handed-by">Vergeben von ${norm(card.vergeben_von) === norm(myEmail()) ? 'dir' : memberName(card.vergeben_von)}</p>`}
 
     <div class="field-grid">
-      <${Field} label="Projekt" htmlFor="card-project">
+      <${Field} label="Pipeline" htmlFor="card-project">
         <${ProjectSelect} id="card-project" value=${card.project_id} onChange=${changeProject} />
       <//>
       <${DueField} card=${card} />

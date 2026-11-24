@@ -176,7 +176,7 @@ export function PriorityPicker({ value, onChange }) {
 export function ProjectSelect({ value, onChange, includeArchived = false, allowEmpty = false, id }) {
   const list = state.db.projects.filter((p) => includeArchived || !p.archived || p.id === value).sort((a, b) => a.sort - b.sort)
   return html`<select id=${id} value=${value || ''} onChange=${(e) => onChange(e.target.value || null)}>
-    ${allowEmpty && html`<option value="">Kein Projekt</option>`}
+    ${allowEmpty && html`<option value="">Keine Pipeline</option>`}
     ${list.map((p) => html`<option value=${p.id}>${p.name}</option>`)}
   </select>`
 }
@@ -211,8 +211,8 @@ export function TaskRow({ card, showSince, sinceText, checkActivity }) {
       ? html`<button
           type="button"
           class="check"
-          title="Aktivität abhaken, die Aufgabe bleibt"
-          aria-label=${'Aktivität „' + activityText(checkActivity) + '“ abhaken, die Aufgabe bleibt'}
+          title="Aktivität abhaken, der Deal bleibt"
+          aria-label=${'Aktivität „' + activityText(checkActivity) + '“ abhaken, der Deal bleibt'}
           onClick=${() => completeActivity(checkActivity)}
         >
           <${Icon} name="check" size=${16} />

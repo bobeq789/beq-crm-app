@@ -88,8 +88,8 @@ function TodoTile({ cards, drag }) {
           ${extra}
         </div>`
       : null
-  const addTask = html`<button type="button" class="link-btn" onClick=${() => openDialog({ kind: 'new-task', title: '' })}><${Icon} name="plus" size=${16} /> Aufgabe</button>`
-  return html`<${Tile} title="Zu erledigen (Aufgaben)" count=${cards.length} cls="tile-todo" drag=${drag} actions=${addTask}>
+  const addTask = html`<button type="button" class="link-btn" onClick=${() => openDialog({ kind: 'new-task', title: '' })}><${Icon} name="plus" size=${16} /> Deal</button>`
+  return html`<${Tile} title="Zu erledigen (Deals)" count=${cards.length} cls="tile-todo" drag=${drag} actions=${addTask}>
     ${cards.length === 0 && html`<${Empty}>Nichts offen. Schön.<//>`}
     ${section('Überfällig und heute', groups.today)}
     ${section('Dringend', groups.urgent)}
@@ -273,7 +273,7 @@ function TeamTile({ drag }) {
       <h3 class="group-title">Neu seit deinem letzten Blick ${fresh.length > 0 && html`<span class="count">${fresh.length}</span>`}</h3>
       ${fresh.length
         ? html`<${MoreList} items=${fresh} render=${(c) => html`<${TaskRow} card=${c} key=${c.id} />`} />`
-        : html`<${Empty}>Keine Änderungen von anderen an deinen Aufgaben.<//>`}
+        : html`<${Empty}>Keine Änderungen von anderen an deinen Deals.<//>`}
     </div>
     <div class="task-group">
       <h3 class="group-title">Von dir vergeben ${elsewhere.length > 0 && html`<span class="count">${elsewhere.length}</span>`}</h3>
@@ -378,7 +378,7 @@ export function Overview() {
     const base = isMobile ? { reihe: mobileOrder, breit: layout.breit } : layout
     saveLayout(moveTile(base, id, target, isMobile))
   })
-  const names = { aufgaben: 'Zu erledigen (Aufgaben)', team: 'Team', termine: 'Termine heute und morgen', wiedervorlagen: 'Wiedervorlagen', meetings: 'Letzte Meetings' }
+  const names = { aufgaben: 'Zu erledigen (Deals)', team: 'Team', termine: 'Termine heute und morgen', wiedervorlagen: 'Wiedervorlagen', meetings: 'Letzte Meetings' }
   const tileFor = (id) => {
     const d = { onPointerDown: (e) => drag.start(id, e) }
     if (id === 'aufgaben') return html`<${TodoTile} cards=${todo} drag=${d} />`
@@ -408,7 +408,7 @@ export function Overview() {
       title=${name ? `Hallo ${name}` : 'Übersicht'}
       actions=${html`<div class="ov-head-actions">
         <${Segmented}
-          label="Welche Aufgaben"
+          label="Welche Deals"
           value=${scope}
           onChange=${changeScope}
           options=${[

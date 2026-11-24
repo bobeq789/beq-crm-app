@@ -1242,7 +1242,7 @@ export const ACTIVITY_KINDS = [
   { value: 'anruf', label: 'Anruf', icon: 'phone' },
   { value: 'mail', label: 'Mail', icon: 'mail' },
   { value: 'termin', label: 'Termin', icon: 'calendar' },
-  { value: 'aufgabe', label: 'Aufgabe', icon: 'check' },
+  { value: 'aufgabe', label: 'To-do', icon: 'check' },
 ]
 export const activityKind = (art) => ACTIVITY_KINDS.find((k) => k.value === art) || ACTIVITY_KINDS[0]
 export const activityText = (a) => a.titel || activityKind(a.art).label
@@ -1392,9 +1392,9 @@ export function lastOfKindHint(stage) {
   if (stagesOf(stage.project_id).filter((s) => s.kind === stage.kind).length > 1) return ''
   const label = (SETTINGS.stageKinds.find((k) => k.value === stage.kind) || {}).label || stage.kind
   const why = {
-    todo: 'Neue Aufgaben aus der Schnellerfassung und aus „Aufs Board“ landen danach ohne Hinweis in der ersten Spalte.',
-    waiting: 'Die Übersicht zeigt danach unter „Warte auf Rückmeldung“ nichts mehr aus diesem Projekt.',
-  }[stage.kind] || 'Aufgaben, die aus anderen Projekten mit dieser Art hierher wandern, landen danach in der ersten Spalte.'
+    todo: 'Neue Deals aus der Schnellerfassung und aus „Aufs Board“ landen danach ohne Hinweis in der ersten Spalte.',
+    waiting: 'Die Übersicht zeigt danach unter „Warte auf Rückmeldung“ nichts mehr aus dieser Pipeline.',
+  }[stage.kind] || 'Deals, die aus anderen Pipelines mit dieser Art hierher wandern, landen danach in der ersten Spalte.'
   return `„${stage.name}“ ist die letzte Spalte der Art „${label}“. ${why}`
 }
 
@@ -1406,7 +1406,7 @@ export async function countStageCards(stageId) {
   try {
     return await api.countStageCards(stageId)
   } catch (err) {
-    toast(`Die Aufgaben in der Spalte ließen sich nicht zählen. ${errorText(err)}`, { error: true })
+    toast(`Die Deals in der Spalte ließen sich nicht zählen. ${errorText(err)}`, { error: true })
     return null
   }
 }
@@ -1423,14 +1423,14 @@ export async function deleteStage(stageId, targetId = null) {
   if (counted.total) {
     const target = getStage(targetId)
     if (!target || target.project_id !== stage.project_id || target.id === stage.id) {
-      toast('Bitte eine Spalte wählen, in die die Aufgaben kommen.', { error: true })
+      toast('Bitte eine Spalte wählen, in die die Deals kommen.', { error: true })
       return false
     }
     try {
       moved = await api.moveStageCards(stage.id, target.id)
     } catch (err) {
       await reload()
-      toast(`Die Aufgaben ließen sich nicht verschieben, die Spalte „${stage.name}“ bleibt stehen. ${errorText(err)}`, { error: true })
+      toast(`Die Deals ließen sich nicht verschieben, die Spalte „${stage.name}“ bleibt stehen. ${errorText(err)}`, { error: true })
       return false
     }
   }
@@ -1438,12 +1438,12 @@ export async function deleteStage(stageId, targetId = null) {
     await api.remove('stages', stage.id)
   } catch (err) {
     await reload()
-    const done = moved ? `${moved === 1 ? 'Die Aufgabe ist' : `Die ${moved} Aufgaben sind`} verschoben, aber die Spalte ließ sich nicht löschen.` : 'Die Spalte ließ sich nicht löschen.'
+    const done = moved ? `${moved === 1 ? 'Der Deal ist' : `Die ${moved} Deals sind`} verschoben, aber die Spalte ließ sich nicht löschen.` : 'Die Spalte ließ sich nicht löschen.'
     toast(`${done} ${errorText(err)}`, { error: true })
     return false
   }
   await reload()
-  toast(moved ? `Spalte gelöscht, ${moved === 1 ? '1 Aufgabe' : `${moved} Aufgaben`} verschoben.` : `Spalte „${stage.name}“ gelöscht.`)
+  toast(moved ? `Spalte gelöscht, ${moved === 1 ? '1 Deal' : `${moved} Deals`} verschoben.` : `Spalte „${stage.name}“ gelöscht.`)
   return true
 }
 
@@ -1500,7 +1500,7 @@ export function moveCardToKind(card, kind) {
   if (cardKind(card) === kind) return null
   const stage = stageOfKind(card.project_id, kind)
   if (!stage || stage.kind !== kind) {
-    toast('Dieses Projekt hat keine passende Spalte.', { error: true })
+    toast('Diese Pipeline hat keine passende Spalte.', { error: true })
     return null
   }
   return update('cards', card.id, { stage_id: stage.id })

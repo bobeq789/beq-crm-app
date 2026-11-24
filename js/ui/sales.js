@@ -239,7 +239,7 @@ function RevenueList({ won, items }) {
   const sorted = [...groups.entries()].sort((a, b) => sum(b[1]) - sum(a[1]))
   return html`<table class="sales-table revenue-table">
     <thead>
-      <tr><th scope="col">Abschluss</th><th scope="col">Aufgabe und Kunde</th>${!mobile && html`<th scope="col">Produkte</th>`}<th scope="col" class="num">Wert</th></tr>
+      <tr><th scope="col">Abschluss</th><th scope="col">Deal und Kunde</th>${!mobile && html`<th scope="col">Produkte</th>`}<th scope="col" class="num">Wert</th></tr>
     </thead>
     ${sorted.map(([email, list]) => html`<tbody key=${email}>
       <tr class="group-row">
@@ -256,7 +256,7 @@ function RevenueList({ won, items }) {
           return html`<tr key=${d.id}>
             <td class="nowrap">${fmtDate(d.closed_at)}</td>
             <td>
-              <button type="button" class="link-btn" onClick=${() => openCard(d.card_id)}>${card ? card.title : '[Aufgabe gelöscht]'}</button>
+              <button type="button" class="link-btn" onClick=${() => openCard(d.card_id)}>${card ? card.title : '[Deal gelöscht]'}</button>
               ${customerOf(card) && html`<span class="muted small block">${customerOf(card)}</span>`}
               ${mobile && dItems.length > 0 && html`<span class="small block">${productSummary(dItems)}</span>`}
             </td>
@@ -279,7 +279,7 @@ export function revenueCsv(won, items) {
     return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t
   }
   const euro = (cents) => (Number(cents || 0) / 100).toFixed(2).replace('.', ',')
-  const rows = [['Mitarbeiter', 'Abschluss', 'Aufgabe', 'Firma', 'Kontakt', 'Produkte', 'Netzwerkplätze', 'Wert netto EUR']]
+  const rows = [['Mitarbeiter', 'Abschluss', 'Deal', 'Firma', 'Kontakt', 'Produkte', 'Netzwerkplätze', 'Wert netto EUR']]
   won
     .slice()
     .sort((a, b) => memberName(a.owner).localeCompare(memberName(b.owner), 'de') || a.closed_at.localeCompare(b.closed_at))
@@ -359,14 +359,14 @@ export function SalesPage() {
     <p class="muted small sales-range">${fmtDate(from)} bis ${fmtDate(to)}</p>
 
     ${deals.length === 0 &&
-    html`<${Empty}>Noch keine Deals. Einen Deal legst du in einer Aufgabe unter „Deal“ an.<//>`}
+    html`<${Empty}>Noch keine Deals mit Wert. Den Wert trägst du im Deal unter „Wert und Status“ ein.<//>`}
 
     <div class="stats">
       <${Stat} main=${true} label="Gewonnen" value=${fmtEuro(r.wonSum)} sub=${r.won.length === 1 ? '1 Deal' : `${r.won.length} Deals`} />
       <${Stat} label="Abschlussquote" value=${r.rate == null ? '[keine Abschlüsse]' : `${r.rate} %`} sub=${`${r.won.length} gewonnen, ${r.lost.length} verloren`} />
       <${Stat} label="Ø Dealgröße" value=${r.avg == null ? '[keine]' : fmtEuro(r.avg)} sub="gewonnene Deals" />
       <${Stat} label="Netzwerkplätze" value=${String(r.places)} sub="verkauft, inklusive gratis" />
-      <${Stat} label="Offene Pipeline" value=${fmtEuro(r.openSum)} sub=${`${r.open.length} offen, unabhängig vom Zeitraum`} />
+      <${Stat} label="Offene Deals" value=${fmtEuro(r.openSum)} sub=${`${r.open.length} offen, unabhängig vom Zeitraum`} />
       <${Stat} label="Gewichtet" value=${fmtEuro(r.weighted)} sub="Wert mal Wahrscheinlichkeit" />
     </div>
 
@@ -458,14 +458,14 @@ export function SalesPage() {
     <${Tile} title="Verloren im Zeitraum" count=${r.lost.length}>
       ${r.lost.length
         ? html`<table class="sales-table deals-table">
-            <thead><tr><th scope="col">Aufgabe</th><th scope="col">Besitzer</th><th scope="col">Verloren am</th><th scope="col">Grund</th><th scope="col" class="num">Wert</th></tr></thead>
+            <thead><tr><th scope="col">Deal</th><th scope="col">Besitzer</th><th scope="col">Verloren am</th><th scope="col">Grund</th><th scope="col" class="num">Wert</th></tr></thead>
             <tbody>
               ${[...r.lost]
                 .sort((a, b) => b.closed_at.localeCompare(a.closed_at))
                 .map((d) => {
                   const card = getCard(d.card_id)
                   return html`<tr key=${d.id}>
-                    <td><button type="button" class="link-btn" onClick=${() => openCard(d.card_id)}>${card ? card.title : '[Aufgabe gelöscht]'}</button></td>
+                    <td><button type="button" class="link-btn" onClick=${() => openCard(d.card_id)}>${card ? card.title : '[Deal gelöscht]'}</button></td>
                     <td>${memberName(d.owner)}</td>
                     <td>${fmtDate(d.closed_at)}</td>
                     <td>${d.lost_reason || '[ohne Grund]'}</td>

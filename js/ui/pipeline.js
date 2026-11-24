@@ -64,8 +64,8 @@ function personOf(param) {
 
 // Kurzer Hinweis auf der Karte, warum sie in dieser Pipeline steht
 function subtaskNote(subs, forWhom) {
-  if (subs.length === 1) return `Unteraufgabe für ${forWhom}: „${subs[0].titel}“`
-  return `${subs.length} Unteraufgaben für ${forWhom}`
+  if (subs.length === 1) return `Checkliste für ${forWhom}: „${subs[0].titel}“`
+  return `${subs.length} Punkte der Checkliste für ${forWhom}`
 }
 
 // Aufgaben der Pipeline mit Hinweis. mode: 'zustaendig' oder 'vergeben'
@@ -216,7 +216,7 @@ function PipelineColumn({ col, items, draggable, viewer }) {
     ${isDone &&
     items.length > DONE_LIMIT &&
     html`<button type="button" class="link-btn" onClick=${() => setShowAll(!showAll)}>${showAll ? 'Weniger anzeigen' : `Alle ${items.length} anzeigen`}</button>`}
-    ${!items.length && html`<p class="column-empty">Keine Aufgaben</p>`}
+    ${!items.length && html`<p class="column-empty">Keine Deals</p>`}
   </section>`
 }
 
@@ -276,8 +276,8 @@ export function PipelinePage({ params }) {
       <button type="button" class=${mode === 'zustaendig' ? 'active' : ''} aria-pressed=${mode === 'zustaendig'} onClick=${() => setParam('ansicht', null, true)}>Zuständig</button>
       <button type="button" class=${mode === 'vergeben' ? 'active' : ''} aria-pressed=${mode === 'vergeben'} onClick=${() => setParam('ansicht', 'vergeben', true)}>${givenLabel}</button>
     </div>
-    <select value=${project} aria-label="Projekt" onChange=${(e) => setProject(e.target.value)}>
-      <option value="">Alle Projekte</option>
+    <select value=${project} aria-label="Pipeline" onChange=${(e) => setProject(e.target.value)}>
+      <option value="">Alle Pipelines</option>
       ${activeProjects()
         .filter((p) => p.id === project || state.db.cards.some((c) => c.project_id === p.id))
         .map((p) => html`<option value=${p.id}>${p.name}</option>`)}
@@ -289,7 +289,7 @@ export function PipelinePage({ params }) {
   </div>`
 
   const newTask = () => openDialog({ kind: 'pipeline-new', person })
-  const actions = html`<button type="button" class="btn btn-primary" onClick=${newTask}><${Icon} name="plus" size=${18} /> Neue Aufgabe</button>`
+  const actions = html`<button type="button" class="btn btn-primary" onClick=${newTask}><${Icon} name="plus" size=${18} /> Neuer Deal</button>`
   const kicker = mode === 'vergeben' ? 'Board · vergeben' : 'Board'
   const bar = html`<div class="project-tabs project-bar"><${ProjectPicker} currentId=${PIPELINE_ID} pipelineCount=${openCount} /></div>`
 
@@ -301,7 +301,7 @@ export function PipelinePage({ params }) {
       ${filters}
       <div class="stage-tabs pl-tabs" role="tablist" aria-label="Bereich">
         ${[
-          ['aufgaben', 'Aufgaben', openCount],
+          ['aufgaben', 'Deals', openCount],
           ['intern', 'Intern', intern.length],
           ['sales', 'Sales', sales.length],
         ].map(
@@ -321,7 +321,7 @@ export function PipelinePage({ params }) {
         <div class="board-mobile"><${PipelineColumn} col=${col} items=${byKind[col.kind]} draggable=${false} viewer=${person} /></div>`}
       ${tab === 'intern' && html`<${ActivityList} title="Aktivitäten intern" list=${intern} mode=${mode} empty=${emptyActs} />`}
       ${tab === 'sales' && html`<${ActivityList} title="Aktivitäten Sales" list=${sales} mode=${mode} empty=${emptyActs} />`}
-      <button type="button" class="fab" aria-label="Neue Aufgabe" onClick=${newTask}><${Icon} name="plus" size=${26} /></button>
+      <button type="button" class="fab" aria-label="Neuer Deal" onClick=${newTask}><${Icon} name="plus" size=${26} /></button>
     </div>`
   }
 
@@ -360,11 +360,11 @@ function NewTaskDialog({ d }) {
     if (!card) return
     closeDialog()
     const project = getProject(card.project_id)
-    toast(norm(assignee) === norm(myEmail()) ? `In ${project ? project.name : 'dein Projekt'} angelegt` : `An ${memberName(assignee)} vergeben`, {
+    toast(norm(assignee) === norm(myEmail()) ? `In ${project ? project.name : 'deiner Pipeline'} angelegt` : `An ${memberName(assignee)} vergeben`, {
       action: { label: 'Öffnen', run: () => openCard(card.id) },
     })
   }
-  return html`<${Modal} title="Neue Aufgabe" onClose=${closeDialog}>
+  return html`<${Modal} title="Neuer Deal" onClose=${closeDialog}>
     <form class="form" onSubmit=${submit}>
       <${Field} label="Titel" htmlFor="pl-title">
         <input id="pl-title" value=${title} required maxlength="300" autofocus onInput=${(e) => setTitle(e.target.value)} />
@@ -375,14 +375,14 @@ function NewTaskDialog({ d }) {
         </select>
       <//>
       <div class="field-grid">
-        <${Field} label="Projekt" htmlFor="pl-project">
+        <${Field} label="Pipeline" htmlFor="pl-project">
           <${ProjectSelect} id="pl-project" value=${projectId} onChange=${setProjectId} />
         <//>
         <${Field} label="Fällig am" htmlFor="pl-due">
           <input id="pl-due" type="date" value=${due} onInput=${(e) => setDue(e.target.value)} />
         <//>
       </div>
-      <p class="muted small">Weitere Zuständige, Unteraufgaben und Aktivitäten trägst du danach in der Aufgabe ein.</p>
+      <p class="muted small">Weitere Zuständige, Checkliste und Aktivitäten trägst du danach im Deal ein.</p>
       <div class="form-actions">
         <button type="button" class="btn" onClick=${closeDialog}>Abbrechen</button>
         <button type="submit" class="btn btn-primary" disabled=${!title.trim() || busy}>${norm(assignee) === norm(myEmail()) ? 'Anlegen' : 'Vergeben'}</button>

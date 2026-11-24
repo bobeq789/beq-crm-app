@@ -102,7 +102,7 @@ export function ActivityForm({ initial, target = {}, onSave, onCancel, onDelete 
       </div>
       ${!isGuest() &&
       html`<select class="act-holder" value=${zustaendig} aria-label="Zuständig" onChange=${(e) => setZustaendig(e.target.value)}>
-        <option value="">${onCard ? 'Zuständig wie die Aufgabe' : 'Zuständig: wer sie anlegt'}</option>
+        <option value="">${onCard ? 'Zuständig wie beim Deal' : 'Zuständig: wer sie anlegt'}</option>
         ${activeMembers().map((t) => html`<option value=${norm(t.email)}>${norm(t.email) === norm(myEmail()) ? 'Ich' : t.name}</option>`)}
         ${zustaendig && !activeMembers().some((t) => norm(t.email) === zustaendig) && html`<option value=${zustaendig}>${memberName(zustaendig)}</option>`}
       </select>`}
@@ -128,7 +128,7 @@ export function ActivityForm({ initial, target = {}, onSave, onCancel, onDelete 
 function ActivityContext({ a, here }) {
   const card = a.card_id ? getCard(a.card_id) : null
   if (card && here !== 'card') {
-    return html`<button type="button" class="act-context link-btn" onClick=${() => openCard(card.id)}>Aufgabe „${card.title}“</button>`
+    return html`<button type="button" class="act-context link-btn" onClick=${() => openCard(card.id)}>Deal „${card.title}“</button>`
   }
   const person = !card && a.person_id ? getPerson(a.person_id) : null
   if (person && here === 'org') return html`<a class="act-context" href=${'#/kontakte/' + person.id}>${person.name}</a>`

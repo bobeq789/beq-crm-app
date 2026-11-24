@@ -1,7 +1,7 @@
 {
   "name": "beQ CRM",
   "short_name": "beQ CRM",
-  "description": "Internes CRM der beQ: Aufgaben, Board, Kontakte, Firmen und Meetings",
+  "description": "Internes CRM der beQ: Deals, Pipelines, Aktivitäten, Kontakte, Firmen und Meetings",
   "lang": "de",
   "start_url": "./#/",
   "scope": "./",

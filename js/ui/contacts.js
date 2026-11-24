@@ -219,7 +219,7 @@ export function ContactDetail({ id }) {
   const del = async () => {
     const ok = await confirmDialog({
       title: 'Kontakt löschen?',
-      text: `„${p.name}“ und alle Notizen dazu sind danach weg. Aufgaben und Meetings bleiben, nur ohne diesen Kontakt.`,
+      text: `„${p.name}“ und alle Notizen dazu sind danach weg. Deals und Meetings bleiben, nur ohne diesen Kontakt.`,
       confirmLabel: 'Löschen',
       danger: true,
     })
@@ -229,7 +229,7 @@ export function ContactDetail({ id }) {
     toast('Kontakt gelöscht')
   }
   const newTask = async () => {
-    const title = await promptDialog({ title: `Neue Aufgabe zu ${p.name}`, label: 'Titel', confirmLabel: 'Anlegen' })
+    const title = await promptDialog({ title: `Neuer Deal zu ${p.name}`, label: 'Titel', confirmLabel: 'Anlegen' })
     if (!title) return
     const card = await createCard({ title, person_id: p.id, org_id: p.org_id, kind: 'todo', assignee: state.me && state.me.email })
     if (card) openCard(card.id)
@@ -262,8 +262,8 @@ export function ContactDetail({ id }) {
     </div>
     <div class="detail-grid">
       <div class="col-main">
-        <${Tile} title="Offene Aufgaben" count=${cards.length} actions=${html`<button type="button" class="link-btn" onClick=${newTask}><${Icon} name="plus" size=${16} /> Aufgabe</button>`}>
-          ${cards.length ? html`<ul class="task-list">${cards.map((c) => html`<${TaskRow} card=${c} key=${c.id} />`)}</ul>` : html`<${Empty}>Keine offenen Aufgaben.<//>`}
+        <${Tile} title="Offene Deals" count=${cards.length} actions=${html`<button type="button" class="link-btn" onClick=${newTask}><${Icon} name="plus" size=${16} /> Deal</button>`}>
+          ${cards.length ? html`<ul class="task-list">${cards.map((c) => html`<${TaskRow} card=${c} key=${c.id} />`)}</ul>` : html`<${Empty}>Keine offenen Deals.<//>`}
         <//>
         ${!isGuest() && html`<${ActivitySection} list=${activitiesForPerson(p.id)} here="person" target=${{ person_id: p.id }} />`}
         <${Tile} title="Notizen"><${Notes} field="person_id" id=${p.id} /><//>

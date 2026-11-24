@@ -263,7 +263,7 @@ export function MeetingEditor({ meeting, onDone }) {
       <${Field} label="Dauer in Minuten" htmlFor="meeting-duration">
         <input id="meeting-duration" type="number" min="0" step="5" inputmode="numeric" value=${form.duration_min} onInput=${(e) => set({ duration_min: e.target.value })} />
       <//>
-      <${Field} label="Projekt" htmlFor="meeting-project">
+      <${Field} label="Pipeline" htmlFor="meeting-project">
         <${ProjectSelect} id="meeting-project" value=${form.project_id} allowEmpty=${true} onChange=${(v) => set({ project_id: v })} />
       <//>
     </div>
@@ -277,7 +277,7 @@ export function MeetingEditor({ meeting, onDone }) {
     <${Field} label="Zusammenfassung" htmlFor="meeting-summary">
       <textarea id="meeting-summary" rows="6" value=${form.summary} onInput=${(e) => set({ summary: e.target.value })}></textarea>
     <//>
-    <${Field} label="Action Items" htmlFor="meeting-actions" hint="Eine pro Zeile, gern im Format „Name: Aufgabe“">
+    <${Field} label="Action Items" htmlFor="meeting-actions" hint="Eine pro Zeile, gern im Format „Name: To-do“">
       <textarea id="meeting-actions" rows="5" value=${form.action_items} placeholder="Anna: Angebot schicken" onInput=${(e) => set({ action_items: e.target.value })}></textarea>
     <//>
     <div class="form-actions">
@@ -318,7 +318,7 @@ function ActionItems({ meeting }) {
       }
     }
     const card = await createCard(fields)
-    if (card) toast('Aufgabe liegt auf dem Board', { action: { label: 'Öffnen', run: () => openCard(card.id) } })
+    if (card) toast('Deal liegt auf dem Board', { action: { label: 'Öffnen', run: () => openCard(card.id) } })
   }
 
   if (!items.length) return html`<${Empty}>Keine Action Items.<//>`
@@ -376,7 +376,7 @@ export function MeetingDetail({ id }) {
   const del = async () => {
     const ok = await confirmDialog({
       title: 'Meeting löschen?',
-      text: `„${meeting.title}“ und die Notizen dazu sind danach weg. Aufgaben aus diesem Meeting bleiben auf dem Board.`,
+      text: `„${meeting.title}“ und die Notizen dazu sind danach weg. Deals aus diesem Meeting bleiben auf dem Board.`,
       confirmLabel: 'Löschen',
       danger: true,
     })

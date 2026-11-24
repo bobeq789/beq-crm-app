@@ -15,12 +15,12 @@ const PRIO_RANK = { hoch: 0, mittel: 1, niedrig: 2 }
 const cmp = (a, b) => (a === b ? 0 : a === null ? 1 : b === null ? -1 : a < b ? -1 : 1)
 
 const COLUMNS = [
-  { key: 'titel', label: 'Aufgabe', value: (c) => c.title.toLowerCase() },
+  { key: 'titel', label: 'Deal', value: (c) => c.title.toLowerCase() },
   { key: 'spalte', label: 'Spalte', value: (c) => (getStage(c.stage_id) || {}).sort ?? null },
   { key: 'zustaendig', label: 'Zuständig', value: (c) => (c.assignee ? memberName(c.assignee).toLowerCase() : null) },
   { key: 'faellig', label: 'Fällig', value: (c) => c.due_date || null },
   { key: 'dringlichkeit', label: 'Dringlichkeit', value: (c) => (c.priority ? PRIO_RANK[c.priority] : null) },
-  { key: 'deal', label: 'Deal', value: (c) => (dealOf(c.id) ? Number(dealOf(c.id).value_cents || 0) : null), desc: true },
+  { key: 'deal', label: 'Wert', value: (c) => (dealOf(c.id) ? Number(dealOf(c.id).value_cents || 0) : null), desc: true },
   { key: 'geaendert', label: 'Geändert', value: (c) => String(c.updated_at || ''), desc: true },
 ]
 
@@ -57,7 +57,7 @@ export function CardTable({ cards }) {
   const mobile = useIsMobile()
   const [sort, setSort] = useState({ key: 'spalte', dir: 'asc' })
   const [showAll, setShowAll] = useState(false)
-  if (!cards.length) return html`<${Empty}>Keine Aufgaben für diese Auswahl.<//>`
+  if (!cards.length) return html`<${Empty}>Keine Deals für diese Auswahl.<//>`
   const sorted = sortCards(cards, sort.key, sort.dir)
   const shown = showAll ? sorted : sorted.slice(0, PAGE)
   const toggle = (col) =>

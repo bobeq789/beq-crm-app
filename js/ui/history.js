@@ -13,7 +13,7 @@ const ACT = {
   anruf: ['einen Anruf', 'den Anruf'],
   mail: ['eine Mail', 'die Mail'],
   termin: ['einen Termin', 'den Termin'],
-  aufgabe: ['eine Aufgabe', 'die Aufgabe'],
+  aufgabe: ['ein To-do', 'das To-do'],
 }
 function actParts(kind, detail) {
   const parts = String(detail || '').split('|')
@@ -47,18 +47,18 @@ export function eventSentence(e, me = myEmail()) {
     const passive = {
       angelegt: 'angelegt',
       spalte: `nach „${d}“ verschoben`,
-      projekt: `ins Projekt ${d} verschoben`,
+      projekt: `in die Pipeline ${d} verschoben`,
       archiv: d === 'archiviert' ? 'archiviert' : 'aus dem Archiv geholt',
     }
     return `${who} ${passive[e.kind] || 'geändert'}`
   }
   switch (e.kind) {
     case 'angelegt':
-      return `${who} ${hat} sie angelegt`
+      return `${who} ${hat} ihn angelegt`
     case 'spalte':
-      return `${who} ${hat} sie nach „${d}“ verschoben`
+      return `${who} ${hat} ihn nach „${d}“ verschoben`
     case 'projekt':
-      return `${who} ${hat} sie ins Projekt ${d} verschoben`
+      return `${who} ${hat} ihn in die Pipeline ${d} verschoben`
     case 'dringlichkeit':
       return d ? `${who} ${hat} die Dringlichkeit auf ${PRIO[d] || d} gesetzt` : `${who} ${hat} die Dringlichkeit entfernt`
     case 'faelligkeit':
@@ -70,7 +70,7 @@ export function eventSentence(e, me = myEmail()) {
     case 'titel':
       return `${who} ${hat} den Titel geändert`
     case 'archiv':
-      return d === 'archiviert' ? `${who} ${hat} sie archiviert` : `${who} ${hat} sie aus dem Archiv geholt`
+      return d === 'archiviert' ? `${who} ${hat} ihn archiviert` : `${who} ${hat} ihn aus dem Archiv geholt`
     case 'notiz':
       return `${who} ${hat} eine Notiz geschrieben`
     case 'erwaehnung':
@@ -88,11 +88,11 @@ export function eventSentence(e, me = myEmail()) {
     case 'mitzustaendig_weg':
       return `${who} ${hat} ${person(d)} als weitere zuständige Person ausgetragen`
     case 'unteraufgabe':
-      return `${who} ${hat} die Unteraufgabe „${d}“ angelegt`
+      return `${who} ${hat} „${d}“ zur Checkliste hinzugefügt`
     case 'unteraufgabe_erledigt':
-      return `${who} ${hat} die Unteraufgabe „${d}“ abgehakt`
+      return `${who} ${hat} „${d}“ auf der Checkliste abgehakt`
     case 'unteraufgabe_geloescht':
-      return `${who} ${hat} die Unteraufgabe „${d}“ gelöscht`
+      return `${who} ${hat} „${d}“ von der Checkliste gelöscht`
     default:
       return `${who} ${hat} etwas geändert`
   }

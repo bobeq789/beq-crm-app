@@ -72,7 +72,7 @@ function TeamAdmin() {
     if (t.active) {
       const ok = await confirmDialog({
         title: `${t.name} deaktivieren?`,
-        text: 'Die Person kommt danach nicht mehr ins CRM. Aufgaben und Notizen bleiben erhalten. Lösch das Anmeldekonto zusätzlich in Supabase.',
+        text: 'Die Person kommt danach nicht mehr ins CRM. Deals und Notizen bleiben erhalten. Lösch das Anmeldekonto zusätzlich in Supabase.',
         confirmLabel: 'Deaktivieren',
         danger: true,
       })
@@ -330,7 +330,7 @@ function PushTile() {
             <label class="check-label"><input type="checkbox" checked=${flag('direkt')} onChange=${(e) => savePushPrefs({ direkt: e.target.checked })} /> Direktnachrichten</label>
             <label class="check-label"><input type="checkbox" checked=${flag('gruppen')} onChange=${(e) => savePushPrefs({ gruppen: e.target.checked })} /> Gruppen</label>
             <label class="check-label"><input type="checkbox" checked=${flag('erwaehnungen')} onChange=${(e) => savePushPrefs({ erwaehnungen: e.target.checked })} /> @Erwähnungen und Antworten im Verlauf</label>
-            <label class="check-label"><input type="checkbox" checked=${flag('zuweisungen')} onChange=${(e) => savePushPrefs({ zuweisungen: e.target.checked })} /> Aufgaben, Unteraufgaben und Aktivitäten, die dir jemand gibt</label>
+            <label class="check-label"><input type="checkbox" checked=${flag('zuweisungen')} onChange=${(e) => savePushPrefs({ zuweisungen: e.target.checked })} /> Deals, Punkte der Checkliste und Aktivitäten, die dir jemand gibt</label>
           </fieldset>
           ${channels.length > 0 &&
           html`<fieldset class="push-kinds">

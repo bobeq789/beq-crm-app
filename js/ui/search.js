@@ -70,7 +70,7 @@ export function searchAll(query) {
     const org = getOrg(c.org_id)
     return matches(q, c.title, c.description, c.labels, person && person.name, org && org.name)
   })
-  add('aufgaben', 'Aufgaben', rank(q, cards, (c) => c.title, (c) => (c.archived ? -10 : isOpen(c) ? 0 : -5)), (c) => {
+  add('aufgaben', 'Deals', rank(q, cards, (c) => c.title, (c) => (c.archived ? -10 : isOpen(c) ? 0 : -5)), (c) => {
     const project = getProject(c.project_id)
     const stage = getStage(c.stage_id)
     return {
@@ -127,7 +127,7 @@ export function searchAll(query) {
     const org = getOrg(card.org_id)
     return matches(q, card.title, person && person.name, org && org.name, memberName(d.owner))
   })
-  add('deals', 'Deals', rank(q, deals, (d) => getCard(d.card_id).title, (d) => (d.status === 'offen' ? 0 : -1)), (d) => {
+  add('deals', 'Wert und Status', rank(q, deals, (d) => getCard(d.card_id).title, (d) => (d.status === 'offen' ? 0 : -1)), (d) => {
     const card = getCard(d.card_id)
     const org = getOrg(card.org_id)
     return {
@@ -168,10 +168,10 @@ function SearchBox({ sheet, onClose, inputRef }) {
   // Alle wählbaren Einträge in Reihenfolge: Treffer, dann die Aktionen
   const actions = q
     ? [
-        { id: 'neu', icon: 'plus', title: `„${q}“ als Aufgabe anlegen`, run: () => openDialog({ kind: 'new-task', title: q }) },
+        { id: 'neu', icon: 'plus', title: `„${q}“ als Deal anlegen`, run: () => openDialog({ kind: 'new-task', title: q }) },
         { id: 'mails', icon: 'mail', title: 'In den Mails suchen', sub: 'nur in deinen Postfächern', run: () => navigate('/postfach', { q }) },
       ]
-    : [{ id: 'neu', icon: 'plus', title: 'Neue Aufgabe', run: () => openDialog({ kind: 'new-task', title: '' }) }]
+    : [{ id: 'neu', icon: 'plus', title: 'Neuer Deal', run: () => openDialog({ kind: 'new-task', title: '' }) }]
   const flat = [...groups.flatMap((g) => g.items), ...actions]
   const current = Math.min(active, flat.length - 1)
 
@@ -249,7 +249,7 @@ function SearchBox({ sheet, onClose, inputRef }) {
     open &&
     html`<div class="search-panel" onPointerDown=${(e) => e.target.closest('.search-item') && e.preventDefault()}>
       <ul class="search-list" role="listbox" id="such-liste" aria-label="Suchergebnisse">
-        ${!q && html`<li class="search-hint" role="presentation">Findet Aufgaben, Kontakte, Firmen, Meetings und Deals.</li>`}
+        ${!q && html`<li class="search-hint" role="presentation">Findet Deals, Kontakte, Firmen und Meetings.</li>`}
         ${q && !groups.length && html`<li class="search-hint" role="presentation">Nichts gefunden für „${q}“.</li>`}
         ${groups.map(
           (g) => html`<li class="search-group" role="presentation" key=${g.key}>
@@ -271,7 +271,7 @@ function SearchBox({ sheet, onClose, inputRef }) {
         type="search"
         value=${query}
         placeholder="Suchen"
-        aria-label="Suchen in Aufgaben, Kontakten, Firmen, Meetings und Deals"
+        aria-label="Suchen in Deals, Kontakten, Firmen und Meetings"
         role="combobox"
         aria-expanded=${open}
         aria-controls="such-liste"
@@ -364,10 +364,10 @@ function NewTaskDialog({ d }) {
     setBusy(false)
     if (!card) return
     closeDialog()
-    toast('Aufgabe angelegt', { action: { label: 'Öffnen', run: () => openCard(card.id) } })
+    toast('Deal angelegt', { action: { label: 'Öffnen', run: () => openCard(card.id) } })
   }
 
-  return html`<${Modal} title="Neue Aufgabe" onClose=${closeDialog}>
+  return html`<${Modal} title="Neuer Deal" onClose=${closeDialog}>
     <form class="new-task" onSubmit=${submit} id="neue-aufgabe">
       <${Field} label="Was steht an?" htmlFor="nt-title">
         <input id="nt-title" ref=${inputRef} value=${title} onInput=${(e) => setTitle(e.target.value)} autocomplete="off" />
@@ -379,7 +379,7 @@ function NewTaskDialog({ d }) {
           <input type="date" value=${due} onInput=${(e) => setDue(e.target.value)} aria-label="Fällig am" />
         </label>
         <label class="quick-field">
-          <span class="sr-only">Projekt</span>
+          <span class="sr-only">Pipeline</span>
           <${ProjectSelect} value=${projectId} onChange=${setProjectId} />
         </label>
         <label class="quick-field">

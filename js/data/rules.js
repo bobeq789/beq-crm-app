@@ -204,7 +204,7 @@ export function checkInsert(db, table, row) {
     throw dbError('23514', 'notes_has_parent')
   }
   if (table === 'aktivitaeten' && !row.card_id && !row.person_id && !row.org_id) {
-    throw dbError('23514', 'Eine Aktivität braucht eine Aufgabe, einen Kontakt oder eine Firma.')
+    throw dbError('23514', 'Eine Aktivität braucht einen Deal, einen Kontakt oder eine Firma.')
   }
   const pairs = { meeting_persons: ['meeting_id', 'person_id'], event_persons: ['event_id', 'person_id'], email_persons: ['email_id', 'person_id'] }
   if (pairs[table]) {

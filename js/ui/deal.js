@@ -72,18 +72,18 @@ function NoDeal({ card }) {
       status: 'offen',
       probability: stage && stage.probability != null ? stage.probability : null,
     })
-    if (saved) toast('Deal angelegt')
+    if (saved) toast('Wert und Status angelegt')
   }
   return html`<section class="deal">
-    <h3 class="section-title">Deal</h3>
+    <h3 class="section-title">Wert und Status</h3>
     ${owner === undefined
       ? html`<p class="muted small">Wird geladen …</p>`
       : owner
         ? html`<p class="muted small">
-            Zu dieser Aufgabe führt ${memberName(owner)} einen Deal. Die Zahlen sehen nur ${firstName(memberName(owner))} selbst, der Teamlead und die Admins.
+            Wert und Status dieses Deals führt ${memberName(owner)}. Die Zahlen sehen nur ${firstName(memberName(owner))} selbst, der Teamlead und die Admins.
           </p>`
-        : html`<p class="muted small">Noch kein Deal. Mit einem Deal zählt diese Aufgabe in „Sales“ mit Wert, Produkten und Abschluss.</p>
-            <button type="button" class="btn" onClick=${create}><${Icon} name="plus" size=${16} /> Deal anlegen</button>`}
+        : html`<p class="muted small">Noch kein Wert. Mit Wert und Status zählt dieser Deal in „Sales“ mit Produkten und Abschluss.</p>
+            <button type="button" class="btn" onClick=${create}><${Icon} name="plus" size=${16} /> Wert eintragen</button>`}
   </section>`
 }
 
@@ -104,9 +104,9 @@ function DealEditor({ card, deal }) {
       const stage = getStage(move.stageId)
       // Offene Aktivitäten halten die Aufgabe aus dem Archiv (24_archiv.sql)
       const later = openActivitiesOfCard(card.id).length
-        ? 'Ins Archiv kommt sie, sobald ihre offenen Aktivitäten erledigt sind und sie 30 Tage nicht geändert wurde.'
-        : 'Nach 30 Tagen ohne Änderung kommt sie ins Archiv.'
-      toast(`Deal ${s.label.toLowerCase()}. Die Aufgabe steht jetzt in „${stage ? stage.name : 'Erledigt'}“. ${later}`)
+        ? 'Ins Archiv kommt er, sobald seine offenen Aktivitäten erledigt sind und er 30 Tage nicht geändert wurde.'
+        : 'Nach 30 Tagen ohne Änderung kommt er ins Archiv.'
+      toast(`Deal ${s.label.toLowerCase()}. Er steht jetzt in „${stage ? stage.name : 'Erledigt'}“. ${later}`)
     }
   }
 
@@ -145,17 +145,17 @@ function DealEditor({ card, deal }) {
   }
   const removeDeal = async () => {
     const ok = await confirmDialog({
-      title: 'Deal entfernen?',
-      text: 'Wert, Produkte und Status dieser Aufgabe sind danach weg. Die Aufgabe selbst bleibt.',
+      title: 'Wert und Status entfernen?',
+      text: 'Wert, Produkte und Status dieses Deals sind danach weg. Der Deal selbst bleibt.',
       confirmLabel: 'Entfernen',
       danger: true,
     })
-    if (ok && (await remove('deals', deal.id))) toast('Deal entfernt')
+    if (ok && (await remove('deals', deal.id))) toast('Wert und Status entfernt')
   }
 
   return html`<section class="deal">
     <div class="deal-head">
-      <h3 class="section-title">Deal</h3>
+      <h3 class="section-title">Wert und Status</h3>
       <div class="deal-value">
         <strong>${fmtEuro(deal.value_cents)}</strong>
         <span class="muted small">netto</span>
@@ -240,7 +240,7 @@ function DealEditor({ card, deal }) {
 
     <div class="deal-foot">
       <span class="muted small">${people.length > 1 ? '' : 'Besitzer: ' + memberName(deal.owner)}</span>
-      <button type="button" class="btn btn-danger-text" onClick=${removeDeal}><${Icon} name="trash" size=${16} /> Deal entfernen</button>
+      <button type="button" class="btn btn-danger-text" onClick=${removeDeal}><${Icon} name="trash" size=${16} /> Wert und Status entfernen</button>
     </div>
   </section>`
 }

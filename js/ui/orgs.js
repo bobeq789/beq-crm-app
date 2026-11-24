@@ -101,7 +101,7 @@ export function OrgDetail({ id }) {
   const del = async () => {
     const ok = await confirmDialog({
       title: 'Firma löschen?',
-      text: `„${o.name}“ und alle Notizen dazu sind danach weg. Kontakte und Aufgaben bleiben, nur ohne diese Firma.`,
+      text: `„${o.name}“ und alle Notizen dazu sind danach weg. Kontakte und Deals bleiben, nur ohne diese Firma.`,
       confirmLabel: 'Löschen',
       danger: true,
     })
@@ -111,7 +111,7 @@ export function OrgDetail({ id }) {
     toast('Firma gelöscht')
   }
   const newTask = async () => {
-    const title = await promptDialog({ title: `Neue Aufgabe zu ${o.name}`, label: 'Titel', confirmLabel: 'Anlegen' })
+    const title = await promptDialog({ title: `Neuer Deal zu ${o.name}`, label: 'Titel', confirmLabel: 'Anlegen' })
     if (!title) return
     const card = await createCard({ title, org_id: o.id, kind: 'todo', assignee: state.me && state.me.email })
     if (card) openCard(card.id)
@@ -137,8 +137,8 @@ export function OrgDetail({ id }) {
     </div>
     <div class="detail-grid">
       <div class="col-main">
-        <${Tile} title="Offene Aufgaben" count=${cards.length} actions=${html`<button type="button" class="link-btn" onClick=${newTask}><${Icon} name="plus" size=${16} /> Aufgabe</button>`}>
-          ${cards.length ? html`<ul class="task-list">${cards.map((c) => html`<${TaskRow} card=${c} key=${c.id} />`)}</ul>` : html`<${Empty}>Keine offenen Aufgaben.<//>`}
+        <${Tile} title="Offene Deals" count=${cards.length} actions=${html`<button type="button" class="link-btn" onClick=${newTask}><${Icon} name="plus" size=${16} /> Deal</button>`}>
+          ${cards.length ? html`<ul class="task-list">${cards.map((c) => html`<${TaskRow} card=${c} key=${c.id} />`)}</ul>` : html`<${Empty}>Keine offenen Deals.<//>`}
         <//>
         ${!isGuest() && html`<${ActivitySection} list=${activitiesForOrg(o.id)} here="org" target=${{ org_id: o.id }} />`}
         <${Tile} title="Notizen"><${Notes} field="org_id" id=${o.id} /><//>

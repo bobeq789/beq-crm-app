@@ -54,8 +54,8 @@ function CanList() {
   return html`<div class="claude-rights">
     <p class="claude-rights-head"><${Icon} name="check" size=${16} /> Claude darf, mit deinen Rechten im CRM</p>
     <ul>
-      <li>Aufgaben, Notizen, Aktivitäten, Kontakte, Firmen, Deals und Meetings lesen, anlegen und ändern</li>
-      <li>Aufgaben und Deals in andere Spalten und Projekte verschieben</li>
+      <li>Deals mit Wert und Status, Notizen, Aktivitäten, Kontakte, Firmen und Meetings lesen, anlegen und ändern</li>
+      <li>Deals in andere Spalten und Pipelines verschieben</li>
       <li>Termine lesen, die du im CRM siehst</li>
       <li>Mails lesen, nur aus deinen eigenen Postfächern</li>
     </ul>
@@ -63,7 +63,7 @@ function CanList() {
     <ul>
       <li>etwas löschen</li>
       <li>Mails senden</li>
-      <li>Projekte und Spalten anlegen, umbenennen oder löschen</li>
+      <li>Pipelines und Spalten anlegen, umbenennen oder löschen</li>
       <li>Team, Rechte, Postfächer, Produkte oder deine Einstellungen ändern</li>
     </ul>
   </div>`
@@ -234,8 +234,8 @@ export function ClaudeTile() {
   }
   return html`<${Tile} title="Claude verbinden" count=${list && list.length ? list.length : undefined}>
     <p class="muted small">
-      Verbinde dein eigenes Claude mit dem CRM, im Browser, in der Desktop-App oder in Claude Code. Claude arbeitet dann mit deinen Rechten: Aufgaben,
-      Notizen, Aktivitäten, Kontakte, Firmen, Deals, Meetings und Termine lesen und schreiben, Mails nur aus deinen eigenen Postfächern lesen. Claude löscht nie und
+      Verbinde dein eigenes Claude mit dem CRM, im Browser, in der Desktop-App oder in Claude Code. Claude arbeitet dann mit deinen Rechten: Deals,
+      Notizen, Aktivitäten, Kontakte, Firmen, Meetings und Termine lesen und schreiben, Mails nur aus deinen eigenen Postfächern lesen. Claude löscht nie und
       sendet keine Mails.
     </p>
     <div class="claude-url">
