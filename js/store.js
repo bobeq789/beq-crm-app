@@ -136,6 +136,8 @@ export function errorText(err) {
   if (/guest_guard|Gäste dürfen/i.test(msg)) return 'Als Gast kannst du hier nur Spalte, Dringlichkeit, Fälligkeit und Zuständig ändern.'
   // Meldungen aus 25_claude_zugang.sql (Freigabe für Claude) sind schon für Menschen geschrieben
   if (/Claude-Zugang|Claude kann|zuerst mit dem zweiten Faktor|Kennung des Claude/i.test(msg)) return msg
+  // Meldungen aus 39_kalender_abos.sql ebenso
+  if (/Kalender-Link|abonnierte Kalender|Kalender abonnieren|Diesen Kalender gibt es nicht|Namen mit höchstens|Bitte einen Namen/i.test(msg)) return msg
   if (code === '42501' || /row-level security|permission denied/i.test(msg)) return 'Keine Berechtigung für diese Änderung.'
   if (code === '23503') return 'Das geht nicht, weil noch Einträge daran hängen.'
   if (code === '23505') return 'Diesen Eintrag gibt es schon.'
@@ -906,6 +908,53 @@ export async function toggleMailboxCalendar(cal, on) {
   return true
 }
 
+// Abonnierte Kalender (39_kalender_abos.sql): anlegen, umbenennen oder schalten, entfernen.
+// Nach dem Anlegen gleich abgleichen, damit die Termine sofort da sind.
+// Fehler kommen als Text zurück (für das Formular), sonst null.
+export async function addCalendarSub(name, url) {
+  let id
+  try {
+    id = await api.calendarSubAdd(name, url)
+  } catch (err) {
+    return errorText(err)
+  }
+  // Gleich abholen und nur über diesen Kalender berichten, nicht über Mails
+  let res = null
+  try {
+    const result = await api.syncNow()
+    res = (result.abos || []).find((a) => a.abo === id) || null
+  } catch {
+    res = null
+  }
+  await reload()
+  const label = `„${name.trim()}“`
+  if (res && res.fehler) toast(`${label} ist abonniert, ließ sich aber noch nicht abholen: ${res.fehler}`, { error: true })
+  else if (res) toast(`${label} ist abonniert, ${res.termine === 1 ? '1 Termin' : (res.termine || 0) + ' Termine'}.`)
+  else toast(`${label} ist abonniert. Die Termine kommen mit dem nächsten Abgleich.`)
+  return null
+}
+export async function changeCalendarSub(id, patch) {
+  try {
+    await api.calendarSubChange(id, patch)
+  } catch (err) {
+    toast('Der Kalender ließ sich nicht ändern. ' + errorText(err), { error: true })
+    return false
+  }
+  await reload()
+  if (patch.aktiv === true) await syncNow()
+  return true
+}
+export async function removeCalendarSub(id) {
+  try {
+    await api.calendarSubRemove(id)
+  } catch (err) {
+    toast('Der Kalender ließ sich nicht entfernen. ' + errorText(err), { error: true })
+    return false
+  }
+  await reload()
+  return true
+}
+
 // Eigene Postfächer sofort abgleichen
 export async function syncNow() {
   try {
@@ -914,7 +963,11 @@ export async function syncNow() {
     const errors = list.filter((r) => r.fehler)
     const mails = list.reduce((n, r) => n + (r.mails || 0), 0)
     const pending = list.some((r) => r.mails_fertig === false)
+    const abos = result.abos || []
+    const aboErrors = abos.filter((a) => a.fehler)
     if (errors.length) toast(`Abgleich für ${errors.map((r) => r.adresse).join(', ')} hat nicht geklappt: ${errors[0].fehler}`, { error: true })
+    else if (aboErrors.length) toast(`Ein abonnierter Kalender ließ sich nicht abholen: ${aboErrors[0].fehler}`, { error: true })
+    else if (!list.length && abos.length) toast(`Abonnierte Kalender abgeglichen, ${abos.reduce((n, a) => n + (a.termine || 0), 0)} Termine.`)
     else if (!list.length) toast('Du hast noch kein Postfach verbunden.')
     else toast(`Abgeglichen. ${mails === 1 ? '1 neue Mail' : mails + ' neue Mails'}${pending ? ', weitere folgen mit den nächsten Durchgängen' : ''}.`)
     await reload()
@@ -1259,10 +1312,24 @@ export function calendars() {
     if (b.status !== 'aktiv' || b.sync_calendar === false || map.has(id)) return
     map.set(id, { id, name: memberName(id) || id, color: paletteColor(id), empty: true })
   })
+  // Abonnierte Kalender (39_kalender_abos.sql), auch ohne Termine
+  ;(state.db.kalender_abos || []).forEach((a) => {
+    const id = 'abo:' + a.id
+    if (!a.aktiv || map.has(id)) return
+    map.set(id, { id, name: a.name, color: paletteColor(id), empty: true })
+  })
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'de'))
 }
 // Postfach eines Termins: bei weiteren Kalendern steht die Kennung als „<Postfach>#<Kalender>“
-export const eventMailbox = (ev) => norm(String(ev.calendar_id || '').split('#')[0])
+export const eventMailbox = (ev) => {
+  const key = norm(String(ev.calendar_id || '').split('#')[0])
+  // Abonnierter Kalender: gehört der Person, die ihn abonniert hat (39_kalender_abos.sql)
+  if (key.startsWith('abo:')) {
+    const abo = (state.db.kalender_abos || []).find((a) => 'abo:' + a.id === key)
+    return abo ? norm(abo.owner) : key
+  }
+  return key
+}
 export function isMyEvent(ev) {
   const me = norm(myEmail())
   return eventMailbox(ev) === me || (ev.attendees || []).some((a) => norm(a) === me)

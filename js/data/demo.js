@@ -671,7 +671,42 @@ export function createDemoApi({ asGuest = false } = {}) {
     },
     async syncNow() {
       const own = db.mailboxes.filter((b) => b.owner === me && b.status === 'aktiv')
-      return { ok: true, postfaecher: own.length, ergebnis: own.map((b) => ({ adresse: b.address, termine: 0, mails: 0, mails_fertig: true, fehler: null })) }
+      // Abonnierte Kalender: im Demo-Modus holt niemand den Link ab, nur der Stand wird gesetzt
+      const abos = (db.kalender_abos || []).filter((a) => a.owner === me && a.aktiv)
+      abos.forEach((a) => Object.assign(a, { last_sync_at: new Date().toISOString(), last_error: null, termine: db.events.filter((e) => e.calendar_id === 'abo:' + a.id).length }))
+      save()
+      return {
+        ok: true,
+        postfaecher: own.length,
+        ergebnis: own.map((b) => ({ adresse: b.address, termine: 0, mails: 0, mails_fertig: true, fehler: null })),
+        abos: abos.map((a) => ({ abo: a.id, termine: a.termine, fehler: null })),
+      }
+    },
+    // Abonnierte Kalender (39_kalender_abos.sql), im Demo-Modus ohne Abholen
+    async calendarSubAdd(name, url) {
+      if (asGuest) throw notAllowed()
+      const link = String(url || '').trim().replace(/^webcals?:\/\//i, 'https://')
+      if (!/^https:\/\/[^\s/@]+\.[^\s/@]+(\/\S*)?$/i.test(link)) throw dbError('22023', 'Das ist kein gültiger Kalender-Link. Er beginnt mit https:// oder webcal://.')
+      if (!String(name || '').trim()) throw dbError('22023', 'Bitte einen Namen angeben.')
+      db.kalender_abos = db.kalender_abos || []
+      const row = { id: uid(), owner: me, name: String(name).trim().slice(0, 80), aktiv: true, last_sync_at: null, last_error: null, termine: null, created_at: new Date().toISOString() }
+      db.kalender_abos.push(row)
+      save()
+      return row.id
+    },
+    async calendarSubChange(id, patch) {
+      const a = (db.kalender_abos || []).find((x) => x.id === id && x.owner === me)
+      if (!a) throw notAllowed()
+      if (patch.name) a.name = String(patch.name).trim().slice(0, 80)
+      if (patch.aktiv !== undefined && patch.aktiv !== null) a.aktiv = !!patch.aktiv
+      if (a.aktiv === false) db.events = db.events.filter((e) => e.calendar_id !== 'abo:' + id)
+      save()
+    },
+    async calendarSubRemove(id) {
+      if (!(db.kalender_abos || []).some((x) => x.id === id && x.owner === me)) throw notAllowed()
+      db.kalender_abos = db.kalender_abos.filter((x) => x.id !== id)
+      db.events = db.events.filter((e) => e.calendar_id !== 'abo:' + id)
+      save()
     },
 
     // Gibt es zu dieser Aufgabe einen Deal, und wem gehört er? (ohne Werte)

@@ -1553,6 +1553,11 @@ body.search-sheet-open .topbar { z-index: 70; }
 
 /* Weitere Kalender je Postfach (35_weitere_kalender.sql) */
 .mailbox-calendars { grid-column: 1 / -1; }
+/* Abonnierte Kalender (39_kalender_abos.sql) */
+.calsub-list { margin-bottom: 12px; }
+.calsub-form { display: grid; gap: 4px; margin-top: 4px; }
+.calsub-form .history-toggle { font-size: 14px; padding: 4px 0; min-height: 36px; justify-self: start; }
+.calsub-help { margin: 0 0 8px; padding-left: 18px; display: grid; gap: 6px; overflow-wrap: anywhere; }
 .mailbox-calendars .history-toggle { font-size: 14px; padding: 4px 0; min-height: 36px; }
 .mailbox-calendar-list { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: 2px; }
 .mailbox-calendar-list .check-label { display: flex; gap: 10px; min-height: 40px; white-space: normal; overflow-wrap: anywhere; font-size: 15px; }

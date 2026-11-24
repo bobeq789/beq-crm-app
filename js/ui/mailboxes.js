@@ -1,14 +1,15 @@
 // Einstellungen: Postfächer und Kalender (10_postfaecher.sql, Edge Function „google-verbinden“).
 // Jede Person verbindet ihre beQ-Postfächer selbst über Google, auch mehrere.
 // Je Postfach lassen sich weitere Kalender des Google-Kontos dazunehmen (35_weitere_kalender.sql).
+// Kalender per Link (iCal) abonnieren: CalendarSubTile weiter unten (39_kalender_abos.sql).
 // Google schickt danach zurück nach #/einstellungen?postfach=ok|fehler&…, diese Seite meldet das Ergebnis.
 import { html, useEffect } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { fmtRelative, norm } from '../lib/util.js'
 import { useRoute } from '../router.js'
-import { state, isSuperAdmin, myEmail, memberName, update, toast, confirmDialog, connectMailbox, disconnectMailbox, mailboxDataCounts, syncNow, loadMailboxCalendars, toggleMailboxCalendar } from '../store.js'
+import { state, isSuperAdmin, myEmail, memberName, update, toast, confirmDialog, connectMailbox, disconnectMailbox, mailboxDataCounts, syncNow, loadMailboxCalendars, toggleMailboxCalendar, promptDialog, addCalendarSub, changeCalendarSub, removeCalendarSub } from '../store.js'
 import { useState } from '../lib/preact.js'
-import { Tile } from './common.js'
+import { Tile, Field } from './common.js'
 
 // Gründe, die „google-verbinden“ bei einem Fehler mitschickt
 const FAILURES = {
@@ -186,5 +187,120 @@ export function MailboxTile() {
       ${list.some((b) => b.owner === me && b.status === 'aktiv') && html`<${SyncButton} />`}
     </div>
     <p class="muted small mailbox-hint">Google fragt jedes Mal, welches Konto. Für ein weiteres Postfach meldest du dich dort mit diesem Postfach an.</p>
+  <//>`
+}
+
+// ------------------------------------------------------------
+// Abonnierte Kalender (39_kalender_abos.sql): ein Kalender per iCal-Link, ohne Anmeldung bei
+// diesem Konto. Der Link geht einmal an die Datenbank und wird nie wieder angezeigt, weil jeder,
+// der ihn hat, den Kalender lesen kann. Termine holt der Abgleich alle 15 Minuten, nur lesen.
+// ------------------------------------------------------------
+function subStatus(a) {
+  if (!a.aktiv) return { text: 'ausgeschaltet', error: false }
+  if (a.last_error) return { text: a.last_error, error: true }
+  if (a.last_sync_at) return { text: `${a.termine ?? 0} ${a.termine === 1 ? 'Termin' : 'Termine'}, abgeglichen ${fmtRelative(a.last_sync_at)}`, error: false }
+  return { text: 'wartet auf den ersten Abgleich', error: false }
+}
+
+function CalendarSubRow({ sub }) {
+  const [busy, setBusy] = useState(false)
+  const status = subStatus(sub)
+  const run = async (fn) => {
+    setBusy(true)
+    await fn()
+    setBusy(false)
+  }
+  const rename = async () => {
+    const name = await promptDialog({ title: 'Kalender umbenennen', label: 'Name', value: sub.name })
+    if (name && name.trim() && name.trim() !== sub.name) run(() => changeCalendarSub(sub.id, { name: name.trim() }))
+  }
+  const remove = async () => {
+    const ok = await confirmDialog({
+      title: `„${sub.name}“ entfernen?`,
+      text: 'Die Termine dieses Kalenders verschwinden aus dem CRM. Im Original-Kalender bleibt alles. Zum erneuten Abonnieren brauchst du den Link noch einmal.',
+      confirmLabel: 'Entfernen',
+      danger: true,
+    })
+    if (ok) run(() => removeCalendarSub(sub.id))
+  }
+  return html`<li>
+    <span class="team-who">
+      <strong>${sub.name}</strong>
+      <span class=${status.error ? 'small overdue-text' : 'muted small'}>${status.text}</span>
+    </span>
+    <span class="mailbox-switches">
+      <label class="check-label">
+        <input type="checkbox" checked=${sub.aktiv} disabled=${busy} onChange=${(e) => run(() => changeCalendarSub(sub.id, { aktiv: e.target.checked }))} />
+        An
+      </label>
+    </span>
+    <span class="mailbox-actions">
+      <button type="button" class="btn btn-small" disabled=${busy} onClick=${rename}>Umbenennen</button>
+      <button type="button" class="btn btn-small" disabled=${busy} onClick=${remove}>Entfernen</button>
+    </span>
+  </li>`
+}
+
+function CalendarSubForm({ onDone }) {
+  const [name, setName] = useState('')
+  const [url, setUrl] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [help, setHelp] = useState(false)
+  const submit = async (e) => {
+    e.preventDefault()
+    if (!name.trim()) return setError('Bitte gib dem Kalender einen Namen.')
+    if (!url.trim()) return setError('Bitte füge den Link des Kalenders ein.')
+    setBusy(true)
+    setError('')
+    const fail = await addCalendarSub(name, url)
+    setBusy(false)
+    if (fail) return setError(fail)
+    setUrl('')
+    setName('')
+    onDone()
+  }
+  return html`<form class="calsub-form" onSubmit=${submit}>
+    <${Field} label="Name im CRM" htmlFor="calsub-name">
+      <input id="calsub-name" value=${name} maxlength="80" placeholder="zum Beispiel Messen 2027" autocomplete="off" onInput=${(e) => setName(e.target.value)} />
+    <//>
+    <${Field} label="Link des Kalenders (iCal)" htmlFor="calsub-url" hint="Beginnt mit https:// oder webcal://. Der Link wird nach dem Speichern nicht mehr angezeigt.">
+      <input id="calsub-url" value=${url} inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://…/basic.ics" onInput=${(e) => setUrl(e.target.value)} />
+    <//>
+    <button type="button" class="history-toggle" aria-expanded=${help} aria-controls="calsub-help" onClick=${() => setHelp(!help)}>
+      <${Icon} name="chevron" size=${16} /> Wo finde ich den Link?
+    </button>
+    ${help &&
+    html`<ul id="calsub-help" class="calsub-help muted small">
+      <li><strong>Google Kalender:</strong> am Computer beim Kalender auf die drei Punkte, „Einstellungen und Freigabe“, ganz unten „Geheime Adresse im iCal-Format“ kopieren.</li>
+      <li><strong>Outlook:</strong> „Einstellungen“, „Kalender“, „Freigegebene Kalender“, „Kalender veröffentlichen“, den ICS-Link kopieren.</li>
+      <li><strong>iCloud:</strong> beim Kalender „Kalender teilen“, „Öffentlicher Kalender“ einschalten, Link kopieren.</li>
+      <li>Feiertage, Messen, Ferien: viele Seiten bieten einen Link zum Abonnieren („iCal“, „ICS“ oder „webcal“).</li>
+    </ul>`}
+    ${error && html`<p class="form-error" role="alert">${error}</p>`}
+    <div class="settings-actions">
+      <button type="submit" class="btn btn-primary" disabled=${busy}>${busy ? 'Holt Termine …' : 'Abonnieren'}</button>
+      <button type="button" class="btn" disabled=${busy} onClick=${onDone}>Abbrechen</button>
+    </div>
+  </form>`
+}
+
+export function CalendarSubTile() {
+  const me = norm(myEmail())
+  const [adding, setAdding] = useState(false)
+  const list = (state.db.kalender_abos || []).filter((a) => norm(a.owner) === me).sort((a, b) => a.name.localeCompare(b.name, 'de'))
+  return html`<${Tile} title="Abonnierte Kalender" count=${list.length}>
+    <p class="muted small">
+      Einen Kalender per Link abonnieren, ohne dich bei diesem Konto anzumelden: einen Google-Kalender eines anderen Kontos, einen veröffentlichten Kalender aus Outlook oder iCloud, Feiertage oder Messen. Das CRM holt die Termine etwa alle 15 Minuten und ändert dort nie etwas.
+      Sehen können die Termine wie bei deinem eigenen Kalender nur du, dein Teamlead und der Super-Admin, Gäste nie.
+    </p>
+    ${list.length > 0 && html`<ul class="team-list mailbox-list calsub-list">${list.map((a) => html`<${CalendarSubRow} key=${a.id} sub=${a} />`)}</ul>`}
+    ${adding
+      ? html`<${CalendarSubForm} onDone=${() => setAdding(false)} />`
+      : html`<div class="settings-actions">
+          <button type="button" class="btn btn-primary" disabled=${list.length >= 10} onClick=${() => setAdding(true)}><${Icon} name="plus" size=${18} /> Kalender abonnieren</button>
+          ${list.some((a) => a.aktiv) && html`<${SyncButton} />`}
+        </div>`}
+    ${list.length >= 10 && html`<p class="muted small">Du hast schon 10 Kalender abonniert, mehr geht nicht.</p>`}
   <//>`
 }

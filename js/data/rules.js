@@ -24,7 +24,7 @@ export const EXTRA_TABLES = ['card_events', 'card_seen']
 
 // Beim Start geladen, aber verzichtbar: fehlt die Tabelle (SQL-Datei noch nicht
 // ausgeführt), bleibt die Liste einfach leer
-export const OPTIONAL_TABLES = ['project_shares', 'products', 'deals', 'deal_items', 'mailboxes', 'aktivitaeten', 'unteraufgaben']
+export const OPTIONAL_TABLES = ['project_shares', 'products', 'deals', 'deal_items', 'mailboxes', 'aktivitaeten', 'unteraufgaben', 'kalender_abos']
 
 // Nur im Demo-Modus: Dateien an Aufgaben (in Supabase liegen sie im Storage, nicht in einer Tabelle)
 export const DEMO_TABLES = ['files', 'nachfass_aus', 'nutzer_gesehen', 'nutzer_einstellungen', 'mail_spuren', 'kontakt_altdaten', 'chat_raeume', 'chat_mitglieder', 'chat_nachrichten', 'chat_gelesen', 'chat_reaktionen', 'chat_dateien', 'postfach_kalender']

@@ -412,6 +412,17 @@ export function buildSeed() {
     ['jonas', 8, 15, 0, 60, 'Vorbereitung Partnerforum', [J, mailOf('katrin')], null, true],
     ['anna', 9, 11, 0, 60, 'Review Pilot Klinikverbund', [A, mailOf('sabine')], null, true],
   ]
+  // Abonnierter Kalender von Anna (39_kalender_abos.sql): nur lesen, ohne Link in der App
+  const aboId = uid()
+  db.kalender_abos = [{ id: aboId, owner: A, name: 'Messen und Feiertage', aktiv: true, last_sync_at: daysAgo(0), last_error: null, termine: 2, created_at: daysAgo(10) }]
+  ;[[5, 'Fachmesse Gebäudetechnik (Beispiel)'], [12, 'Feiertag (Beispiel)']].forEach(([day, title], i) => {
+    db.events.push({
+      id: uid(), calendar_id: 'abo:' + aboId, calendar_name: 'Messen und Feiertage', calendar_color: '#5B6B75',
+      event_id: 'abo-demo-' + i, ical_uid: `abo-demo-${i}@example.com`, title, start_at: at(day, 0), end_at: at(day + 1, 0),
+      all_day: true, location: null, meet_url: null, html_link: null, organizer: null, attendees: [], description: null,
+      status: 'confirmed', details: { abonniert: true }, updated_at: daysAgo(1),
+    })
+  })
   eventDefs.forEach(([cal, day, hour, minute, minutes, title, attendees, location, meet], i) => {
     const allDay = hour === null
     const start = allDay ? at(day, 0) : at(day, hour, minute)

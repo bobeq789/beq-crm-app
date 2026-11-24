@@ -1,4 +1,4 @@
-// Einstellungen (Zahnrad): Farbschema pro Gerät, Konto, Mitteilungen aufs Handy, Postfächer und Kalender, Terminlink, Claude verbinden, Team (nur Admins), Produkte (Sales), Demo zurücksetzen
+// Einstellungen (Zahnrad): Farbschema pro Gerät, Konto, Mitteilungen aufs Handy, Postfächer und Kalender, abonnierte Kalender, Terminlink, Claude verbinden, Team (nur Admins), Produkte (Sales), Demo zurücksetzen
 import { html, useState, useEffect } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { norm, fmtEuro } from '../lib/util.js'
@@ -31,7 +31,7 @@ import {
 } from '../store.js'
 import { PageHead, Tile, Segmented, Field, Avatar } from './common.js'
 import { squareJpeg } from '../lib/image.js'
-import { MailboxTile } from './mailboxes.js'
+import { MailboxTile, CalendarSubTile } from './mailboxes.js'
 import { ClaudeTile } from './claude.js'
 import {
   pushSupported,
@@ -443,6 +443,7 @@ export function SettingsPage() {
     ${!isGuest() && html`<${ProfilePhotoTile} />`}
     ${state.chat.available && html`<${PushTile} key=${state.prefsLoaded ? 'geladen' : 'leer'} />`}
     ${!isGuest() && html`<${MailboxTile} />`}
+    ${!isGuest() && html`<${CalendarSubTile} />`}
     ${!isGuest() && html`<${TerminlinkTile} key=${state.prefsLoaded ? 'geladen' : 'leer'} />`}
     ${!isGuest() && html`<${ClaudeTile} />`}
     ${isAdmin() && html`<${TeamAdmin} />`}

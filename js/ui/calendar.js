@@ -368,7 +368,7 @@ export function CalendarPage() {
                 html`<div class="cal-toggles-inline">
                   ${cals.map(
                     (c) => html`<button type="button" class=${'cal-toggle' + (hidden.has(c.id) ? ' off' : '')} aria-pressed=${!hidden.has(c.id)} onClick=${() => toggleCal(c.id)}>
-                      <${Dot} color=${c.color} /> ${String(c.id).includes('#') ? c.name.replace(/ \([^)]*\)$/, '') : firstName(c.name)}
+                      <${Dot} color=${c.color} /> ${String(c.id).startsWith('abo:') ? c.name : String(c.id).includes('#') ? c.name.replace(/ \([^)]*\)$/, '') : firstName(c.name)}
                     </button>`
                   )}
                 </div>`}
@@ -433,6 +433,8 @@ export function EventPanel({ id }) {
           <${Icon} name="clock" size=${18} />
           ${fmtDateLong(new Date(ev.start_at))}, ${fmtTimeRange(ev.start_at, ev.end_at, ev.all_day)}
         </p>
+        ${String(ev.calendar_id || '').startsWith('abo:') &&
+        html`<p class="muted small">Aus einem abonnierten Kalender. Das CRM liest ihn nur, ändern kannst du den Termin dort, wo der Kalender herkommt.</p>`}
         ${ev.location &&
         html`<p class="event-where">
           <${Icon} name="pin" size=${18} />

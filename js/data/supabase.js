@@ -587,6 +587,17 @@ export async function createSupabaseApi(config) {
       if (!res.ok) throw functionError(res, body)
       return body
     },
+    // Abonnierte Kalender (39_kalender_abos.sql): der Link geht nur einmal an die Datenbank und
+    // kommt nie zurück in die App
+    async calendarSubAdd(name, url) {
+      return check(await client.rpc('kalender_abo_anlegen', { p_name: name, p_url: url }))
+    },
+    async calendarSubChange(id, patch) {
+      check(await client.rpc('kalender_abo_aendern', { p_id: id, p_name: patch.name ?? null, p_aktiv: patch.aktiv ?? null }))
+    },
+    async calendarSubRemove(id) {
+      check(await client.rpc('kalender_abo_entfernen', { p_id: id }))
+    },
     async disconnectMailbox(id, deleteData) {
       check(await client.rpc('disconnect_mailbox', { target: id, delete_data: !!deleteData }))
     },
