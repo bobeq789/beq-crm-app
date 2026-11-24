@@ -1049,9 +1049,9 @@ button.att-btn:disabled { cursor: progress; }
   .att-name { max-width: 200px; }
 }
 
-/* Navigation: neun Bereiche oben, unter 1100 px fünf und „Mehr“ (wie unten am Handy).
+/* Navigation: zehn Bereiche oben, unter 1280 px ohne Meetings und Firmen, unter 1100 px fünf und „Mehr“ (wie unten am Handy).
    Die Stufen mit der Suche stehen unten bei „Suche oben in der Kopfleiste“. */
-@media (min-width: 760px) and (max-width: 1439px) {
+@media (min-width: 760px) and (max-width: 1599px) {
   .topnav { gap: 0; overflow-x: auto; scrollbar-width: none; }
   .topnav a, .topnav-more { padding: 8px 9px; font-size: 14.5px; }
   .topbar { gap: 14px; }
@@ -1064,6 +1064,11 @@ button.att-btn:disabled { cursor: progress; }
 .topnav-more.active { background: var(--navy-2); color: var(--green); }
 @media (min-width: 760px) and (max-width: 1099px) {
   .topnav .nav-extra { display: none; }
+  .topnav-more { display: flex; }
+}
+/* Seit „Pipeline“ (36_meine_pipeline.sql) zehn Bereiche: unter 1280 px Meetings und Firmen unter „Mehr“ */
+@media (min-width: 760px) and (max-width: 1279px) {
+  .topnav .nav-minor { display: none; }
   .topnav-more { display: flex; }
 }
 @media (min-width: 760px) and (max-width: 819px) {
@@ -1554,3 +1559,64 @@ body.search-sheet-open .topbar { z-index: 70; }
 .mailbox-calendar-list .check-label input { width: 18px; height: 18px; min-height: 0; margin: 0; padding: 0; flex: none; }
 .mailbox-calendar-list .muted { margin-left: auto; flex: none; }
 .mailbox-calendar-list li { display: block; border: 0; padding: 0; min-height: 0; }
+
+/* ------------------------------------------------------------
+   Meine Pipeline (36_meine_pipeline.sql): Board je Person, Aktivitäten intern und Sales,
+   Unteraufgaben und weitere Zuständige in der Aufgabe
+   ------------------------------------------------------------ */
+.pl-filters .segmented { flex: none; }
+.pl-filters .search { flex: 1 1 220px; }
+/* Fünf Spalten und die Listen nebeneinander brauchen mehr als die üblichen 1280 px */
+.content:has(.page-pipeline) { max-width: 1760px; }
+.pl-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; }
+.pl-board { min-width: 0; }
+.pl-board .column { flex: 1 0 186px; }
+.pl-aside { display: flex; flex-direction: column; gap: 14px; }
+.pl-list { background: var(--surface); border-radius: var(--radius); padding: 12px 14px; }
+.pl-list-title { font-size: 15px; font-weight: 700; margin: 0 0 6px; }
+.pl-group + .pl-group { margin-top: 8px; }
+.pl-group-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 8px 0 2px; }
+.pl-group-title.overdue { color: var(--red); }
+.pl-acts { list-style: none; margin: 0; padding: 0; }
+.pl-act { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-top: 1px solid var(--border); }
+.pl-act:first-child { border-top: 0; }
+.pl-act-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-height: 40px; justify-content: center; padding: 0; border: 0; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.pl-act-title { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; overflow-wrap: anywhere; }
+.pl-act-ctx { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.pl-act-main:hover .pl-act-title { color: var(--accent-text); }
+.pl-act .badge { flex: none; }
+.bc-project { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 4px; }
+.bc-note { display: block; font-size: 13px; color: var(--accent-text); margin-top: 3px; }
+.bc-subs-done { color: var(--accent-text); }
+.pl-tabs { margin-bottom: 8px; }
+@media (max-width: 1379px) {
+  .pl-layout { grid-template-columns: minmax(0, 1fr); }
+  .pl-aside { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+}
+@media (max-width: 759px) {
+  .pl-filters select, .pl-filters .segmented { width: 100%; }
+  .pl-filters .segmented button { flex: 1; padding: 0 8px; }
+  .page-pipeline .pl-list { padding: 10px 12px; }
+}
+
+.handed-by { margin: -6px 0 12px; }
+.subtasks { margin-top: 18px; }
+.sub-list { list-style: none; margin: 0 0 6px; padding: 0; }
+.sub-item { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 0; border-top: 1px solid var(--border); }
+.sub-item:first-child { border-top: 0; }
+.sub-title { flex: 1 1 0; min-width: 0; }
+input.sub-title { border: 1px solid transparent; background: transparent; padding: 6px 8px; min-height: 38px; }
+input.sub-title:hover, input.sub-title:focus { border-color: var(--border); background: var(--input-bg); }
+.sub-done .sub-title { color: var(--muted); text-decoration: line-through; }
+.sub-meta .icon-btn { margin-left: auto; }
+.sub-meta { display: flex; align-items: center; gap: 6px; width: 100%; padding-left: 40px; margin-top: -4px; }
+.sub-meta select.sub-who { width: auto; min-width: 0; max-width: 160px; min-height: 36px; padding: 4px 8px; font-size: 14px; }
+.sub-meta input.sub-due { width: 150px; min-height: 36px; padding: 4px 8px; font-size: 14px; }
+.sub-add { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.sub-add input { flex: 1; min-width: 0; }
+.act-who { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.act-who .act-holder { width: auto; flex: 1 1 200px; }
+.act-holder-name { flex: none; }
+@media (max-width: 759px) {
+  .sub-meta select.sub-who { flex: 1; max-width: none; }
+}

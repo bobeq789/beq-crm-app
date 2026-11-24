@@ -24,13 +24,13 @@ export const EXTRA_TABLES = ['card_events', 'card_seen']
 
 // Beim Start geladen, aber verzichtbar: fehlt die Tabelle (SQL-Datei noch nicht
 // ausgeführt), bleibt die Liste einfach leer
-export const OPTIONAL_TABLES = ['project_shares', 'products', 'deals', 'deal_items', 'mailboxes', 'aktivitaeten']
+export const OPTIONAL_TABLES = ['project_shares', 'products', 'deals', 'deal_items', 'mailboxes', 'aktivitaeten', 'unteraufgaben']
 
 // Nur im Demo-Modus: Dateien an Aufgaben (in Supabase liegen sie im Storage, nicht in einer Tabelle)
 export const DEMO_TABLES = ['files', 'nachfass_aus', 'nutzer_gesehen', 'nutzer_einstellungen', 'mail_spuren', 'kontakt_altdaten', 'chat_raeume', 'chat_mitglieder', 'chat_nachrichten', 'chat_gelesen', 'chat_reaktionen', 'chat_dateien', 'postfach_kalender']
 
-const WITH_UPDATED_AT = new Set(['projects', 'organizations', 'persons', 'meetings', 'cards', 'notes', 'events', 'products', 'deals', 'aktivitaeten'])
-const WITH_CREATED_AT = new Set(['team_members', 'projects', 'stages', 'organizations', 'persons', 'meetings', 'cards', 'card_shares', 'project_shares', 'notes', 'emails', 'products', 'deals', 'deal_items', 'aktivitaeten'])
+const WITH_UPDATED_AT = new Set(['projects', 'organizations', 'persons', 'meetings', 'cards', 'notes', 'events', 'products', 'deals', 'aktivitaeten', 'unteraufgaben'])
+const WITH_CREATED_AT = new Set(['team_members', 'projects', 'stages', 'organizations', 'persons', 'meetings', 'cards', 'card_shares', 'project_shares', 'notes', 'emails', 'products', 'deals', 'deal_items', 'aktivitaeten', 'unteraufgaben'])
 
 const DEFAULTS = {
   team_members: { role: 'mitglied', active: true, sales_team: null, team_lead: false, super_admin: false },
@@ -61,6 +61,8 @@ const DEFAULTS = {
     external_id: null,
     created_by: null,
     labels: [],
+    mitzustaendig: [],
+    vergeben_von: null,
   },
   card_shares: { created_by: null },
   project_shares: { created_by: null },
@@ -72,7 +74,30 @@ const DEFAULTS = {
   event_persons: {},
   emails: { to_emails: [], cc_emails: [], attachments: [] },
   email_persons: {},
-  aktivitaeten: { owner: null, card_id: null, person_id: null, org_id: null, art: 'wiedervorlage', titel: null, uhrzeit: null, zustaendig: null, erledigt_at: null, erledigt_von: null, created_by: null },
+  aktivitaeten: { owner: null, card_id: null, person_id: null, org_id: null, art: 'wiedervorlage', titel: null, uhrzeit: null, zustaendig: null, bereich: null, erledigt_at: null, erledigt_von: null, created_by: null },
+  unteraufgaben: { zustaendig: null, faellig: null, position: 0, erledigt_at: null, erledigt_von: null, created_by: null },
+}
+
+const lower = (x) => String(x || '').trim().toLowerCase()
+
+// Weitere Zuständige und „vergeben von“ wie tg_cards_zustaendige() in 36_meine_pipeline.sql:
+// klein, ohne Doppelte, ohne die Hauptperson. „Vergeben von“ ist, wer die Hauptperson zuletzt auf
+// jemand anderen gesetzt hat, leer beim selbst Nehmen.
+function cardHoldersClean(r, old, me) {
+  if (!old || r.assignee !== old.assignee) r.assignee = lower(r.assignee) || null
+  const seen = new Set()
+  r.mitzustaendig = (r.mitzustaendig || []).map(lower).filter((x) => x && x !== r.assignee && !seen.has(x) && seen.add(x))
+  if (!me) return
+  if (!old || r.assignee !== old.assignee) r.vergeben_von = r.assignee && r.assignee !== lower(me) ? lower(me) : null
+  else r.vergeben_von = old.vergeben_von || null
+}
+
+// Vorschlag für den Bereich einer Aktivität wie aktivitaet_bereich_vorschlag() in 36_meine_pipeline.sql:
+// Sales an Kontakt, Firma oder Aufgabe mit Deal, sonst intern
+export function activityAreaSuggestion(db, a) {
+  if (a.person_id || a.org_id) return 'sales'
+  if (a.card_id && (db.deals || []).some((d) => d.card_id === a.card_id)) return 'sales'
+  return 'intern'
 }
 
 // Neuer Datensatz mit allem, was die Datenbank selbst ergänzt
@@ -85,6 +110,14 @@ export function prepareInsert(table, row, me) {
   if ((table === 'cards' || table === 'meetings' || table === 'deals') && me) r.created_by = me
   if (table === 'deals') dealDates(r)
   if (table === 'cards' && !r.stage_changed_at) r.stage_changed_at = now
+  if (table === 'cards') cardHoldersClean(r, null, me)
+  // Unteraufgaben wie tg_unteraufgaben_before() in 36_meine_pipeline.sql
+  if (table === 'unteraufgaben') {
+    r.titel = String(r.titel || '').trim()
+    r.zustaendig = lower(r.zustaendig) || null
+    if (me) r.created_by = lower(me)
+    r.erledigt_von = r.erledigt_at ? lower(me) || r.erledigt_von : null
+  }
   if (table === 'notes' && me) r.author = me
   // Aktivitäten wie tg_aktivitaeten_before() in 19_aktivitaeten.sql
   if (table === 'aktivitaeten') {
@@ -98,11 +131,20 @@ export function prepareInsert(table, row, me) {
   return r
 }
 
-// Geänderter Datensatz: updated_at, Spaltenwechsel, Autor bleibt
-export function prepareUpdate(table, old, patch) {
+// Geänderter Datensatz: updated_at, Spaltenwechsel, Autor bleibt. me: wer ändert (für „vergeben von“)
+export function prepareUpdate(table, old, patch, me = null) {
   const r = { ...old, ...patch }
   if (WITH_UPDATED_AT.has(table)) r.updated_at = nowIso()
   if (table === 'cards' && 'stage_id' in patch && patch.stage_id !== old.stage_id) r.stage_changed_at = nowIso()
+  if (table === 'cards') cardHoldersClean(r, old, me)
+  if (table === 'unteraufgaben') {
+    r.card_id = old.card_id
+    r.titel = String(r.titel || '').trim()
+    r.zustaendig = lower(r.zustaendig) || null
+    if (r.erledigt_at && !old.erledigt_at) r.erledigt_von = lower(me) || r.erledigt_von || null
+    else if (!r.erledigt_at) r.erledigt_von = null
+    else r.erledigt_von = old.erledigt_von
+  }
   if ('created_by' in old) r.created_by = old.created_by
   if (table === 'notes') r.author = old.author
   if (table === 'deals') dealDates(r)
@@ -111,6 +153,7 @@ export function prepareUpdate(table, old, patch) {
     if ('titel' in patch) r.titel = String(patch.titel || '').trim() || null
     if ('zustaendig' in patch) r.zustaendig = String(patch.zustaendig || '').trim().toLowerCase() || null
     if (!r.erledigt_at) r.erledigt_von = null
+    r.bereich = r.bereich || old.bereich || null
   }
   return r
 }
@@ -236,7 +279,7 @@ export function lastHandovers(db) {
 // Eine neue Notiz schiebt Aufgabe, Kontakt und Firma nach oben. Eine Aktivität an einer
 // Aufgabe gilt wie eine Notiz als Änderung der Aufgabe (tg_aktivitaeten_card()).
 export function afterInsert(db, table, row) {
-  if (table === 'aktivitaeten') return touchCard(db, row.card_id, row.updated_at)
+  if (table === 'aktivitaeten' || table === 'unteraufgaben') return touchCard(db, row.card_id, row.updated_at)
   if (table !== 'notes') return
   const now = row.created_at || nowIso()
   const touch = (t, id) => {
@@ -267,9 +310,9 @@ export function archiveOldDone(db, days = 30, now = new Date()) {
 }
 
 export function afterUpdate(db, table, row) {
-  if (table === 'aktivitaeten') touchCard(db, row.card_id, row.updated_at)
+  if (table === 'aktivitaeten' || table === 'unteraufgaben') touchCard(db, row.card_id, row.updated_at)
 }
-function touchCard(db, cardId, at) {
+export function touchCard(db, cardId, at) {
   if (!cardId) return
   db.cards = db.cards.map((c) => (c.id === cardId ? { ...c, updated_at: at || nowIso() } : c))
 }
@@ -295,6 +338,7 @@ export function cascadeDelete(db, table, id) {
     if (db.card_seen) drop('card_seen', 'card_id')
     if (db.files) drop('files', 'card_id')
     if (db.aktivitaeten) drop('aktivitaeten', 'card_id')
+    if (db.unteraufgaben) drop('unteraufgaben', 'card_id')
     if (db.deals) {
       const gone = new Set(db.deals.filter((d) => d.card_id === id).map((d) => d.id))
       db.deals = db.deals.filter((d) => d.card_id !== id)
@@ -351,13 +395,22 @@ function event(cardId, actor, kind, detail, at) {
 export function cardEventsFor(db, op, oldCard, card, actor) {
   const stageName = (id) => (db.stages.find((s) => s.id === id) || {}).name || ''
   const projectName = (id) => (db.projects.find((p) => p.id === id) || {}).name || ''
-  if (op === 'insert') return [event(card.id, actor, 'angelegt', stageName(card.stage_id), card.created_at)]
+  if (op === 'insert') {
+    return [
+      event(card.id, actor, 'angelegt', stageName(card.stage_id), card.created_at),
+      ...(card.mitzustaendig || []).map((x) => event(card.id, actor, 'mitzustaendig_dazu', x)),
+    ]
+  }
   const out = []
   if (card.project_id !== oldCard.project_id) out.push(event(card.id, actor, 'projekt', projectName(card.project_id)))
   if (card.stage_id !== oldCard.stage_id) out.push(event(card.id, actor, 'spalte', stageName(card.stage_id)))
   if ((card.priority || null) !== (oldCard.priority || null)) out.push(event(card.id, actor, 'dringlichkeit', card.priority || ''))
   if ((card.due_date || null) !== (oldCard.due_date || null)) out.push(event(card.id, actor, 'faelligkeit', card.due_date || ''))
   if ((card.assignee || null) !== (oldCard.assignee || null)) out.push(event(card.id, actor, 'zustaendig', (card.assignee || '').toLowerCase()))
+  const before = oldCard.mitzustaendig || []
+  const after = card.mitzustaendig || []
+  after.filter((x) => !before.includes(x)).forEach((x) => out.push(event(card.id, actor, 'mitzustaendig_dazu', x)))
+  before.filter((x) => !after.includes(x)).forEach((x) => out.push(event(card.id, actor, 'mitzustaendig_weg', x)))
   if (card.title !== oldCard.title) out.push(event(card.id, actor, 'titel', card.title))
   if (!!card.archived !== !!oldCard.archived) out.push(event(card.id, actor, 'archiv', card.archived ? 'archiviert' : 'zurueckgeholt'))
   return out
@@ -380,6 +433,14 @@ export function activityEventsFor(act, actor, old = null) {
   if (!old) return [event(act.card_id, actor, 'aktivitaet', `${act.art}|${act.faellig}|${text}`)]
   if (act.erledigt_at && !old.erledigt_at) return [event(act.card_id, actor, 'aktivitaet_erledigt', `${act.art}|${text}`)]
   if (!act.erledigt_at && act.faellig !== old.faellig) return [event(act.card_id, actor, 'aktivitaet_verschoben', `${act.art}|${act.faellig}|${text}`)]
+  return []
+}
+
+// Unteraufgabe (wie tg_unteraufgaben_card() in 36_meine_pipeline.sql): angelegt, abgehakt, gelöscht
+export function subtaskEventsFor(op, row, actor, old = null) {
+  if (op === 'insert') return [event(row.card_id, actor, 'unteraufgabe', row.titel)]
+  if (op === 'delete') return [event(row.card_id, actor, 'unteraufgabe_geloescht', row.titel)]
+  if (row.erledigt_at && !old.erledigt_at) return [event(row.card_id, actor, 'unteraufgabe_erledigt', row.titel)]
   return []
 }
 
@@ -474,6 +535,7 @@ export function guestView(db, email) {
   view.card_seen = (db.card_seen || []).filter((x) => x.email === me)
   view.files = (db.files || []).filter((f) => shared.has(f.card_id))
   view.aktivitaeten = (db.aktivitaeten || []).filter((a) => a.card_id && shared.has(a.card_id))
+  view.unteraufgaben = (db.unteraufgaben || []).filter((u) => shared.has(u.card_id))
   return view
 }
 

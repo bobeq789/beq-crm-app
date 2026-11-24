@@ -35,6 +35,10 @@ import {
   noteEventsFor,
   cardFlags,
   archiveOldDone,
+  activityAreaSuggestion,
+  subtaskEventsFor,
+  isTeamAddress,
+  touchCard,
 } from './rules.js'
 import * as chat from './chat_rules.js'
 
@@ -65,6 +69,17 @@ export function createDemoApi({ asGuest = false } = {}) {
     return !!card && db.project_shares.some((s) => s.project_id === card.project_id && s.email === me)
   }
   const notAllowed = () => dbError('42501', 'permission denied')
+  // Weitere Zuständige und Zuständige von Unteraufgaben nur aktive Teammitglieder (36_meine_pipeline.sql)
+  const checkHolders = (row, old = null) => {
+    const added = (row.mitzustaendig || []).filter((x) => !(old && (old.mitzustaendig || []).includes(x)))
+    if (added.some((x) => !isTeamAddress(db, x))) throw dbError('23514', 'Weitere Zuständige können nur Teammitglieder sein.')
+  }
+  const checkSubtask = (row, old = null) => {
+    if (row.zustaendig && (!old || row.zustaendig !== old.zustaendig) && !isTeamAddress(db, row.zustaendig)) {
+      throw dbError('23514', 'Zuständig für eine Unteraufgabe können nur Teammitglieder sein.')
+    }
+    if (!old && db.unteraufgaben.filter((u) => u.card_id === row.card_id).length >= 100) throw dbError('23514', 'Höchstens 100 Unteraufgaben je Aufgabe.')
+  }
   // Deal gewonnen oder verloren: Aufgabe nach „Erledigt“ (wie 28_deal_abschluss.sql), mit Verlauf
   const moveClosedDeal = (oldDeal, deal) => {
     const hit = closedDealMove(db, oldDeal, deal)
@@ -256,6 +271,7 @@ export function createDemoApi({ asGuest = false } = {}) {
       const r = prepareInsert(table, row, me)
       if (asGuest) {
         if (table === 'cards') checkGuestCardInsert(db, r, me)
+        else if (table === 'unteraufgaben') throw notAllowed()
         else if (table === 'aktivitaeten') {
           // Gäste nur an Aufgaben, die sie sehen, nie ohne Aufgabe (19_aktivitaeten.sql)
           if (!r.card_id || r.person_id || r.org_id || !sharedWithMe(r.card_id)) throw notAllowed()
@@ -266,6 +282,13 @@ export function createDemoApi({ asGuest = false } = {}) {
       }
       checkInsert(db, table, r)
       checkSales(table, r)
+      if (table === 'cards') checkHolders(r)
+      if (table === 'unteraufgaben') {
+        checkSubtask(r)
+        if (!r.position) r.position = Math.max(0, ...db.unteraufgaben.filter((u) => u.card_id === r.card_id).map((u) => u.position || 0)) + 1
+      }
+      // Bereich wie tg_aktivitaeten_bereich() in 36_meine_pipeline.sql
+      if (table === 'aktivitaeten' && !r.bereich) r.bereich = activityAreaSuggestion(db, r)
       if (table === 'deals' && db.deals.some((d) => d.card_id === r.card_id)) throw dbError('23505', 'deals_card_key')
       if (table === 'notes') r.mentions = cleanMentions(db, r, me, asGuest)
       db[table] = [...db[table], r]
@@ -274,6 +297,7 @@ export function createDemoApi({ asGuest = false } = {}) {
       // Verlauf wie die Trigger in der Datenbank
       if (table === 'cards') db.card_events.push(...cardEventsFor(db, 'insert', null, r, me))
       if (table === 'aktivitaeten') db.card_events.push(...activityEventsFor(r, me))
+      if (table === 'unteraufgaben') db.card_events.push(...subtaskEventsFor('insert', r, me))
       if (table === 'cards') waitingFollowUp(null, r)
       if (table === 'deals') moveClosedDeal(null, r)
       // Teammitglied weist einem Gast zu: automatisch teilen
@@ -296,13 +320,19 @@ export function createDemoApi({ asGuest = false } = {}) {
       }
       if (asGuest) {
         if (table === 'cards' && sharedWithMe(id)) checkGuestCardUpdate(db, old, patch, me)
+        else if (table === 'unteraufgaben' && sharedWithMe(old.card_id)) {
+          // Gäste haken nur ab (36_meine_pipeline.sql)
+          if (Object.keys(patch).some((k) => k !== 'erledigt_at' && k !== 'erledigt_von')) throw notAllowed()
+        }
         else if (table === 'aktivitaeten' && old.card_id && sharedWithMe(old.card_id)) {
           if (['card_id', 'person_id', 'org_id'].some((k) => k in patch && patch[k] !== old[k])) throw notAllowed()
         }
         else if (table === 'notes' && old.author === me && !old.internal && sharedWithMe(old.card_id)) patch = { content: patch.content ?? old.content, mentions: patch.mentions ?? old.mentions }
         else throw notAllowed()
       }
-      const r = prepareUpdate(table, old, patch)
+      const r = prepareUpdate(table, old, patch, me)
+      if (table === 'cards') checkHolders(r, old)
+      if (table === 'unteraufgaben') checkSubtask(r, old)
       checkSales(table, old)
       checkSales(table, r)
       if (table === 'notes') r.mentions = cleanMentions(db, r, me, asGuest)
@@ -316,6 +346,10 @@ export function createDemoApi({ asGuest = false } = {}) {
       if (table === 'aktivitaeten') {
         afterUpdate(db, table, r)
         db.card_events.push(...activityEventsFor(r, me, old))
+      }
+      if (table === 'unteraufgaben') {
+        afterUpdate(db, table, r)
+        db.card_events.push(...subtaskEventsFor('update', r, me, old))
       }
       if (table === 'cards') waitingFollowUp(old, r)
       if (table === 'deals') moveClosedDeal(old, r)
@@ -342,6 +376,13 @@ export function createDemoApi({ asGuest = false } = {}) {
       const old = find(table, id)
       // Aktivitäten löschen nur die eigenen oder Admins (19_aktivitaeten.sql)
       if (table === 'aktivitaeten' && old && old.owner !== me && !isAdmin()) throw notAllowed()
+      // Unteraufgaben: wer sie angelegt hat, die Hauptperson der Aufgabe oder Admins (36_meine_pipeline.sql)
+      if (table === 'unteraufgaben' && old) {
+        const card = find('cards', old.card_id)
+        if (old.created_by !== me && !(card && card.assignee === me) && !isAdmin()) throw notAllowed()
+        db.card_events.push(...subtaskEventsFor('delete', old, me))
+        touchCard(db, old.card_id)
+      }
       if (old) checkSales(table, old)
       db[table] = db[table].filter((x) => x.id !== id)
       cascadeDelete(db, table, id)

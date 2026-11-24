@@ -2,7 +2,7 @@
 // Datumsangaben sind relativ zu heute, damit die Demo immer überfällige und heutige Aufgaben zeigt.
 import { SETTINGS } from '../settings.js'
 import { uid, todayStr, addDays } from '../lib/util.js'
-import { emptyDb, recalcDeal } from './rules.js'
+import { emptyDb, recalcDeal, activityAreaSuggestion } from './rules.js'
 
 const nowIsoDemo = () => new Date().toISOString()
 
@@ -632,8 +632,89 @@ export function buildSeed() {
     { google_id: 'de.german#holiday@group.v.calendar.example.com', name: 'Feiertage in Deutschland', zugriff: 'reader', primaer: false, aktiv: false },
   ].map((k) => ({ id: uid(), mailbox_id: annaBox.id, created_at: created, updated_at: created, ...k }))
 
+  seedPipeline(db, K, today)
   seedChat(db)
   return db
+}
+
+// Meine Pipeline (36_meine_pipeline.sql), alles erfunden: weitere Zuständige, „vergeben von“,
+// Unteraufgaben, Zuständige an Aktivitäten, Bereich „intern“ oder „Sales“ für jede Aktivität
+function seedPipeline(db, K, today) {
+  const hoursAgo = (h) => new Date(Date.now() - h * 3600000).toISOString()
+  const card = (title) => db.cards.find((c) => c.id === K[title])
+  db.cards.forEach((c) => {
+    c.mitzustaendig = c.mitzustaendig || []
+    c.vergeben_von = c.vergeben_von || null
+  })
+  // Anna hat diese Aufgaben weitergegeben (die beiden an Mira stehen schon im Verlauf)
+  ;['Datenschutzunterlagen an Klinikverbund senden', 'Schulung für Installationspartner planen', 'Rahmenvertrag mit Netzwerk Technik Brandt prüfen'].forEach((t) => (card(t).vergeben_von = A))
+  db.card_events.push({ id: uid(), card_id: K['Rahmenvertrag mit Netzwerk Technik Brandt prüfen'], at: hoursAgo(30), actor: A, kind: 'zustaendig', detail: J })
+  // Mehrere Zuständige
+  card('Messestand für die Fachmesse im Frühjahr buchen').mitzustaendig = [A]
+  card('Vortrag für das Partnerforum vorbereiten').mitzustaendig = [M]
+  card('Messwerte aus der ersten Pilotwoche auswerten').mitzustaendig = [J]
+
+  // Unteraufgaben: [Aufgabe, Titel, zuständig, fällig in Tagen, erledigt]
+  const subs = [
+    ['Angebot Pilotinstallation an Nordlicht schicken', 'Preise mit dem Vertrieb abstimmen', null, null, true],
+    ['Angebot Pilotinstallation an Nordlicht schicken', 'Standorte Hafenstraße und Altona eintragen', J, 0, false],
+    ['Angebot Pilotinstallation an Nordlicht schicken', 'Angebot als PDF erstellen', A, 1, false],
+    ['Messestand für die Fachmesse im Frühjahr buchen', 'Standgröße festlegen', A, 3, false],
+    ['Messestand für die Fachmesse im Frühjahr buchen', 'Angebot der Messe einholen', J, 5, false],
+    ['CRM im Team vorstellen', 'Folien vorbereiten', A, null, true],
+    ['CRM im Team vorstellen', 'Einladung an alle schicken', null, 2, false],
+    ['Rahmenvertrag mit Netzwerk Technik Brandt prüfen', 'Haftung prüfen lassen', M, 4, false],
+  ]
+  const pos = {}
+  subs.forEach(([title, titel, zustaendig, inDays, done], i) => {
+    const cardId = K[title]
+    pos[cardId] = (pos[cardId] || 0) + 1
+    const at = daysAgo(2, 9, i)
+    db.unteraufgaben.push({
+      id: uid(),
+      card_id: cardId,
+      titel,
+      zustaendig,
+      faellig: inDays === null ? null : addDays(today, inDays),
+      position: pos[cardId],
+      erledigt_at: done ? daysAgo(1, 15, i) : null,
+      erledigt_von: done ? A : null,
+      created_by: A,
+      created_at: at,
+      updated_at: at,
+    })
+  })
+
+  // Zuständige an Aktivitäten und zwei weitere für Anna (intern und Sales)
+  const act = (text) => db.aktivitaeten.find((a) => a.titel === text)
+  act('Entwurf an Daniel schicken').zustaendig = M
+  act('Vor-Ort-Termin vorschlagen').zustaendig = J
+  const extra = [
+    ['aufgabe', 'Reisekostenabrechnung Oktober', 1, 'Belege einscannen', A, A],
+    ['wiedervorlage', 'Teamtermin für Dezember planen', -1, 'Raum für den Teamtermin anfragen', M, A],
+    ['anruf', 'Messestand für die Fachmesse im Frühjahr buchen', 4, 'Messe wegen Eckstand anrufen', A, J],
+  ]
+  extra.forEach(([art, title, inDays, titel, zustaendig, by], i) => {
+    const at = daysAgo(1, 10, i)
+    db.aktivitaeten.push({
+      id: uid(),
+      owner: by,
+      card_id: K[title],
+      person_id: null,
+      org_id: null,
+      art,
+      titel,
+      faellig: addDays(today, inDays),
+      uhrzeit: null,
+      zustaendig: zustaendig === by ? null : zustaendig,
+      erledigt_at: null,
+      erledigt_von: null,
+      created_by: by,
+      created_at: at,
+      updated_at: at,
+    })
+  })
+  db.aktivitaeten.forEach((a) => (a.bereich = activityAreaSuggestion(db, a)))
 }
 
 // Chat (30_chat.sql): erfundene Kanäle, eine Gruppe und Direktnachrichten. Eine Direktnachricht

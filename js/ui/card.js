@@ -2,7 +2,7 @@
 // Gäste sehen eine schlanke Fassung: nur Spalte, Dringlichkeit und Fälligkeit änderbar, dazu Notizen.
 import { html, useState, useEffect } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
-import { fmtDate, fmtDateTime, fmtRelative, norm, telHref } from '../lib/util.js'
+import { fmtDate, fmtDateTime, fmtRelative, norm, telHref, firstName } from '../lib/util.js'
 import {
   getCard,
   getProject,
@@ -29,6 +29,13 @@ import {
   assignCard,
   activitiesOfCard,
   answerFor,
+  activeMembers,
+  setCoAssignees,
+  subtasksOf,
+  createSubtask,
+  toggleSubtask,
+  canDeleteSubtask,
+  deleteSubtask,
 } from '../store.js'
 import { closeCard } from '../router.js'
 import { Field, PriorityPicker, ProjectSelect, EntityPicker, Notes, Dot, LinkText, brandSafe, LabelPicker, Labels, useOverlay } from './common.js'
@@ -98,6 +105,113 @@ function AssigneePicker({ card }) {
       </button>`
     })}
   </div>`
+}
+
+// Weitere Zuständige (36_meine_pipeline.sql): nur Teammitglieder, nie Gäste, nie die Hauptperson.
+// Die Aufgabe erscheint dann in der Pipeline aller Zuständigen. Ein Tipp schaltet um.
+const MAX_CO = 10
+function CoAssigneePicker({ card }) {
+  const me = norm(myEmail())
+  const main = norm(card.assignee || '')
+  const list = (card.mitzustaendig || []).map(norm)
+  const options = activeMembers().filter((t) => norm(t.email) !== main)
+  // Wer nicht mehr aktiv ist, bleibt sichtbar, bis jemand ihn austrägt
+  list.filter((e) => !options.some((t) => norm(t.email) === e)).forEach((e) => options.push({ email: e, name: memberName(e) }))
+  if (!options.length) return null
+  const toggle = (e, on) => {
+    if (!on && list.length >= MAX_CO) return toast(`Höchstens ${MAX_CO} weitere Zuständige je Aufgabe.`, { error: true })
+    setCoAssignees(card, on ? list.filter((x) => x !== e) : [...list, e])
+  }
+  return html`<${Field} label="Weitere zuständig">
+    <div class="chips co-assignee-picker" role="group" aria-label="Weitere zuständig">
+      ${options.map((t) => {
+        const e = norm(t.email)
+        const on = list.includes(e)
+        return html`<button type="button" class=${'chip-btn' + (on ? ' active' : '')} aria-pressed=${on} onClick=${() => toggle(e, on)}>
+          ${on && html`<${Icon} name="check" size=${14} />`} ${e === me ? 'Ich' : t.name}
+        </button>`
+      })}
+    </div>
+  <//>`
+}
+
+// Unteraufgaben (36_meine_pipeline.sql): Checkliste mit Haken, optional zuständig und fällig.
+// Gäste haken nur ab. Wer jemandem eine Unteraufgabe gibt, bringt die Aufgabe in dessen Pipeline.
+function SubtaskRow({ u, guest }) {
+  const [titel, setTitel] = useState(u.titel)
+  useEffect(() => setTitel(u.titel), [u.titel])
+  const done = !!u.erledigt_at
+  const save = () => {
+    const t = titel.trim()
+    if (!t) setTitel(u.titel)
+    else if (t !== u.titel) update('unteraufgaben', u.id, { titel: t })
+  }
+  const remove = async () => {
+    const ok = await confirmDialog({ title: 'Unteraufgabe löschen?', text: `„${u.titel}“ ist danach weg. Erledigtes besser abhaken.`, confirmLabel: 'Löschen', danger: true })
+    if (ok) deleteSubtask(u)
+  }
+  return html`<li class=${'sub-item' + (done ? ' sub-done' : '')}>
+    <button
+      type="button"
+      class=${'check' + (done ? ' checked' : '')}
+      aria-pressed=${done}
+      aria-label=${(done ? 'Wieder öffnen: ' : 'Abhaken: ') + u.titel}
+      title=${done ? 'Wieder öffnen' : 'Abhaken'}
+      onClick=${() => toggleSubtask(u)}
+    >
+      <${Icon} name="check" size=${16} />
+    </button>
+    ${guest
+      ? html`<span class="sub-title">${u.titel}</span>`
+      : html`<input
+          class="sub-title"
+          value=${titel}
+          aria-label="Unteraufgabe"
+          onInput=${(e) => setTitel(e.target.value)}
+          onBlur=${save}
+          onKeyDown=${(e) => e.key === 'Enter' && e.target.blur()}
+        />`}
+    <span class="sub-meta">
+      ${guest
+        ? u.zustaendig && html`<span class="muted small">${firstName(memberName(u.zustaendig))}</span>`
+        : html`<select class="sub-who" value=${u.zustaendig || ''} aria-label=${'Zuständig für „' + u.titel + '“'} onChange=${(e) => update('unteraufgaben', u.id, { zustaendig: e.target.value || null })}>
+            <option value="">Niemand</option>
+            ${activeMembers().map((t) => html`<option value=${norm(t.email)}>${norm(t.email) === norm(myEmail()) ? 'Ich' : t.name}</option>`)}
+            ${u.zustaendig && !activeMembers().some((t) => norm(t.email) === u.zustaendig) && html`<option value=${u.zustaendig}>${memberName(u.zustaendig)}</option>`}
+          </select>`}
+      ${guest
+        ? u.faellig && html`<span class="muted small">${fmtDate(u.faellig)}</span>`
+        : html`<input class="sub-due" type="date" value=${u.faellig || ''} aria-label=${'Fällig für „' + u.titel + '“'} onChange=${(e) => update('unteraufgaben', u.id, { faellig: e.target.value || null })} />`}
+      ${canDeleteSubtask(u) &&
+      html`<button type="button" class="icon-btn small" aria-label=${'Löschen: ' + u.titel} title="Löschen" onClick=${remove}><${Icon} name="trash" size=${15} /></button>`}
+    </span>
+  </li>`
+}
+
+function Subtasks({ card, guest = false }) {
+  const [titel, setTitel] = useState('')
+  const list = subtasksOf(card.id)
+  if (guest && !list.length) return null
+  const done = list.filter((u) => u.erledigt_at).length
+  const add = async (e) => {
+    e.preventDefault()
+    const t = titel.trim()
+    if (!t) return
+    setTitel('')
+    await createSubtask(card.id, { titel: t })
+  }
+  return html`<section class="subtasks">
+    <div class="act-head">
+      <h3 class="section-title">Unteraufgaben ${list.length > 0 && html`<span class="count">${done} von ${list.length}</span>`}</h3>
+    </div>
+    ${list.length > 0 && html`<ul class="sub-list">${list.map((u) => html`<${SubtaskRow} key=${u.id} u=${u} guest=${guest} />`)}</ul>`}
+    ${!guest &&
+    html`<form class="sub-add" onSubmit=${add}>
+      <${Icon} name="plus" size=${16} />
+      <input value=${titel} placeholder="Unteraufgabe hinzufügen" aria-label="Neue Unteraufgabe" maxlength="300" onInput=${(e) => setTitel(e.target.value)} />
+      ${titel.trim() && html`<button type="submit" class="btn btn-small btn-primary">Hinzufügen</button>`}
+    </form>`}
+  </section>`
 }
 
 // Unter dem Kontakt der Aufgabe (Nachtrag „Anrufen“, B7, B4): „Anrufen“ für bis zu zwei Nummern
@@ -214,6 +328,7 @@ function GuestCard({ card }) {
       <${DueField} card=${card} />
       <${Field} label="Dringlichkeit"><${PriorityPicker} value=${card.priority} onChange=${(v) => update('cards', card.id, { priority: v })} /><//>
     </div>
+    <${Subtasks} card=${card} guest=${true} />
     <${ActivitySection} list=${activitiesOfCard(card.id)} here="card" target=${{ card_id: card.id }} card=${card} />
     <${CardFiles} card=${card} />
     <${History} card=${card} />
@@ -309,6 +424,9 @@ export function CardPanel({ id }) {
 
     <${StagePicker} card=${card} />
     <${Field} label="Zuständig"><${AssigneePicker} card=${card} /><//>
+    <${CoAssigneePicker} card=${card} />
+    ${card.vergeben_von && norm(card.vergeben_von) !== norm(card.assignee || '') &&
+    html`<p class="muted small handed-by">Vergeben von ${norm(card.vergeben_von) === norm(myEmail()) ? 'dir' : memberName(card.vergeben_von)}</p>`}
 
     <div class="field-grid">
       <${Field} label="Projekt" htmlFor="card-project">
@@ -347,6 +465,7 @@ export function CardPanel({ id }) {
       <${Icon} name="meetings" size=${16} /> Aus dem Meeting <a href=${'#/meetings/' + meeting.id}>„${meeting.title}“</a> vom ${fmtDate(meeting.held_at)}
     </p>`}
 
+    <${Subtasks} card=${card} />
     <${ActivitySection} list=${activitiesOfCard(card.id)} here="card" target=${{ card_id: card.id }} card=${card} />
     <${CardDeal} card=${card} />
     <${CardFiles} card=${card} />

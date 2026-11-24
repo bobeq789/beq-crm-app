@@ -2,7 +2,7 @@
 import { html, useState, useEffect, useRef } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { SETTINGS } from '../settings.js'
-import { matches, local, fmtEuro, fmtDate } from '../lib/util.js'
+import { matches, local, fmtEuro, fmtDate, norm } from '../lib/util.js'
 import {
   state,
   activeProjects,
@@ -39,17 +39,27 @@ import {
   countStageCards,
   lastOfKindHint,
   answerFor,
+  cardHolders,
+  subtasksOf,
 } from '../store.js'
 import { navigate, openCard } from '../router.js'
 import { PageHead, Dot, Avatar, PrioBadge, DueBadge, NewBadge, Modal, Field, Empty, Labels, ActivityBadge, dialogKinds, useIsMobile } from './common.js'
 
 const DONE_LIMIT = 15
 
-function BoardCard({ card, draggable }) {
+// viewer: aus wessen Sicht (Pipeline einer anderen Person), Kürzel nur für die anderen Zuständigen.
+// showProject: Projekt oben auf der Karte (Pipeline zeigt Aufgaben aus allen Projekten).
+// note: kurzer Hinweis, zum Beispiel „Unteraufgabe für dich“
+export function BoardCard({ card, draggable, viewer = null, showProject = false, note = null }) {
   const person = getPerson(card.person_id)
   const org = getOrg(card.org_id)
   const noteCount = notesFor('card_id', card.id).length
   const isDone = state.db.stages.find((s) => s.id === card.stage_id)?.kind === 'done'
+  const project = showProject ? getProject(card.project_id) : null
+  const who = norm(viewer || myEmail())
+  const others = cardHolders(card).filter((e) => e !== who)
+  const subs = subtasksOf(card.id)
+  const subsDone = subs.filter((u) => u.erledigt_at).length
   return html`<li
     class="board-card"
     draggable=${draggable}
@@ -61,17 +71,20 @@ function BoardCard({ card, draggable }) {
     onDragEnd=${(e) => e.currentTarget.classList.remove('dragging')}
   >
     <button type="button" class="board-card-btn" onClick=${() => openCard(card.id)}>
+      ${project && html`<span class="bc-project"><${Dot} color=${project.color} />${project.name}</span>`}
       <span class="bc-title">${card.title}</span>
+      ${note && html`<span class="bc-note">${note}</span>`}
       ${(person || org) && html`<span class="bc-sub">${[person && person.name, org && org.name].filter(Boolean).join(' · ')}</span>`}
       ${(card.labels || []).length > 0 && html`<span class="bc-labels"><${Labels} labels=${card.labels} /></span>`}
       <span class="bc-meta">
         ${answerFor(card.id) && html`<span class="badge badge-new" title="Ein Kontakt hat geantwortet">Antwort da</span>`}
         <${NewBadge} cardId=${card.id} />
-        ${assignedToOther(card) && html`<${Avatar} email=${card.assignee} />`}
+        ${others.slice(0, 3).map((e) => html`<${Avatar} email=${e} key=${e} />`)}
         <${PrioBadge} priority=${card.priority} />
         <${DueBadge} due=${card.due_date} done=${isDone} />
         ${sharesOf(card.id).length > 0 && html`<span class="bc-notes" title="Mit einem Gast geteilt"><${Icon} name="share" size=${14} /></span>`}
         ${noteCount > 0 && html`<span class="bc-notes" title=${noteCount + (noteCount === 1 ? ' Notiz' : ' Notizen')}><${Icon} name="note" size=${14} />${noteCount}</span>`}
+        ${subs.length > 0 && html`<span class=${'bc-notes' + (subsDone === subs.length ? ' bc-subs-done' : '')} title=${`Unteraufgaben: ${subsDone} von ${subs.length} erledigt`}><${Icon} name="check" size=${14} />${subsDone}/${subs.length}</span>`}
         ${card.archived && html`<span class="badge">Archiv</span>`}
         ${!isDone && html`<${ActivityBadge} cardId=${card.id} />`}
         <${DealBadge} card=${card} />
@@ -81,7 +94,7 @@ function BoardCard({ card, draggable }) {
 }
 
 // Wert des Deals auf der Karte (nur wenn ich die Zahlen sehen darf, sonst gibt es ihn hier nicht)
-function DealBadge({ card }) {
+export function DealBadge({ card }) {
   const deal = dealOf(card.id)
   if (!deal) return null
   const cls = deal.status === 'gewonnen' ? ' deal-won' : deal.status === 'verloren' ? ' deal-lost' : ''

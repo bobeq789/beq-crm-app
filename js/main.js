@@ -6,6 +6,7 @@ import { useRoute } from './router.js'
 import { Dialogs, Toasts } from './ui/common.js'
 import { Overview, overviewCount } from './ui/overview.js'
 import { Board } from './ui/board.js'
+import { PipelinePage } from './ui/pipeline.js'
 import { CardPanel } from './ui/card.js'
 import { CalendarPage, EventPanel } from './ui/calendar.js'
 import { MeetingsList, MeetingDetail, MeetingNew } from './ui/meetings.js'
@@ -26,6 +27,7 @@ import { ClaudeConsent } from './ui/claude.js'
 const NAV_TEAM = [
   { key: '', label: 'Übersicht', icon: 'home' },
   { key: 'board', label: 'Board', icon: 'board' },
+  { key: 'pipeline', label: 'Pipeline', icon: 'pipeline' },
   { key: 'chat', label: 'Chat', icon: 'chat' },
   { key: 'sales', label: 'Sales', icon: 'sales' },
   { key: 'kalender', label: 'Kalender', icon: 'calendar' },
@@ -38,8 +40,11 @@ const NAV_GUEST = [
   { key: 'geteilt', label: 'Geteilt', icon: 'share' },
   { key: 'chat', label: 'Chat', icon: 'chat' },
 ]
-// Am Handy unten nur fünf Bereiche und „Mehr“, der Rest steckt hinter „Mehr“
-const MOBILE_MAIN = ['', 'board', 'chat', 'postfach', 'kalender']
+// Am Handy unten nur fünf Bereiche und „Mehr“, der Rest steckt hinter „Mehr“. Seit „Meine Pipeline“
+// (36_meine_pipeline.sql) steht dort die eigene Pipeline, die Boards der Projekte unter „Mehr“.
+const MOBILE_MAIN = ['', 'pipeline', 'chat', 'postfach', 'kalender']
+// Am Rechner zwischen 760 und 1279 px stecken diese zusätzlich hinter „Mehr“ (styles.css, .nav-minor)
+const NAV_MINOR = ['meetings', 'firmen']
 
 function NavMore() {
   const more = NAV_TEAM.filter((n) => !MOBILE_MAIN.includes(n.key))
@@ -72,6 +77,8 @@ function Page({ route }) {
       return html`<${Board} projectId=${id} archiveOpen=${sub === 'archiv'} archiveQuery=${route.params.get('q') || ''} />`
     case 'chat':
       return html`<${ChatPage} raumId=${id} verlauf=${route.params.get('verlauf')} nachricht=${route.params.get('nachricht')} />`
+    case 'pipeline':
+      return html`<${PipelinePage} params=${route.params} />`
     case 'sales':
       return html`<${SalesPage} />`
     case 'kalender':
@@ -135,7 +142,7 @@ function Shell({ route }) {
         ${nav.map(
           (n) => html`<a
             href=${'#/' + n.key}
-            class=${[section === n.key ? 'active' : '', !guest && !MOBILE_MAIN.includes(n.key) ? 'nav-extra' : ''].filter(Boolean).join(' ')}
+            class=${[section === n.key ? 'active' : '', !guest && !MOBILE_MAIN.includes(n.key) ? 'nav-extra' : '', !guest && NAV_MINOR.includes(n.key) ? 'nav-minor' : ''].filter(Boolean).join(' ')}
             aria-current=${section === n.key ? 'page' : undefined}
           >
             ${n.label}<${NavCount} n=${counts[n.key]} what=${countText[n.key]} />

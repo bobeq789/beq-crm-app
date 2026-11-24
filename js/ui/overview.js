@@ -19,6 +19,7 @@ import {
   nextActivity,
   allActivities,
   isMyActivity,
+  isCardOf,
   activityKind,
   activityText,
   activitySort,
@@ -57,11 +58,10 @@ function taskSort(a, b) {
   return String(b.updated_at).localeCompare(String(a.updated_at))
 }
 
-// „Meine“: ich bin zuständig, oder niemand ist zuständig und ich habe die Aufgabe angelegt
+// „Meine“: ich bin zuständig (Hauptperson oder weitere, 36_meine_pipeline.sql), oder niemand ist
+// zuständig und ich habe die Aufgabe angelegt
 export function isMine(card) {
-  const me = myEmail().toLowerCase()
-  const assignee = (card.assignee || '').toLowerCase()
-  return assignee ? assignee === me : (card.created_by || '').toLowerCase() === me
+  return isCardOf(card, myEmail())
 }
 
 function TodoTile({ cards, drag }) {

@@ -4,7 +4,7 @@
 import { useState, useEffect } from './lib/preact.js'
 import { SETTINGS } from './settings.js'
 import { uid, local, todayStr, addDays, fmtDate, firstName, initials, norm, safeFileName } from './lib/util.js'
-import { prepareInsert, prepareUpdate, afterInsert, afterUpdate, cascadeDelete, emptyDb, recalcDeal, isClosedDeal } from './data/rules.js'
+import { prepareInsert, prepareUpdate, afterInsert, afterUpdate, cascadeDelete, emptyDb, recalcDeal, isClosedDeal, activityAreaSuggestion, touchCard } from './data/rules.js'
 import { createDemoApi } from './data/demo.js'
 import { createSupabaseApi } from './data/supabase.js'
 
@@ -981,8 +981,8 @@ export async function insert(table, row) {
 export async function update(table, id, patch) {
   const old = state.db[table].find((x) => x.id === id)
   if (!old) return null
-  replaceRow(table, prepareUpdate(table, old, patch))
-  if (table === 'aktivitaeten') afterUpdate(state.db, table, state.db[table].find((x) => x.id === id))
+  replaceRow(table, prepareUpdate(table, old, patch, myEmail()))
+  if (table === 'aktivitaeten' || table === 'unteraufgaben') afterUpdate(state.db, table, state.db[table].find((x) => x.id === id))
   state.db = { ...state.db }
   emit()
   try {
@@ -1002,8 +1002,11 @@ export async function update(table, id, patch) {
 
 export async function remove(table, id) {
   const db = { ...state.db }
+  const old = db[table].find((x) => x.id === id)
   db[table] = db[table].filter((x) => x.id !== id)
   cascadeDelete(db, table, id)
+  // Unteraufgabe gelöscht: die Aufgabe gilt als geändert (wie tg_unteraufgaben_card())
+  if (table === 'unteraufgaben' && old) touchCard(db, old.card_id)
   state.db = db
   emit()
   try {
@@ -1263,12 +1266,20 @@ export function activitiesForOrg(orgId) {
 // „Meine“: ich bin zuständig, oder niemand ist es und ich bin bei der Aufgabe zuständig (ohne
 // Zuständige wie bei „Meine“ für Aufgaben: angelegt), ohne Aufgabe: ich habe sie angelegt
 export function isMyActivity(a) {
-  const me = norm(myEmail())
-  if (a.zustaendig) return norm(a.zustaendig) === me
-  const card = a.card_id ? getCard(a.card_id) : null
-  if (card) return card.assignee ? norm(card.assignee) === me : norm(card.created_by || '') === me
-  return norm(a.owner || '') === me
+  return activityHolder(a) === norm(myEmail())
 }
+// Wer eine Aktivität erledigen soll: zuständig, sonst die Hauptperson der Aufgabe (ohne sie, wer
+// die Aufgabe angelegt hat), ohne Aufgabe, wer die Aktivität angelegt hat
+export function activityHolder(a) {
+  if (a.zustaendig) return norm(a.zustaendig)
+  const card = a.card_id ? getCard(a.card_id) : null
+  if (card) return norm(card.assignee || card.created_by || '')
+  return norm(a.owner || '')
+}
+// Intern oder Sales (36_meine_pipeline.sql). Gespeichert an der Aktivität, solange sie nur hier
+// liegt (gerade angelegt), der Vorschlag wie in der Datenbank.
+export const activityArea = (a) => a.bereich || activityAreaSuggestion(state.db, a)
+export const activityAreaFor = (target) => activityAreaSuggestion(state.db, target || {})
 export const canDeleteActivity = (a) => !isGuest() && (isAdmin() || norm(a.owner || '') === norm(myEmail()))
 export const createActivity = (fields) => insert('aktivitaeten', fields)
 export async function completeActivity(a) {
@@ -1452,3 +1463,45 @@ export function personByName(name, candidates) {
 }
 
 export const today = () => todayStr()
+
+// ------------------------------------------------------------
+// Meine Pipeline, weitere Zuständige, Unteraufgaben (36_meine_pipeline.sql)
+// ------------------------------------------------------------
+// Alle, denen eine Aufgabe gehört: Hauptperson und weitere Zuständige
+export function cardHolders(card) {
+  return [card.assignee, ...(card.mitzustaendig || [])].filter(Boolean).map(norm)
+}
+// Ohne Zuständige gehört eine Aufgabe, wer sie angelegt hat (wie „Meine“ in der Übersicht)
+export function isCardOf(card, email) {
+  const e = norm(email)
+  const holders = cardHolders(card)
+  return holders.length ? holders.includes(e) : norm(card.created_by || '') === e
+}
+export const subtasksOf = (cardId) =>
+  (state.db.unteraufgaben || []).filter((u) => u.card_id === cardId).sort((a, b) => (a.position || 0) - (b.position || 0) || String(a.created_at).localeCompare(String(b.created_at)))
+export const openSubtasksFor = (email) => (state.db.unteraufgaben || []).filter((u) => !u.erledigt_at && norm(u.zustaendig || '') === norm(email))
+export function createSubtask(cardId, fields) {
+  const position = Math.max(0, ...subtasksOf(cardId).map((u) => u.position || 0)) + 1
+  return insert('unteraufgaben', { card_id: cardId, position, ...fields })
+}
+export const toggleSubtask = (u) => update('unteraufgaben', u.id, { erledigt_at: u.erledigt_at ? null : new Date().toISOString() })
+// Löschen: wer sie angelegt hat, die Hauptperson der Aufgabe oder Admins
+export function canDeleteSubtask(u) {
+  if (isGuest()) return false
+  const card = getCard(u.card_id)
+  const me = norm(myEmail())
+  return isAdmin() || norm(u.created_by || '') === me || (!!card && norm(card.assignee || '') === me)
+}
+export const deleteSubtask = (u) => remove('unteraufgaben', u.id)
+export const setCoAssignees = (card, list) => update('cards', card.id, { mitzustaendig: list })
+
+// In der Pipeline in eine Spalte der Art „kind“ ziehen: die passende Spalte im Projekt der Aufgabe
+export function moveCardToKind(card, kind) {
+  if (cardKind(card) === kind) return null
+  const stage = stageOfKind(card.project_id, kind)
+  if (!stage || stage.kind !== kind) {
+    toast('Dieses Projekt hat keine passende Spalte.', { error: true })
+    return null
+  }
+  return update('cards', card.id, { stage_id: stage.id })
+}

@@ -81,6 +81,18 @@ export function eventSentence(e, me = myEmail()) {
     case 'aktivitaet_erledigt':
     case 'aktivitaet_verschoben':
       return activitySentence(e.kind, d, who, hat)
+    // Meine Pipeline (36_meine_pipeline.sql)
+    case 'mitzustaendig_dazu':
+      if (self && norm(d) === norm(me)) return `Du hast dich als weitere zuständige Person eingetragen`
+      return `${who} ${hat} ${person(d)} als weitere zuständige Person eingetragen`
+    case 'mitzustaendig_weg':
+      return `${who} ${hat} ${person(d)} als weitere zuständige Person ausgetragen`
+    case 'unteraufgabe':
+      return `${who} ${hat} die Unteraufgabe „${d}“ angelegt`
+    case 'unteraufgabe_erledigt':
+      return `${who} ${hat} die Unteraufgabe „${d}“ abgehakt`
+    case 'unteraufgabe_geloescht':
+      return `${who} ${hat} die Unteraufgabe „${d}“ gelöscht`
     default:
       return `${who} ${hat} etwas geändert`
   }

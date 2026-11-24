@@ -6,7 +6,7 @@
 // Admin), Erledigtes bleibt aufklappbar mit „Wieder öffnen“.
 import { html, useState, useRef, useLayoutEffect } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
-import { todayStr, addDays, fmtDate } from '../lib/util.js'
+import { todayStr, addDays, fmtDate, norm, firstName } from '../lib/util.js'
 import {
   ACTIVITY_KINDS,
   activityKind,
@@ -22,6 +22,11 @@ import {
   getCard,
   getPerson,
   getOrg,
+  activeMembers,
+  memberName,
+  myEmail,
+  isGuest,
+  activityAreaFor,
 } from '../store.js'
 import { openCard } from '../router.js'
 import { Tile, activityWhen } from './common.js'
@@ -34,9 +39,20 @@ const QUICK = [
   ['In 2 Wochen', 14],
 ]
 
+// Bereich (36_meine_pipeline.sql): „Sales“ an Kontakt, Firma oder Aufgabe mit Deal, sonst „intern“.
+// Vorgeschlagen, änderbar, danach fest an der Aktivität.
+export const AREAS = [
+  { value: 'intern', label: 'Intern' },
+  { value: 'sales', label: 'Sales' },
+]
+
 // Formular zum Anlegen und Ändern. Enter legt an, Escape schließt nur das Formular.
-function ActivityForm({ initial, onSave, onCancel, onDelete }) {
+// target: woran die Aktivität hängt (für den Vorschlag „intern“ oder „Sales“)
+export function ActivityForm({ initial, target = {}, onSave, onCancel, onDelete }) {
   const [art, setArt] = useState(initial.art || 'wiedervorlage')
+  const [bereich, setBereich] = useState(initial.bereich || activityAreaFor({ ...target, ...initial }))
+  const [zustaendig, setZustaendig] = useState(initial.zustaendig || '')
+  const onCard = !!(initial.card_id || target.card_id)
   const [faellig, setFaellig] = useState(initial.faellig || addDays(todayStr(), 1))
   const [uhrzeit, setUhrzeit] = useState(initial.uhrzeit ? String(initial.uhrzeit).slice(0, 5) : '')
   const [titel, setTitel] = useState(initial.titel || '')
@@ -49,7 +65,9 @@ function ActivityForm({ initial, onSave, onCancel, onDelete }) {
   const submit = (e) => {
     e.preventDefault()
     if (!faellig) return
-    onSave({ art, faellig, uhrzeit: uhrzeit || null, titel: titel.trim() || null })
+    const fields = { art, faellig, uhrzeit: uhrzeit || null, titel: titel.trim() || null, bereich }
+    if (!isGuest()) fields.zustaendig = zustaendig || null
+    onSave(fields)
   }
   const onKeyDown = (e) => {
     if (e.key === 'Escape') {
@@ -75,6 +93,19 @@ function ActivityForm({ initial, onSave, onCancel, onDelete }) {
     <div class="act-when">
       <input type="date" value=${faellig} required aria-label="Datum" onInput=${(e) => setFaellig(e.target.value)} />
       <input type="time" value=${uhrzeit} aria-label="Uhrzeit, freiwillig" onInput=${(e) => setUhrzeit(e.target.value)} />
+    </div>
+    <div class="act-who">
+      <div class="chips act-area" role="group" aria-label="Bereich">
+        ${AREAS.map(
+          (x) => html`<button type="button" class=${'chip-btn small' + (x.value === bereich ? ' active' : '')} aria-pressed=${x.value === bereich} onClick=${() => setBereich(x.value)}>${x.label}</button>`
+        )}
+      </div>
+      ${!isGuest() &&
+      html`<select class="act-holder" value=${zustaendig} aria-label="Zuständig" onChange=${(e) => setZustaendig(e.target.value)}>
+        <option value="">${onCard ? 'Zuständig wie die Aufgabe' : 'Zuständig: wer sie anlegt'}</option>
+        ${activeMembers().map((t) => html`<option value=${norm(t.email)}>${norm(t.email) === norm(myEmail()) ? 'Ich' : t.name}</option>`)}
+        ${zustaendig && !activeMembers().some((t) => norm(t.email) === zustaendig) && html`<option value=${zustaendig}>${memberName(zustaendig)}</option>`}
+      </select>`}
     </div>
     <input
       ref=${textRef}
@@ -107,6 +138,7 @@ function ActivityContext({ a, here }) {
 function ActivityItem({ a, here, onEdit, onDone }) {
   const kind = activityKind(a.art)
   const when = activityWhen(a)
+  const other = a.zustaendig && norm(a.zustaendig) !== norm(myEmail())
   return html`<li class="act-item">
     <button type="button" class="check" title="Abhaken" aria-label=${'Abhaken: ' + activityText(a)} onClick=${() => onDone(a)}>
       <${Icon} name="check" size=${16} />
@@ -118,6 +150,7 @@ function ActivityItem({ a, here, onEdit, onDone }) {
       </button>
       <${ActivityContext} a=${a} here=${here} />
     </div>
+    ${other && html`<span class="muted small act-holder-name" title="Zuständig">${firstName(memberName(a.zustaendig))}</span>`}
     <span class=${'badge due-' + when.tone}>${when.text}</span>
   </li>`
 }
@@ -179,6 +212,7 @@ export function ActivitySection({ list, here, target, card }) {
     html`<${ActivityForm}
       key=${form.a ? form.a.id : 'neu'}
       initial=${form.a || {}}
+      target=${form.target || target}
       onSave=${save}
       onCancel=${() => setForm(null)}
       onDelete=${form.a && canDeleteActivity(form.a) ? remove : null}
