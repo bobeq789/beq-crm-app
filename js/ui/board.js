@@ -333,7 +333,12 @@ export function ProjectPicker({ currentId, person = null, pipelineCount = null }
   // „Meine Pipeline“ steht immer da, auch wenn ich nicht in der Liste bin (zum Beispiel als Gast)
   if (!people.some((t) => t.email === me)) people.unshift({ email: me, name: memberName(me) || me })
   const firstNames = people.map((t) => firstName(t.name))
-  const personLabel = (t) => (t.email === me ? 'Meine Pipeline' : 'Pipeline von ' + (firstNames.filter((f) => f === firstName(t.name)).length > 1 ? t.name : firstName(t.name)))
+  // Auch die eigene mit Namen („Pipeline von Sebastian“, Wunsch vom 24.11.2026), das Sternchen zeigt,
+  // dass es die eigene ist. Ohne Namen im Team bleibt es „Meine Pipeline“.
+  const personLabel = (t) => {
+    if (t.email === me && (!t.name || t.name === t.email)) return 'Meine Pipeline'
+    return 'Pipeline von ' + (firstNames.filter((f) => f === firstName(t.name)).length > 1 ? t.name : firstName(t.name))
+  }
   const viewingPerson = people.find((t) => t.email === viewing)
   const shared = (p) => projectSharesOf(p.id).length > 0
   // Escape auch direkt am Knopf (der Fokus liegt dort), falls die Liste gerade erst aufging
@@ -374,7 +379,7 @@ export function ProjectPicker({ currentId, person = null, pipelineCount = null }
   const ownFirst = (list) => [...list.filter(own), ...list.filter((p) => !own(p))]
   const intern = filled.filter((p) => projectArea(p) === 'intern')
   const sales = ownFirst(filled.filter((p) => projectArea(p) === 'sales'))
-  const label = isPipeline ? (viewingPerson ? personLabel(viewingPerson) : 'Meine Pipeline') : current ? current.name : 'Pipeline wählen'
+  const label = isPipeline ? personLabel(viewingPerson || people.find((t) => t.email === me)) : current ? current.name : 'Pipeline wählen'
   return html`<span class="project-picker" ref=${ref} onKeyDown=${onKeyDown}>
     <button type="button" ref=${btn} class="project-picker-btn" aria-haspopup="listbox" aria-expanded=${open} aria-label=${'Board wählen, aktuell ' + label} onClick=${toggle}>
       ${isPipeline ? html`<${Icon} name="account" size=${18} />` : current && html`<${Dot} color=${current.color} />`}

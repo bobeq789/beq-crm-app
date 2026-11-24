@@ -258,7 +258,8 @@ export function PipelinePage({ params }) {
   const sales = acts.filter((a) => activityArea(a) === 'sales')
   const openCount = items.filter((x) => cardKind(x.card) !== 'done').length
 
-  const title = self ? 'Meine Pipeline' : `Pipeline von ${name}`
+  // Auch die eigene mit Vornamen (Wunsch vom 24.11.2026), ohne Namen im Team „Meine Pipeline“
+  const title = self ? (name && name !== person ? `Pipeline von ${firstName(name)}` : 'Meine Pipeline') : `Pipeline von ${name}`
   const givenLabel = self ? 'Von mir vergeben' : `Von ${firstName(name)} vergeben`
   const emptyActs = !self ? 'Nichts, was dich betrifft.' : mode === 'vergeben' ? 'Nichts an andere vergeben.' : 'Nichts offen.'
 
