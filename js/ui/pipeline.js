@@ -39,6 +39,8 @@ import {
   closeDialog,
   toast,
   isSuperAdmin,
+  isAdmin,
+  isMentioned,
 } from '../store.js'
 import { navigate, openCard, setParam } from '../router.js'
 import { PageHead, Modal, Field, ProjectSelect, Avatar, Empty, activityWhen, dialogKinds, useIsMobile } from './common.js'
@@ -54,13 +56,25 @@ export const PIPELINE_COLUMNS = [
 const DONE_LIMIT = 15
 const LIST_LIMIT = 8
 
-// Wessen Pipeline? Ohne Angabe die eigene. Andere nur für den Super-Admin, nur aktive
-// Teammitglieder (keine Gäste).
-function personOf(param) {
-  if (!isSuperAdmin()) return norm(myEmail())
-  const e = norm(param || '')
-  return activeMembers().find((t) => norm(t.email) === e) ? e : norm(myEmail())
+// Wessen Pipeline darf ich öffnen? (Entscheidung vom 24.11.2026, vorher nur der Super-Admin)
+// Admins und Super-Admin alle aktiven Teammitglieder, ein Teamlead die seines Sales-Teams, alle
+// anderen nur die eigene. Nur eine Ansicht: Deals und Aktivitäten sieht das Team ohnehin.
+export function pipelinePeople() {
+  const me = norm(myEmail())
+  const members = activeMembers()
+  if (isSuperAdmin() || isAdmin()) return members
+  const self = members.find((t) => norm(t.email) === me)
+  if (self && self.team_lead && self.sales_team) return members.filter((t) => t.sales_team === self.sales_team)
+  return members.filter((t) => norm(t.email) === me)
 }
+// Ohne Angabe die eigene Pipeline
+function personOf(param) {
+  const e = norm(param || '')
+  return pipelinePeople().some((t) => norm(t.email) === e) ? e : norm(myEmail())
+}
+// In der Pipeline einer anderen Person nur Aktivitäten, die mich betreffen: ich bin zuständig
+// oder im Deal erwähnt. Sonst wird es unübersichtlich (Entscheidung vom 24.11.2026).
+const concernsMeActivity = (a) => activityHolder(a) === norm(myEmail()) || (!!a.card_id && isMentioned(a.card_id))
 
 // Deals der Pipeline mit Hinweis. mode: 'zustaendig' oder 'vergeben'. Die Checkliste
 // (unteraufgaben) zeigt die App seit dem 24.11.2026 nicht mehr (Entscheidung: nur Aktivitäten).
@@ -234,6 +248,7 @@ export function PipelinePage({ params }) {
       const card = a.card_id ? getCard(a.card_id) : null
       if (!card || card.project_id !== project) return false
     }
+    if (!self && !concernsMeActivity(a)) return false
     return activityMatches(a, query)
   })
   const intern = acts.filter((a) => activityArea(a) === 'intern')
@@ -242,16 +257,17 @@ export function PipelinePage({ params }) {
 
   const title = self ? 'Meine Pipeline' : `Pipeline von ${name}`
   const givenLabel = self ? 'Von mir vergeben' : `Von ${firstName(name)} vergeben`
-  const emptyActs = mode === 'vergeben' ? 'Nichts an andere vergeben.' : 'Nichts offen.'
+  const emptyActs = !self ? 'Nichts, was dich betrifft.' : mode === 'vergeben' ? 'Nichts an andere vergeben.' : 'Nichts offen.'
 
   const lists = html`
+    ${!self && html`<p class="muted small pl-acts-hint">Hier stehen nur Aktivitäten, für die du zuständig bist oder in deren Deal du erwähnt wurdest.</p>`}
     <${ActivityList} title="Aktivitäten intern" list=${intern} mode=${mode} empty=${emptyActs} />
     <${ActivityList} title="Aktivitäten Sales" list=${sales} mode=${mode} empty=${emptyActs} />`
 
   const filters = html`<div class="board-filters pl-filters">
-    ${isSuperAdmin() &&
+    ${pipelinePeople().length > 1 &&
     html`<select value=${person} aria-label="Pipeline von" onChange=${(e) => setParam('von', norm(e.target.value) === norm(myEmail()) ? null : e.target.value, true)}>
-      ${activeMembers().map((t) => html`<option value=${norm(t.email)}>${norm(t.email) === norm(myEmail()) ? 'Meine Pipeline' : 'Pipeline von ' + t.name}</option>`)}
+      ${pipelinePeople().map((t) => html`<option value=${norm(t.email)}>${norm(t.email) === norm(myEmail()) ? 'Meine Pipeline' : 'Pipeline von ' + t.name}</option>`)}
     </select>`}
     <div class="segmented" role="group" aria-label="Ansicht">
       <button type="button" class=${mode === 'zustaendig' ? 'active' : ''} aria-pressed=${mode === 'zustaendig'} onClick=${() => setParam('ansicht', null, true)}>Zuständig</button>
@@ -300,6 +316,7 @@ export function PipelinePage({ params }) {
           )}
         </div>
         <div class="board-mobile"><${PipelineColumn} col=${col} items=${byKind[col.kind]} draggable=${false} viewer=${person} /></div>`}
+      ${!self && tab !== 'aufgaben' && html`<p class="muted small pl-acts-hint">Hier stehen nur Aktivitäten, für die du zuständig bist oder in deren Deal du erwähnt wurdest.</p>`}
       ${tab === 'intern' && html`<${ActivityList} title="Aktivitäten intern" list=${intern} mode=${mode} empty=${emptyActs} />`}
       ${tab === 'sales' && html`<${ActivityList} title="Aktivitäten Sales" list=${sales} mode=${mode} empty=${emptyActs} />`}
       <button type="button" class="fab" aria-label="Neuer Deal" onClick=${newTask}><${Icon} name="plus" size=${26} /></button>
