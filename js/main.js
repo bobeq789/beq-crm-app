@@ -1,12 +1,13 @@
 // Einstieg der App: Rahmen (Kopfleiste, Navigation), Seitenwahl, Fenster über der Seite, Service Worker
 import { html, render, useEffect } from './lib/preact.js'
 import { Icon } from './lib/icons.js'
-import { useStore, boot, isDemo, isGuest, state } from './store.js'
+import { useStore, boot, isDemo, isGuest, isSuperAdmin, state } from './store.js'
 import { useRoute } from './router.js'
 import { Dialogs, Toasts } from './ui/common.js'
 import { Overview, overviewCount } from './ui/overview.js'
 import { Board } from './ui/board.js'
 import { PipelinePage } from './ui/pipeline.js'
+import { TeamPage } from './ui/team.js'
 import { CardPanel } from './ui/card.js'
 import { CalendarPage, EventPanel } from './ui/calendar.js'
 import { MeetingsList, MeetingDetail, MeetingNew } from './ui/meetings.js'
@@ -35,7 +36,10 @@ const NAV_TEAM = [
   { key: 'meetings', label: 'Meetings', icon: 'meetings' },
   { key: 'kontakte', label: 'Kontakte', icon: 'contacts' },
   { key: 'firmen', label: 'Firmen', icon: 'orgs' },
+  // Team-Überblick nur für den Super-Admin (beQ Backoffice, Entscheidung vom 24.11.2026)
+  { key: 'team', label: 'Team', icon: 'users', superAdmin: true },
 ]
+const navTeam = () => NAV_TEAM.filter((n) => !n.superAdmin || isSuperAdmin())
 const NAV_GUEST = [
   { key: 'geteilt', label: 'Geteilt', icon: 'share' },
   { key: 'chat', label: 'Chat', icon: 'chat' },
@@ -44,10 +48,10 @@ const NAV_GUEST = [
 // (36_meine_pipeline.sql) steht dort die eigene Pipeline, die Boards der Projekte unter „Mehr“.
 const MOBILE_MAIN = ['', 'pipeline', 'chat', 'postfach', 'kalender']
 // Am Rechner zwischen 760 und 1279 px stecken diese zusätzlich hinter „Mehr“ (styles.css, .nav-minor)
-const NAV_MINOR = ['meetings', 'firmen']
+const NAV_MINOR = ['meetings', 'firmen', 'team']
 
 function NavMore() {
-  const more = NAV_TEAM.filter((n) => !MOBILE_MAIN.includes(n.key))
+  const more = navTeam().filter((n) => !MOBILE_MAIN.includes(n.key))
   return html`<${Modal} title="Mehr" onClose=${closeDialog}>
     <ul class="nav-more">
       ${more.map(
@@ -79,6 +83,8 @@ function Page({ route }) {
       return html`<${ChatPage} raumId=${id} verlauf=${route.params.get('verlauf')} nachricht=${route.params.get('nachricht')} />`
     case 'pipeline':
       return html`<${PipelinePage} params=${route.params} />`
+    case 'team':
+      return html`<${TeamPage} />`
     case 'sales':
       return html`<${SalesPage} />`
     case 'kalender':
@@ -124,7 +130,7 @@ function useAppBadge(n) {
 
 function Shell({ route }) {
   const guest = isGuest()
-  const nav = guest ? NAV_GUEST : NAV_TEAM
+  const nav = guest ? NAV_GUEST : navTeam()
   const counts = guest ? { chat: unreadTotal() } : { '': overviewCount(), postfach: state.followUp.newMail.length, chat: unreadTotal() }
   const countText = { '': 'fällig', postfach: 'neu', chat: 'ungelesen' }
   useAppBadge(counts[''] || 0)

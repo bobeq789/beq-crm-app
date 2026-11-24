@@ -9,7 +9,8 @@
 // (aktivitaeten.bereich), gruppiert nach Überfällig, Heute, Diese Woche, Später.
 // „Von mir vergeben“ zeigt, was die Person anderen gegeben hat (cards.vergeben_von, angelegte
 // Unteraufgaben und Aktivitäten für andere).
-// Alle im Team dürfen die Pipeline anderer ansehen (Aufgaben sieht ohnehin das ganze Team).
+// Die Pipeline anderer sieht nur der Super-Admin (beQ Backoffice, Entscheidung vom 24.11.2026),
+// alle anderen nur ihre eigene.
 // Adresse: #/pipeline?von=<Adresse>&ansicht=vergeben
 import { html, useState } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
@@ -37,6 +38,7 @@ import {
   openDialog,
   closeDialog,
   toast,
+  isSuperAdmin,
 } from '../store.js'
 import { navigate, openCard, setParam } from '../router.js'
 import { PageHead, Modal, Field, ProjectSelect, Avatar, Empty, activityWhen, dialogKinds, useIsMobile } from './common.js'
@@ -52,8 +54,10 @@ export const PIPELINE_COLUMNS = [
 const DONE_LIMIT = 15
 const LIST_LIMIT = 8
 
-// Wessen Pipeline? Ohne Angabe die eigene. Nur aktive Teammitglieder (keine Gäste).
+// Wessen Pipeline? Ohne Angabe die eigene. Andere nur für den Super-Admin, nur aktive
+// Teammitglieder (keine Gäste).
 function personOf(param) {
+  if (!isSuperAdmin()) return norm(myEmail())
   const e = norm(param || '')
   return activeMembers().find((t) => norm(t.email) === e) ? e : norm(myEmail())
 }
@@ -262,9 +266,10 @@ export function PipelinePage({ params }) {
     <${ActivityList} title="Aktivitäten Sales" list=${sales} mode=${mode} empty=${emptyActs} />`
 
   const filters = html`<div class="board-filters pl-filters">
-    <select value=${person} aria-label="Pipeline von" onChange=${(e) => setParam('von', norm(e.target.value) === norm(myEmail()) ? null : e.target.value, true)}>
+    ${isSuperAdmin() &&
+    html`<select value=${person} aria-label="Pipeline von" onChange=${(e) => setParam('von', norm(e.target.value) === norm(myEmail()) ? null : e.target.value, true)}>
       ${activeMembers().map((t) => html`<option value=${norm(t.email)}>${norm(t.email) === norm(myEmail()) ? 'Meine Pipeline' : 'Pipeline von ' + t.name}</option>`)}
-    </select>
+    </select>`}
     <div class="segmented" role="group" aria-label="Ansicht">
       <button type="button" class=${mode === 'zustaendig' ? 'active' : ''} aria-pressed=${mode === 'zustaendig'} onClick=${() => setParam('ansicht', null, true)}>Zuständig</button>
       <button type="button" class=${mode === 'vergeben' ? 'active' : ''} aria-pressed=${mode === 'vergeben'} onClick=${() => setParam('ansicht', 'vergeben', true)}>${givenLabel}</button>

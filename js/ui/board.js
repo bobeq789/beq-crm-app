@@ -43,7 +43,8 @@ import {
   subtasksOf,
 } from '../store.js'
 import { navigate, openCard } from '../router.js'
-import { PageHead, Dot, Avatar, PrioBadge, DueBadge, NewBadge, Modal, Field, Empty, Labels, ActivityBadge, dialogKinds, useIsMobile } from './common.js'
+import { PageHead, Dot, Avatar, PrioBadge, DueBadge, NewBadge, Modal, Field, Empty, Labels, ActivityBadge, dialogKinds, useIsMobile, Segmented } from './common.js'
+import { CardTable } from './cardtable.js'
 
 const DONE_LIMIT = 15
 
@@ -444,6 +445,12 @@ export function Board({ projectId, archiveOpen = false, archiveQuery = '' }) {
   const [mobileStage, setMobileStage] = useState(null)
   const [renaming, setRenaming] = useState(null)
   const [addingAt, setAddingAt] = useState(null)
+  // Board oder Liste (Entscheidung vom 24.11.2026), je Gerät gemerkt
+  const [view, setView] = useState(() => (local.get('beqcrm-board-view', 'board') === 'liste' ? 'liste' : 'board'))
+  const changeView = (v) => {
+    setView(v)
+    local.set('beqcrm-board-view', v)
+  }
 
   useEffect(() => {
     if (current) local.set('beqcrm-last-project', current.id)
@@ -573,6 +580,7 @@ export function Board({ projectId, archiveOpen = false, archiveQuery = '' }) {
     </div>
 
     <div class="board-filters">
+      <${Segmented} label="Ansicht" value=${view} onChange=${changeView} options=${[{ value: 'board', label: 'Board' }, { value: 'liste', label: 'Liste' }]} />
       <label class="search">
         <${Icon} name="search" size=${18} />
         <input type="search" value=${query} placeholder="Suchen: Titel, Kontakt, Firma" aria-label="Board durchsuchen" onInput=${(e) => setQuery(e.target.value)} />
@@ -596,7 +604,25 @@ export function Board({ projectId, archiveOpen = false, archiveQuery = '' }) {
       </a>
     </p>`}
 
-    ${mobile
+    ${view === 'liste'
+      ? html`<${CardTable} cards=${filtered} />
+          ${mobile &&
+          html`<button
+            type="button"
+            class="fab"
+            aria-label="Neue Aufgabe"
+            onClick=${async () => {
+              const title = await promptDialog({ title: 'Neue Aufgabe', label: 'Titel', confirmLabel: 'Anlegen' })
+              const first = stages.find((s) => s.kind === 'todo') || stages[0]
+              if (title && first) {
+                const card = await addCard(title, first.id)
+                if (card) openCard(card.id)
+              }
+            }}
+          >
+            <${Icon} name="plus" size=${26} />
+          </button>`}`
+      : mobile
       ? html`<div class="stage-tabs" role="tablist" aria-label="Spalten">
             ${stages.map(
               (s) => html`<button
