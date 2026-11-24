@@ -1673,3 +1673,7 @@ button.chat-item.chat-person { width: 100%; border: 0; background: none; font: i
 .chat-presence { margin-left: auto; font-size: 13px; color: var(--muted); }
 .chat-presence.on { color: var(--accent-text); font-weight: 500; }
 .chat-list-head .muted { font-weight: 400; text-transform: none; letter-spacing: 0; }
+/* Verbundener Kalender ohne Termine (Wunsch vom 24.11.2026) */
+.cal-name { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.cal-empty-hint { font-size: 12px; font-weight: 400; color: var(--muted); line-height: 1.2; }
+.cal-toggles .cal-toggle:has(.cal-empty-hint) { min-height: 44px; border-radius: 12px; }

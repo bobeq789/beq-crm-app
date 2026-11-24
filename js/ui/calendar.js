@@ -309,7 +309,7 @@ export function CalendarPage() {
 
   const newEvent = () => openDialog({ kind: 'new-event' })
 
-  if (!state.db.events.length) {
+  if (!state.db.events.length && !cals.length) {
     return html`<div class="page">
       <${PageHead}
         kicker="Kalender"
@@ -351,7 +351,8 @@ export function CalendarPage() {
           ${cals.map(
             (c) => html`<li>
               <button type="button" class=${'cal-toggle' + (hidden.has(c.id) ? ' off' : '')} aria-pressed=${!hidden.has(c.id)} onClick=${() => toggleCal(c.id)}>
-                <${Dot} color=${c.color} /> ${c.name}
+                <${Dot} color=${c.color} />
+                <span class="cal-name">${c.name}${c.empty && html`<span class="cal-empty-hint" title="Verbunden, aber noch keine Termine im Abgleich">verbunden, keine Termine</span>`}</span>
               </button>
             </li>`
           )}

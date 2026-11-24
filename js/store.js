@@ -1184,10 +1184,25 @@ export function sharesOf(cardId) {
 }
 
 // Termine: Kalender, Zeitraum, Bezug zu Kontakten
+// Farbe aus der Palette, fest je Kalender, für Kalender ohne Termine (mit Terminen gilt die Farbe aus der Datenbank)
+const CAL_PALETTE = ['#37BA98', '#34495A', '#27836B', '#5B6B75', '#9AA7B0', '#BFEADF']
+function paletteColor(id) {
+  let h = 0
+  for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) | 0
+  return CAL_PALETTE[Math.abs(h) % CAL_PALETTE.length]
+}
+// Kalender für die Liste links: aus den Terminen, dazu jeder verbundene Hauptkalender eines
+// sichtbaren Postfachs, auch ohne Termine (Wunsch vom 24.11.2026). Wer welches Postfach sieht,
+// regelt die Datenbank (eigene, der Super-Admin alle), genau wie bei den Terminen.
 export function calendars() {
   const map = new Map()
   state.db.events.forEach((e) => {
     if (!map.has(e.calendar_id)) map.set(e.calendar_id, { id: e.calendar_id, name: e.calendar_name || e.calendar_id, color: e.calendar_color || '#37BA98' })
+  })
+  ;(state.db.mailboxes || []).forEach((b) => {
+    const id = norm(b.address)
+    if (b.status !== 'aktiv' || b.sync_calendar === false || map.has(id)) return
+    map.set(id, { id, name: memberName(id) || id, color: paletteColor(id), empty: true })
   })
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'de'))
 }

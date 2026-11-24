@@ -253,6 +253,12 @@ export function PostfachPage() {
   return html`<div class="page page-wide">
     <${PageHead} kicker="Postfach" title="Postfach" actions=${actions} />
     <div class="pf-toolbar">
+      ${/* Postfach zuerst (Wunsch vom 24.11.2026), dann Ordner und Suche */ ''}
+      ${boxes.length > 1 &&
+      html`<select class="pf-box" aria-label="Postfach" value=${box} onChange=${(e) => setBox(e.target.value)}>
+        <option value="">Alle Postfächer</option>
+        ${boxes.map((b) => html`<option value=${b.address}>${b.address}</option>`)}
+      </select>`}
       <${Segmented}
         label="Ordner"
         value=${folder}
@@ -267,11 +273,6 @@ export function PostfachPage() {
           { value: 'ohne', label: 'Ohne Antwort' },
         ]}
       />
-      ${boxes.length > 1 &&
-      html`<select aria-label="Postfach" value=${box} onChange=${(e) => setBox(e.target.value)}>
-        <option value="">Alle Postfächer</option>
-        ${boxes.map((b) => html`<option value=${b.address}>${b.address}</option>`)}
-      </select>`}
       <label class="search pf-search">
         <${Icon} name="search" size=${18} />
         <input type="search" value=${query} placeholder="Suchen: Betreff, Absender, Empfänger" aria-label="Mails durchsuchen" onInput=${(e) => setQuery(e.target.value)} />
