@@ -4,7 +4,7 @@
 // Anfragen an Supabase (andere Adresse) laufen nie über den Cache.
 // Zeigt Mitteilungen aus dem Chat an (34_chat_push.sql, Edge Function „chat-push“) und öffnet beim
 // Antippen die App an der richtigen Stelle.
-const VERSION = 'beqcrm-v50'
+const VERSION = 'beqcrm-v51'
 const FILES = [
   './',
   'index.html',

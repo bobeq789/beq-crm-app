@@ -139,6 +139,8 @@ export function errorText(err) {
   if (/guest_guard|Gäste dürfen/i.test(msg)) return 'Als Gast kannst du hier nur Spalte, Dringlichkeit, Fälligkeit und Zuständig ändern.'
   // Meldungen aus 25_claude_zugang.sql (Freigabe für Claude) sind schon für Menschen geschrieben
   if (/Claude-Zugang|Claude kann|zuerst mit dem zweiten Faktor|Kennung des Claude/i.test(msg)) return msg
+  // Sperre aus 44_deals_nur_archivieren.sql
+  if (/nur archivieren/i.test(msg)) return msg
   // Meldungen aus 39_kalender_abos.sql ebenso
   if (/Kalender-Link|abonnierte Kalender|Kalender abonnieren|Diesen Kalender gibt es nicht|Namen mit höchstens|Bitte einen Namen/i.test(msg)) return msg
   if (code === '42501' || /row-level security|permission denied/i.test(msg)) return 'Keine Berechtigung für diese Änderung.'

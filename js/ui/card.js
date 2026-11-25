@@ -15,7 +15,6 @@ import {
   insert,
   remove,
   memberName,
-  confirmDialog,
   toast,
   isGuest,
   myActiveMailboxes,
@@ -287,14 +286,6 @@ export function CardPanel({ id }) {
     set(patch)
   }
 
-  const del = async () => {
-    const ok = await confirmDialog({ title: 'Deal löschen?', text: `„${card.title}“ und seine Notizen sind danach weg.`, confirmLabel: 'Löschen', danger: true })
-    if (!ok) return
-    closeCard()
-    await remove('cards', card.id)
-    toast('Deal gelöscht')
-  }
-
   return html`<${PanelFrame} card=${card} project=${project}>
     <textarea
       class="title-input"
@@ -392,10 +383,10 @@ export function CardPanel({ id }) {
     <div class="panel-foot">
       <span class="muted small">Angelegt von ${memberName(card.created_by) || 'unbekannt'} ${fmtRelative(card.created_at)}</span>
       <div class="panel-actions">
+        ${/* Deals nur archivieren, nie löschen (44_deals_nur_archivieren.sql, Wunsch vom 25.11.2026) */ ''}
         <button type="button" class="btn" onClick=${() => set({ archived: !card.archived })}>
           <${Icon} name="archive" size=${16} /> ${card.archived ? 'Aus dem Archiv holen' : 'Archivieren'}
         </button>
-        <button type="button" class="btn btn-danger-text" onClick=${del}><${Icon} name="trash" size=${16} /> Löschen</button>
       </div>
     </div>
   <//>`
