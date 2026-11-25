@@ -243,6 +243,10 @@ ul { margin: 0; padding: 0; list-style: none; }
 .tile-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; font-weight: 500; }
 .group-title { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin: 18px 0 6px; }
 .task-group:first-of-type .group-title, .tile-head + .task-group .group-title { margin-top: 4px; }
+/* Erklärungen in der Kachel „Team“ (Wunsch vom 25.11.2026) */
+.tile-hint { margin: 0 0 4px; line-height: 1.4; }
+.group-hint { margin: -2px 0 8px; line-height: 1.4; }
+.tile-hint + .task-group .group-title { margin-top: 10px; }
 .section-title { font-size: 16px; font-weight: 700; margin: 24px 0 10px; }
 
 .overview-grid, .detail-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: var(--gap); align-items: start; }

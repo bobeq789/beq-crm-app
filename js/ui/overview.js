@@ -274,21 +274,26 @@ function TeamTile({ drag }) {
     })
     .sort((a, b) => String(a.since).localeCompare(String(b.since)))
   // Die Zahl zählt immer alle, sichtbar sind zuerst 8, „Alle n anzeigen“ klappt den Rest auf
+  // Kurze Erklärung je Gruppe (Wunsch vom 25.11.2026: sonst schwer nachvollziehbar)
   return html`<${Tile} title="Team" drag=${drag}>
+    <p class="tile-hint muted small">Was andere dir geschickt oder gegeben haben und was du anderen gegeben hast. Deine eigenen Deals stehen unter „Zu erledigen“.</p>
     <div class="task-group">
       <h3 class="group-title">Du wurdest erwähnt ${mentioned.length > 0 && html`<span class="count">${mentioned.length}</span>`}</h3>
+      <p class="group-hint muted small">Jemand hat dich in einer Notiz mit @Name angesprochen. Verschwindet, sobald du den Deal öffnest.</p>
       ${mentioned.length
         ? html`<${MoreList} items=${mentioned} render=${(c) => html`<${TaskRow} card=${c} key=${c.id} />`} />`
         : html`<${Empty}>Niemand hat dich neu erwähnt.<//>`}
     </div>
     <div class="task-group">
       <h3 class="group-title">Dir neu gegeben ${given.length > 0 && html`<span class="count">${given.length}</span>`}</h3>
+      <p class="group-hint muted small">Jemand hat dich zuständig gemacht, als weitere Zuständige eingetragen oder den Deal für dich angelegt. Verschwindet, sobald du den Deal öffnest.</p>
       ${given.length
         ? html`<${MoreList} items=${given} render=${(x) => html`<${TaskRow} card=${x.card} key=${x.card.id} showSince=${true} sinceText=${givenText(x.g)} />`} />`
         : html`<${Empty}>Dir hat niemand etwas Neues gegeben.<//>`}
     </div>
     <div class="task-group">
       <h3 class="group-title">Von dir vergeben ${elsewhere.length > 0 && html`<span class="count">${elsewhere.length}</span>`}</h3>
+      <p class="group-hint muted small">Deals, die du jemand anderem gegeben hast und die noch offen sind, mit „seit“. So siehst du, was bei anderen liegt. Verschwindet, wenn der Deal erledigt ist.</p>
       ${elsewhere.length
         ? html`<${MoreList} items=${elsewhere} render=${(x) => html`<${TaskRow} card=${x.card} key=${x.card.id} showSince=${true} sinceText=${sinceLabel(x.since)} />`} />`
         : html`<${Empty}>Gerade hast du nichts an andere vergeben.<//>`}
