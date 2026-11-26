@@ -25,6 +25,7 @@ import {
   openActivitiesOfCard,
 } from '../store.js'
 import { Field } from './common.js'
+import { t, stageLabel } from '../i18n.js'
 
 const STATUS = [
   { value: 'offen', label: 'Offen' },
@@ -72,18 +73,18 @@ function NoDeal({ card }) {
       status: 'offen',
       probability: stage && stage.probability != null ? stage.probability : null,
     })
-    if (saved) toast('Wert und Status angelegt')
+    if (saved) toast(t('Wert und Status angelegt'))
   }
   return html`<section class="deal">
-    <h3 class="section-title">Wert und Status</h3>
+    <h3 class="section-title">${t('Wert und Status')}</h3>
     ${owner === undefined
-      ? html`<p class="muted small">Wird geladen …</p>`
+      ? html`<p class="muted small">${t('Wird geladen …')}</p>`
       : owner
         ? html`<p class="muted small">
-            Wert und Status dieses Deals führt ${memberName(owner)}. Die Zahlen sehen nur ${firstName(memberName(owner))} selbst, der Teamlead und die Admins.
+            ${t('Wert und Status dieses Deals führt {name}. Die Zahlen sehen nur {first} selbst, der Teamlead und die Admins.', { name: memberName(owner), first: firstName(memberName(owner)) })}
           </p>`
-        : html`<p class="muted small">Noch kein Wert. Mit Wert und Status zählt dieser Deal in „Sales“ mit Produkten und Abschluss.</p>
-            <button type="button" class="btn" onClick=${create}><${Icon} name="plus" size=${16} /> Wert eintragen</button>`}
+        : html`<p class="muted small">${t('Noch kein Wert. Mit Wert und Status zählt dieser Deal in „Sales“ mit Produkten und Abschluss.')}</p>
+            <button type="button" class="btn" onClick=${create}><${Icon} name="plus" size=${16} /> ${t('Wert eintragen')}</button>`}
   </section>`
 }
 
@@ -104,9 +105,10 @@ function DealEditor({ card, deal }) {
       const stage = getStage(move.stageId)
       // Offene Aktivitäten halten die Aufgabe aus dem Archiv (24_archiv.sql)
       const later = openActivitiesOfCard(card.id).length
-        ? 'Ins Archiv kommt er, sobald seine offenen Aktivitäten erledigt sind und er 30 Tage nicht geändert wurde.'
-        : 'Nach 30 Tagen ohne Änderung kommt er ins Archiv.'
-      toast(`Deal ${s.label.toLowerCase()}. Er steht jetzt in „${stage ? stage.name : 'Erledigt'}“. ${later}`)
+        ? t('Ins Archiv kommt er, sobald seine offenen Aktivitäten erledigt sind und er 30 Tage nicht geändert wurde.')
+        : t('Nach 30 Tagen ohne Änderung kommt er ins Archiv.')
+      const what = { offen: 'Deal offen.', gewonnen: 'Deal gewonnen.', verloren: 'Deal verloren.' }[s.value]
+      toast(`${t(what)} ${t('Er steht jetzt in „{stage}“.', { stage: stage ? stageLabel(stage.name) : t('Erledigt') })} ${later}`)
     }
   }
 
@@ -116,7 +118,7 @@ function DealEditor({ card, deal }) {
   const saveValue = () => {
     const cents = parseEuro(value)
     if (cents === null) {
-      toast('Bitte einen Betrag in Euro eingeben, zum Beispiel 9.800.', { error: true })
+      toast(t('Bitte einen Betrag in Euro eingeben, zum Beispiel 9.800.'), { error: true })
       setValue(euroInput(deal.value_cents))
     } else if (cents !== Number(deal.value_cents)) set({ value_cents: cents })
   }
@@ -145,25 +147,25 @@ function DealEditor({ card, deal }) {
   }
   const removeDeal = async () => {
     const ok = await confirmDialog({
-      title: 'Wert und Status entfernen?',
-      text: 'Wert, Produkte und Status dieses Deals sind danach weg. Der Deal selbst bleibt.',
-      confirmLabel: 'Entfernen',
+      title: t('Wert und Status entfernen?'),
+      text: t('Wert, Produkte und Status dieses Deals sind danach weg. Der Deal selbst bleibt.'),
+      confirmLabel: t('Entfernen'),
       danger: true,
     })
-    if (ok && (await remove('deals', deal.id))) toast('Wert und Status entfernt')
+    if (ok && (await remove('deals', deal.id))) toast(t('Wert und Status entfernt'))
   }
 
   return html`<section class="deal">
     <div class="deal-head">
-      <h3 class="section-title">Wert und Status</h3>
+      <h3 class="section-title">${t('Wert und Status')}</h3>
       <div class="deal-value">
         <strong>${fmtEuro(deal.value_cents)}</strong>
-        <span class="muted small">netto</span>
+        <span class="muted small">${t('netto')}</span>
       </div>
     </div>
 
     <${Field} label="Status">
-      <div class="chips" role="group" aria-label="Status des Deals">
+      <div class="chips" role="group" aria-label=${t('Status des Deals')}>
         ${STATUS.map(
           (s) => html`<button
             type="button"
@@ -171,7 +173,7 @@ function DealEditor({ card, deal }) {
             aria-pressed=${deal.status === s.value}
             onClick=${() => deal.status !== s.value && setStatus(s)}
           >
-            ${s.label}
+            ${t(s.label)}
           </button>`
         )}
       </div>
@@ -181,7 +183,7 @@ function DealEditor({ card, deal }) {
       <input
         id="deal-reason"
         value=${reason}
-        placeholder="zum Beispiel Budget, anderer Anbieter, kein Bedarf"
+        placeholder=${t('zum Beispiel Budget, anderer Anbieter, kein Bedarf')}
         onInput=${(e) => setReason(e.target.value)}
         onBlur=${() => reason.trim() !== (deal.lost_reason || '') && set({ lost_reason: reason.trim() || null })}
       />
@@ -208,7 +210,7 @@ function DealEditor({ card, deal }) {
                 step="5"
                 inputmode="numeric"
                 value=${deal.probability ?? ''}
-                placeholder="[offen]"
+                placeholder=${t('[offen]')}
                 onChange=${(e) => {
                   const v = e.target.value === '' ? null : Math.max(0, Math.min(100, Math.round(Number(e.target.value))))
                   set({ probability: Number.isFinite(v) ? v : null })
@@ -220,14 +222,14 @@ function DealEditor({ card, deal }) {
           <//>`}
     </div>
 
-    <h4 class="deal-sub">Produkte</h4>
+    <h4 class="deal-sub">${t('Produkte')}</h4>
     ${items.length > 0 &&
     html`<ul class="deal-items">
       ${items.map((i) => html`<${ItemRow} key=${i.id} item=${i} onChange=${(patch) => changeItem(i, patch)} onRemove=${() => removeItem(i)} />`)}
     </ul>`}
     <div class="deal-add">
-      <select aria-label="Produkt hinzufügen" value="" onChange=${(e) => e.target.value && addItem(e.target.value)}>
-        <option value="">Produkt hinzufügen …</option>
+      <select aria-label=${t('Produkt hinzufügen')} value="" onChange=${(e) => e.target.value && addItem(e.target.value)}>
+        <option value="">${t('Produkt hinzufügen …')}</option>
         ${products.map((p) => html`<option value=${p.id}>${p.name} (${fmtEuro(p.price_cents)})</option>`)}
       </select>
     </div>
@@ -236,11 +238,11 @@ function DealEditor({ card, deal }) {
           <input id="deal-value" inputmode="decimal" value=${value} onInput=${(e) => setValue(e.target.value)} onBlur=${saveValue} />
         <//>`
       : places + bonus > 0 &&
-        html`<p class="muted small">${places + bonus} Netzwerkplätze${bonus > 0 ? ` (${places} bezahlt, ${bonus} gratis)` : ''}</p>`}
+        html`<p class="muted small">${t('{n} Netzwerkplätze', { n: places + bonus })}${bonus > 0 ? ' ' + t('({paid} bezahlt, {free} gratis)', { paid: places, free: bonus }) : ''}</p>`}
 
     <div class="deal-foot">
-      <span class="muted small">${people.length > 1 ? '' : 'Besitzer: ' + memberName(deal.owner)}</span>
-      <button type="button" class="btn btn-danger-text" onClick=${removeDeal}><${Icon} name="trash" size=${16} /> Wert und Status entfernen</button>
+      <span class="muted small">${people.length > 1 ? '' : t('Besitzer: {name}', { name: memberName(deal.owner) })}</span>
+      <button type="button" class="btn btn-danger-text" onClick=${removeDeal}><${Icon} name="trash" size=${16} /> ${t('Wert und Status entfernen')}</button>
     </div>
   </section>`
 }
@@ -259,7 +261,7 @@ function ItemRow({ item, onChange, onRemove }) {
     const p = parseEuro(price)
     const d = Number(String(disc).replace(',', '.'))
     if (!(q > 0) || p === null || !(d >= 0 && d <= 100)) {
-      toast('Menge über 0, Preis in Euro und Rabatt zwischen 0 und 100 Prozent, bitte.', { error: true })
+      toast(t('Menge über 0, Preis in Euro und Rabatt zwischen 0 und 100 Prozent, bitte.'), { error: true })
       setQty(String(Number(item.quantity)))
       setPrice(euroInput(item.unit_price_cents))
       setDisc(String(Number(item.discount_percent || 0)))
@@ -271,10 +273,10 @@ function ItemRow({ item, onChange, onRemove }) {
   }
   return html`<li class="deal-item">
     <span class="deal-item-name">${item.name}</span>
-    <label class="deal-num"><span>Menge</span><input inputmode="decimal" value=${qty} onInput=${(e) => setQty(e.target.value)} onBlur=${save} /></label>
-    <label class="deal-num wide"><span>Preis €</span><input inputmode="decimal" value=${price} onInput=${(e) => setPrice(e.target.value)} onBlur=${save} /></label>
-    <label class="deal-num"><span>Rabatt %</span><input inputmode="decimal" value=${disc} onInput=${(e) => setDisc(e.target.value)} onBlur=${save} /></label>
+    <label class="deal-num"><span>${t('Menge')}</span><input inputmode="decimal" value=${qty} onInput=${(e) => setQty(e.target.value)} onBlur=${save} /></label>
+    <label class="deal-num wide"><span>${t('Preis €')}</span><input inputmode="decimal" value=${price} onInput=${(e) => setPrice(e.target.value)} onBlur=${save} /></label>
+    <label class="deal-num"><span>${t('Rabatt %')}</span><input inputmode="decimal" value=${disc} onInput=${(e) => setDisc(e.target.value)} onBlur=${save} /></label>
     <strong class="deal-item-sum">${fmtEuro(itemTotal(item))}</strong>
-    <button type="button" class="icon-btn small" aria-label=${'„' + item.name + '“ entfernen'} onClick=${onRemove}><${Icon} name="trash" size=${16} /></button>
+    <button type="button" class="icon-btn small" aria-label=${t('„{name}“ entfernen', { name: item.name })} onClick=${onRemove}><${Icon} name="trash" size=${16} /></button>
   </li>`
 }

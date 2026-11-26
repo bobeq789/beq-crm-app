@@ -39,6 +39,7 @@ import {
 } from '../store.js'
 import { closeEvent, openEvent, navigate } from '../router.js'
 import { PageHead, Empty, Dot, Field, Modal, LinkText, Segmented, useIsMobile, dialogKinds, brandSafe, useOverlay } from './common.js'
+import { t, isEnglish } from '../i18n.js'
 
 const HOUR_PX = 48
 const VIEW_KEY = 'beqcrm-cal-view'
@@ -105,7 +106,7 @@ function EventChip({ ev, compact }) {
       openEvent(ev.id)
     }}
   >
-    <span class="event-title">${ev.title || '(ohne Titel)'}</span>
+    <span class="event-title">${ev.title || t('(ohne Titel)')}</span>
     ${!compact && !ev.all_day && html`<span class="event-time">${fmtTimeRange(ev.start_at, ev.end_at, false)}</span>`}
   </button>`
 }
@@ -139,13 +140,13 @@ function WeekGrid({ days, events }) {
       ${days.map(
         (d) => html`<div class=${'week-day-head' + (sameDay(d, now) ? ' today' : '')}>
           <span class="wd">${WEEKDAYS_SHORT[d.getDay()]}</span>
-          <span class="dn">${d.getDate()}.</span>
+          <span class="dn">${d.getDate()}${isEnglish() ? '' : '.'}</span>
         </div>`
       )}
     </div>
     ${allDay.length > 0 &&
     html`<div class="week-allday">
-      <div class="week-gutter small muted">ganztägig</div>
+      <div class="week-gutter small muted">${t('ganztägig')}</div>
       ${days.map((d) => html`<div class="allday-cell">${eventsOnDay(allDay, d).map((ev) => html`<${EventChip} ev=${ev} compact=${true} key=${ev.id} />`)}</div>`)}
     </div>`}
     <div class="week-body" ref=${scrollRef}>
@@ -194,7 +195,7 @@ function EventList({ events, past }) {
       return en >= from && s <= to
     })
     .sort((a, b) => (past ? b.start_at.localeCompare(a.start_at) : a.start_at.localeCompare(b.start_at)))
-  if (!list.length) return html`<${Empty}>${past ? 'In den letzten 30 Tagen gab es keine Termine.' : 'Keine anstehenden Termine.'}<//>`
+  if (!list.length) return html`<${Empty}>${past ? t('In den letzten 30 Tagen gab es keine Termine.') : t('Keine anstehenden Termine.')}<//>`
   const groups = []
   list.forEach((e) => {
     const key = ymd(new Date(e.start_at))
@@ -205,14 +206,14 @@ function EventList({ events, past }) {
   return html`<div class="event-list">
     ${groups.map(
       (g) => html`<section key=${g.key}>
-        <h2 class="group-title">${g.key === ymd(now) ? 'Heute, ' : ''}${fmtDateLong(new Date(g.items[0].start_at))}</h2>
+        <h2 class="group-title">${g.key === ymd(now) ? t('Heute') + ', ' : ''}${fmtDateLong(new Date(g.items[0].start_at))}</h2>
         <ul class="row-list">
           ${g.items.map(
             (e) => html`<li key=${e.id}>
               <button type="button" class="row-link" onClick=${() => openEvent(e.id)}>
-                <span class="row-time">${e.all_day ? 'ganztägig' : fmtTime(e.start_at)}</span>
+                <span class="row-time">${e.all_day ? t('ganztägig') : fmtTime(e.start_at)}</span>
                 <span class="row-main">
-                  <span class="row-title">${e.title || '(ohne Titel)'}</span>
+                  <span class="row-title">${e.title || t('(ohne Titel)')}</span>
                   <span class="row-meta">
                     <span class="meta-item"><${Dot} color=${e.calendar_color} />${e.calendar_name}</span>
                     ${!e.all_day && html`<span>${fmtTimeRange(e.start_at, e.end_at, false)}</span>`}
@@ -242,16 +243,16 @@ function MiniMonth({ anchor, onPick, events }) {
   const inWeek = (d) => d >= weekStart && d < addDaysDate(weekStart, 7)
   return html`<div class="mini-month">
     <div class="mini-head">
-      <button type="button" class="icon-btn small" aria-label="Vorheriger Monat" onClick=${() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>
+      <button type="button" class="icon-btn small" aria-label=${t('Vorheriger Monat')} onClick=${() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>
         <${Icon} name="chevronLeft" size=${16} />
       </button>
       <span>${MONTHS_LONG[month.getMonth()]} ${month.getFullYear()}</span>
-      <button type="button" class="icon-btn small" aria-label="Nächster Monat" onClick=${() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>
+      <button type="button" class="icon-btn small" aria-label=${t('Nächster Monat')} onClick=${() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>
         <${Icon} name="chevron" size=${16} />
       </button>
     </div>
     <div class="mini-grid">
-      ${['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map((w) => html`<span class="mini-wd">${w}</span>`)}
+      ${['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map((w) => html`<span class="mini-wd">${t(w)}</span>`)}
       ${days.map(
         (d) => html`<button
           type="button"
@@ -303,41 +304,45 @@ export function CalendarPage() {
   const title =
     view === 'liste'
       ? past
-        ? 'Letzte 30 Tage'
-        : 'Nächste Termine'
-      : `KW ${isoWeek(days[0])} · ${days[0].getDate()}. bis ${fmtDate(ymd(days[days.length - 1])).replace(/^\S+ /, '')}`
+        ? t('Letzte 30 Tage')
+        : t('Nächste Termine')
+      : t('KW {week} · {from} bis {to}', {
+          week: isoWeek(days[0]),
+          from: days[0].getDate() + (isEnglish() ? '' : '.'),
+          to: fmtDate(ymd(days[days.length - 1])).replace(/^\S+ /, ''),
+        })
 
   const newEvent = () => openDialog({ kind: 'new-event' })
 
   if (!state.db.events.length && !cals.length) {
     return html`<div class="page">
       <${PageHead}
-        kicker="Kalender"
-        title="Kalender"
-        actions=${html`<button type="button" class="btn btn-primary" onClick=${newEvent}><${Icon} name="plus" size=${18} /> Neuer Termin</button>`}
+        kicker=${t('Kalender')}
+        title=${t('Kalender')}
+        actions=${html`<button type="button" class="btn btn-primary" onClick=${newEvent}><${Icon} name="plus" size=${18} /> ${t('Neuer Termin')}</button>`}
       />
       <div class="tile empty-calendar">
         <${Icon} name="calendar" size=${32} />
-        <p><strong>Noch kein Kalender angebunden.</strong></p>
-        <p class="muted">Sobald der Abgleich mit Google Kalender läuft, erscheinen hier die Termine aus euren Kalendern. Neue Termine kannst du trotzdem schon anlegen, sie öffnen sich in Google Kalender.</p>
+        <p><strong>${t('Noch kein Kalender angebunden.')}</strong></p>
+        <p class="muted">${t('Sobald der Abgleich mit Google Kalender läuft, erscheinen hier die Termine aus euren Kalendern. Neue Termine kannst du trotzdem schon anlegen, sie öffnen sich in Google Kalender.')}</p>
       </div>
     </div>`
   }
 
   return html`<div class="page page-calendar">
     <${PageHead}
-      kicker="Kalender"
+      kicker=${t('Kalender')}
       title=${title}
       actions=${html`<${Segmented}
-          label="Ansicht"
+          label=${t('Ansicht')}
           value=${view}
           onChange=${changeView}
           options=${[
-            { value: 'woche', label: 'Woche' },
-            { value: 'liste', label: 'Liste' },
+            { value: 'woche', label: t('Woche') },
+            { value: 'liste', label: t('Liste') },
           ]}
         />
-        <button type="button" class="btn btn-primary" onClick=${newEvent}><${Icon} name="plus" size=${18} /><span class="hide-sm">Neuer Termin</span></button>`}
+        <button type="button" class="btn btn-primary" onClick=${newEvent}><${Icon} name="plus" size=${18} /><span class="hide-sm">${t('Neuer Termin')}</span></button>`}
     />
     <div class="calendar-layout">
       ${!mobile &&
@@ -346,13 +351,13 @@ export function CalendarPage() {
           setAnchor(d)
           if (view === 'liste') changeView('woche')
         }} />
-        <h3 class="side-title">Kalender</h3>
+        <h3 class="side-title">${t('Kalender')}</h3>
         <ul class="cal-toggles">
           ${cals.map(
             (c) => html`<li>
               <button type="button" class=${'cal-toggle' + (hidden.has(c.id) ? ' off' : '')} aria-pressed=${!hidden.has(c.id)} onClick=${() => toggleCal(c.id)}>
                 <${Dot} color=${c.color} />
-                <span class="cal-name">${c.name}${c.empty && html`<span class="cal-empty-hint" title="Verbunden, aber noch keine Termine im Abgleich">verbunden, keine Termine</span>`}</span>
+                <span class="cal-name">${c.name}${c.empty && html`<span class="cal-empty-hint" title=${t('Verbunden, aber noch keine Termine im Abgleich')}>${t('verbunden, keine Termine')}</span>`}</span>
               </button>
             </li>`
           )}
@@ -361,9 +366,9 @@ export function CalendarPage() {
       <div class="calendar-main">
         ${view === 'woche'
           ? html`<div class="calendar-toolbar">
-                <button type="button" class="btn btn-small" onClick=${() => setAnchor(new Date())}>Heute</button>
-                <button type="button" class="icon-btn" aria-label="Zurück" onClick=${() => setAnchor(addDaysDate(anchor, -step))}><${Icon} name="chevronLeft" /></button>
-                <button type="button" class="icon-btn" aria-label="Weiter" onClick=${() => setAnchor(addDaysDate(anchor, step))}><${Icon} name="chevron" /></button>
+                <button type="button" class="btn btn-small" onClick=${() => setAnchor(new Date())}>${t('Heute')}</button>
+                <button type="button" class="icon-btn" aria-label=${t('Zurück')} onClick=${() => setAnchor(addDaysDate(anchor, -step))}><${Icon} name="chevronLeft" /></button>
+                <button type="button" class="icon-btn" aria-label=${t('Weiter')} onClick=${() => setAnchor(addDaysDate(anchor, step))}><${Icon} name="chevron" /></button>
                 ${mobile &&
                 html`<div class="cal-toggles-inline">
                   ${cals.map(
@@ -376,12 +381,12 @@ export function CalendarPage() {
               <${WeekGrid} days=${days} events=${events} />`
           : html`<div class="calendar-toolbar">
                 <${Segmented}
-                  label="Zeitraum"
+                  label=${t('Zeitraum')}
                   value=${past ? 'past' : 'next'}
                   onChange=${(v) => setPast(v === 'past')}
                   options=${[
-                    { value: 'next', label: 'Ab heute' },
-                    { value: 'past', label: 'Letzte 30 Tage' },
+                    { value: 'next', label: t('Ab heute') },
+                    { value: 'past', label: t('Letzte 30 Tage') },
                   ]}
                 />
               </div>
@@ -402,9 +407,9 @@ export function EventPanel({ id }) {
   if (!ev) {
     return html`<div class="backdrop" onClick=${closeEvent}>
       <aside class="panel" onClick=${(e) => e.stopPropagation()}>
-        <div class="panel-head"><div class="kicker">Termin</div>
-          <button type="button" class="icon-btn" aria-label="Schließen" onClick=${closeEvent}><${Icon} name="x" /></button></div>
-        <p class="empty">Diesen Termin gibt es nicht mehr.</p>
+        <div class="panel-head"><div class="kicker">${t('Termin')}</div>
+          <button type="button" class="icon-btn" aria-label=${t('Schließen')} onClick=${closeEvent}><${Icon} name="x" /></button></div>
+        <p class="empty">${t('Diesen Termin gibt es nicht mehr.')}</p>
       </aside>
     </div>`
   }
@@ -413,28 +418,28 @@ export function EventPanel({ id }) {
   const description = htmlToText(ev.description)
   const addContact = async (address) => {
     const guess = address.split('@')[0].split(/[._-]/).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-    const name = await promptDialog({ title: 'Als Kontakt anlegen', label: 'Name', value: guess, confirmLabel: 'Anlegen' })
+    const name = await promptDialog({ title: t('Als Kontakt anlegen'), label: t('Name'), value: guess, confirmLabel: t('Anlegen') })
     if (!name) return
     const person = await insert('persons', { name, emails: [address] })
     if (!person) return
     await insert('event_persons', { event_id: ev.id, person_id: person.id })
-    toast(`„${name}“ ist jetzt ein Kontakt`, { action: { label: 'Öffnen', run: () => navigate('/kontakte/' + person.id) } })
+    toast(t('„{name}“ ist jetzt ein Kontakt', { name }), { action: { label: t('Öffnen'), run: () => navigate('/kontakte/' + person.id) } })
   }
 
   return html`<div class="backdrop" onClick=${closeEvent}>
-    <aside class="panel" role="dialog" aria-modal="true" aria-label=${'Termin ' + (ev.title || '')} onClick=${(e) => e.stopPropagation()}>
+    <aside class="panel" role="dialog" aria-modal="true" aria-label=${t('Termin {title}', { title: ev.title || '' })} onClick=${(e) => e.stopPropagation()}>
       <div class="panel-head">
-        <div class="kicker"><${Dot} color=${ev.calendar_color} />Termin · ${brandSafe(ev.calendar_name)}</div>
-        <button type="button" class="icon-btn" aria-label="Schließen" onClick=${closeEvent}><${Icon} name="x" /></button>
+        <div class="kicker"><${Dot} color=${ev.calendar_color} />${t('Termin')} · ${brandSafe(ev.calendar_name)}</div>
+        <button type="button" class="icon-btn" aria-label=${t('Schließen')} onClick=${closeEvent}><${Icon} name="x" /></button>
       </div>
       <div class="panel-body">
-        <h2 class="panel-title">${ev.title || '(ohne Titel)'}</h2>
+        <h2 class="panel-title">${ev.title || t('(ohne Titel)')}</h2>
         <p class="event-when">
           <${Icon} name="clock" size=${18} />
           ${fmtDateLong(new Date(ev.start_at))}, ${fmtTimeRange(ev.start_at, ev.end_at, ev.all_day)}
         </p>
         ${String(ev.calendar_id || '').startsWith('abo:') &&
-        html`<p class="muted small">Aus einem abonnierten Kalender. Das CRM liest ihn nur, ändern kannst du den Termin dort, wo der Kalender herkommt.</p>`}
+        html`<p class="muted small">${t('Aus einem abonnierten Kalender. Das CRM liest ihn nur, ändern kannst du den Termin dort, wo der Kalender herkommt.')}</p>`}
         ${ev.location &&
         html`<p class="event-where">
           <${Icon} name="pin" size=${18} />
@@ -444,13 +449,13 @@ export function EventPanel({ id }) {
         </p>`}
         <div class="quick-actions">
           ${ev.meet_url &&
-          html`<a class="btn btn-primary" href=${ev.meet_url} target="_blank" rel="noopener noreferrer"><${Icon} name="video" size=${18} /> Beitreten</a>`}
-          ${meeting && html`<a class="btn" href=${'#/meetings/' + meeting.id}><${Icon} name="meetings" size=${18} /> Zusammenfassung</a>`}
+          html`<a class="btn btn-primary" href=${ev.meet_url} target="_blank" rel="noopener noreferrer"><${Icon} name="video" size=${18} /> ${t('Beitreten')}</a>`}
+          ${meeting && html`<a class="btn" href=${'#/meetings/' + meeting.id}><${Icon} name="meetings" size=${18} /> ${t('Zusammenfassung')}</a>`}
           ${ev.html_link &&
-          html`<a class="btn" href=${ev.html_link} target="_blank" rel="noopener noreferrer"><${Icon} name="external" size=${18} /> In Google Kalender</a>`}
+          html`<a class="btn" href=${ev.html_link} target="_blank" rel="noopener noreferrer"><${Icon} name="external" size=${18} /> ${t('In Google Kalender')}</a>`}
         </div>
 
-        <h3 class="section-title">Teilnehmer</h3>
+        <h3 class="section-title">${t('Teilnehmer')}</h3>
         ${(ev.attendees || []).length
           ? html`<div class="chips">
               ${ev.attendees.map((address) => {
@@ -458,14 +463,14 @@ export function EventPanel({ id }) {
                 const p = personByEmail(address)
                 if (p) return html`<a class="chip chip-link" href=${'#/kontakte/' + p.id}>${p.name}</a>`
                 return html`<span class="chip chip-free">${address}
-                  <button type="button" class="chip-add" title="Als Kontakt anlegen" onClick=${() => addContact(address)}><${Icon} name="plus" size=${14} /> Kontakt</button>
+                  <button type="button" class="chip-add" title=${t('Als Kontakt anlegen')} onClick=${() => addContact(address)}><${Icon} name="plus" size=${14} /> ${t('Kontakt')}</button>
                 </span>`
               })}
             </div>`
-          : html`<${Empty}>Keine Teilnehmer eingetragen.<//>`}
+          : html`<${Empty}>${t('Keine Teilnehmer eingetragen.')}<//>`}
 
         ${description &&
-        html`<h3 class="section-title">Beschreibung</h3>
+        html`<h3 class="section-title">${t('Beschreibung')}</h3>
           <div class="prose"><${LinkText} text=${description} /></div>`}
       </div>
     </aside>
@@ -527,20 +532,20 @@ function NewEventDialog({ d }) {
     return p ? p.name : member(address) ? memberName(address) : address
   }
 
-  return html`<${Modal} title="Neuer Termin" onClose=${closeDialog} wide=${true}>
+  return html`<${Modal} title=${t('Neuer Termin')} onClose=${closeDialog} wide=${true}>
     <form onSubmit=${open}>
-      <${Field} label="Titel" htmlFor="ev-title">
+      <${Field} label=${t('Titel')} htmlFor="ev-title">
         <input id="ev-title" value=${form.title} required onInput=${(e) => set({ title: e.target.value })} />
       <//>
       <div class="field-grid three">
-        <${Field} label="Datum" htmlFor="ev-date"><input id="ev-date" type="date" value=${form.date} required onInput=${(e) => set({ date: e.target.value })} /><//>
-        <${Field} label="Von" htmlFor="ev-from"><input id="ev-from" type="time" value=${form.from} required onInput=${(e) => set({ from: e.target.value })} /><//>
-        <${Field} label="Bis" htmlFor="ev-to"><input id="ev-to" type="time" value=${form.to} required onInput=${(e) => set({ to: e.target.value })} /><//>
+        <${Field} label=${t('Datum')} htmlFor="ev-date"><input id="ev-date" type="date" value=${form.date} required onInput=${(e) => set({ date: e.target.value })} /><//>
+        <${Field} label=${t('Von')} htmlFor="ev-from"><input id="ev-from" type="time" value=${form.from} required onInput=${(e) => set({ from: e.target.value })} /><//>
+        <${Field} label=${t('Bis')} htmlFor="ev-to"><input id="ev-to" type="time" value=${form.to} required onInput=${(e) => set({ to: e.target.value })} /><//>
       </div>
-      <${Field} label="Gäste" htmlFor="ev-guests">
+      <${Field} label=${t('Gäste')} htmlFor="ev-guests">
         <div class="chips guest-chips">
           ${form.guests.map(
-            (g) => html`<span class="chip">${guestLabel(g)}<button type="button" aria-label=${g + ' entfernen'} onClick=${() => set({ guests: form.guests.filter((x) => x !== g) })}><${Icon} name="x" size=${14} /></button></span>`
+            (g) => html`<span class="chip">${guestLabel(g)}<button type="button" aria-label=${t('{name} entfernen', { name: g })} onClick=${() => set({ guests: form.guests.filter((x) => x !== g) })}><${Icon} name="x" size=${14} /></button></span>`
           )}
         </div>
         <div class="picker">
@@ -548,7 +553,7 @@ function NewEventDialog({ d }) {
             id="ev-guests"
             value=${guestText}
             autocomplete="off"
-            placeholder="Kontakt suchen oder Adresse eintippen, Enter"
+            placeholder=${t('Kontakt suchen oder Adresse eintippen, Enter')}
             onInput=${(e) => setGuestText(e.target.value)}
             onKeyDown=${(e) => {
               if (e.key === 'Enter') {
@@ -569,27 +574,26 @@ function NewEventDialog({ d }) {
         </div>
       <//>
       <div class="field-grid">
-        <${Field} label="Ort" htmlFor="ev-loc"><input id="ev-loc" value=${form.location} onInput=${(e) => set({ location: e.target.value })} /><//>
-        <${Field} label="Einladen aus dem Konto" htmlFor="ev-account">
+        <${Field} label=${t('Ort')} htmlFor="ev-loc"><input id="ev-loc" value=${form.location} onInput=${(e) => set({ location: e.target.value })} /><//>
+        <${Field} label=${t('Einladen aus dem Konto')} htmlFor="ev-account">
           <select id="ev-account" value=${form.account} onChange=${(e) => set({ account: e.target.value })}>
             ${accounts.map((a) => html`<option value=${a}>${a}</option>`)}
           </select>
         <//>
       </div>
-      <${Field} label="Beschreibung" htmlFor="ev-desc">
+      <${Field} label=${t('Beschreibung')} htmlFor="ev-desc">
         <textarea id="ev-desc" rows="3" value=${form.description} onInput=${(e) => set({ description: e.target.value })}></textarea>
       <//>
       <label class="check-line">
         <input type="checkbox" checked=${form.meet} onChange=${(e) => set({ meet: e.target.checked })} />
-        Google Meet hinzufügen
+        ${t('Google Meet hinzufügen')}
       </label>
       <p class="muted small">
-        Das CRM liest die Kalender nur. Google Kalender öffnet sich mit allem ausgefüllt, erst „Speichern“ dort verschickt die Einladungen.
-        Nach dem nächsten Abgleich erscheint der Termin auch hier.
+        ${t('Das CRM liest die Kalender nur. Google Kalender öffnet sich mit allem ausgefüllt, erst „Speichern“ dort verschickt die Einladungen. Nach dem nächsten Abgleich erscheint der Termin auch hier.')}
       </p>
       <div class="form-actions">
-        <button type="button" class="btn" onClick=${closeDialog}>Abbrechen</button>
-        <button type="submit" class="btn btn-primary" disabled=${!form.title.trim()}><${Icon} name="external" size=${16} /> In Google Kalender öffnen</button>
+        <button type="button" class="btn" onClick=${closeDialog}>${t('Abbrechen')}</button>
+        <button type="submit" class="btn btn-primary" disabled=${!form.title.trim()}><${Icon} name="external" size=${16} /> ${t('In Google Kalender öffnen')}</button>
       </div>
     </form>
   <//>`

@@ -8,6 +8,7 @@
 //     nur in der App vom Home-Bildschirm, egal aus welchem Browser sie angelegt wurde.
 // Muss früh geladen werden (main.js), sonst ist „beforeinstallprompt“ schon vorbei.
 import { emit } from './store.js'
+import { t } from './i18n.js'
 
 let deferred = null
 let installed = false
@@ -56,11 +57,11 @@ export async function promptInstall() {
 export function installHowTo() {
   if (isIos()) {
     const b = iosBrowser()
-    if (b === 'chrome') return 'In Chrome rechts in der Adresszeile auf das Teilen-Symbol (Quadrat mit Pfeil) tippen, dann „Zum Home-Bildschirm“ und „Hinzufügen“.'
-    if (b === 'edge') return 'In Edge unten auf das Menü (drei Striche) tippen, dann „Teilen“ und „Zum Home-Bildschirm“.'
-    if (b === 'firefox') return 'In Firefox unten auf das Menü tippen, dann „Teilen“ und „Zum Home-Bildschirm“.'
-    return 'In Safari unten auf „Teilen“ (Quadrat mit Pfeil) tippen, dann „Zum Home-Bildschirm“ und „Hinzufügen“.'
+    if (b === 'chrome') return t('In Chrome rechts in der Adresszeile auf das Teilen-Symbol (Quadrat mit Pfeil) tippen, dann „Zum Home-Bildschirm“ und „Hinzufügen“.')
+    if (b === 'edge') return t('In Edge unten auf das Menü (drei Striche) tippen, dann „Teilen“ und „Zum Home-Bildschirm“.')
+    if (b === 'firefox') return t('In Firefox unten auf das Menü tippen, dann „Teilen“ und „Zum Home-Bildschirm“.')
+    return t('In Safari unten auf „Teilen“ (Quadrat mit Pfeil) tippen, dann „Zum Home-Bildschirm“ und „Hinzufügen“.')
   }
-  if (isAndroid()) return 'In Chrome oben rechts auf das Menü (drei Punkte) tippen, dann „App installieren“ oder „Zum Startbildschirm hinzufügen“.'
-  return 'In Chrome oder Edge rechts in der Adresszeile auf das Symbol „App installieren“ klicken.'
+  if (isAndroid()) return t('In Chrome oben rechts auf das Menü (drei Punkte) tippen, dann „App installieren“ oder „Zum Startbildschirm hinzufügen“.')
+  return t('In Chrome oder Edge rechts in der Adresszeile auf das Symbol „App installieren“ klicken.')
 }

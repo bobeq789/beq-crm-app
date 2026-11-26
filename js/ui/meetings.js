@@ -23,6 +23,7 @@ import {
 } from '../store.js'
 import { navigate, openCard } from '../router.js'
 import { PageHead, Tile, Empty, Dot, Field, ProjectSelect, Notes, LinkText } from './common.js'
+import { t, isEnglish } from '../i18n.js'
 
 // „Name: Aufgabe“ zerlegen, Aufzählungszeichen am Anfang ignorieren
 export function parseActionItems(text) {
@@ -60,7 +61,7 @@ export function MeetingsList() {
       return
     }
     let stale = false
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       try {
         const ids = await searchMeetingSummaries(q)
         if (!stale) setSummaryHits(new Set(ids))
@@ -70,7 +71,7 @@ export function MeetingsList() {
     }, 300)
     return () => {
       stale = true
-      clearTimeout(t)
+      clearTimeout(timer)
     }
   }, [q])
 
@@ -88,17 +89,17 @@ export function MeetingsList() {
 
   return html`<div class="page">
     <${PageHead}
-      kicker="Gespräche"
-      title="Meetings"
-      actions=${html`<a class="btn btn-primary" href="#/meetings/neu"><${Icon} name="plus" size=${18} /> Neues Meeting</a>`}
+      kicker=${t('Gespräche')}
+      title=${t('Meetings')}
+      actions=${html`<a class="btn btn-primary" href="#/meetings/neu"><${Icon} name="plus" size=${18} /> ${t('Neues Meeting')}</a>`}
     />
     <div class="list-filters">
       <label class="search">
         <${Icon} name="search" size=${18} />
-        <input type="search" value=${query} placeholder="Suchen: Titel, Teilnehmer, Inhalt" aria-label="Meetings durchsuchen" onInput=${(e) => setQuery(e.target.value)} />
+        <input type="search" value=${query} placeholder=${t('Suchen: Titel, Teilnehmer, Inhalt')} aria-label=${t('Meetings durchsuchen')} onInput=${(e) => setQuery(e.target.value)} />
       </label>
     </div>
-    ${!list.length && html`<${Empty}>${q ? 'Keine Meetings gefunden.' : 'Noch keine Meetings. Leg das erste an.'}<//>`}
+    ${!list.length && html`<${Empty}>${q ? t('Keine Meetings gefunden.') : t('Noch keine Meetings. Leg das erste an.')}<//>`}
     ${groups.map(
       (g) => html`<section class="month-group" key=${g.label}>
         <h2 class="group-title">${g.label}</h2>
@@ -109,13 +110,13 @@ export function MeetingsList() {
             return html`<li key=${m.id}>
               <a class="row-link" href=${'#/meetings/' + m.id}>
                 <span class="row-date">
-                  <span class="row-day">${new Date(m.held_at).getDate()}.</span>
+                  <span class="row-day">${new Date(m.held_at).getDate()}${isEnglish() ? '' : '.'}</span>
                   <span class="row-wd">${fmtDate(m.held_at).split(',')[0]}</span>
                 </span>
                 <span class="row-main">
                   <span class="row-title">${m.title}</span>
                   <span class="row-meta">
-                    ${fmtTime(m.held_at)}${m.duration_min ? `, ${m.duration_min} Min.` : ''}
+                    ${fmtTime(m.held_at)}${m.duration_min ? ', ' + t('{n} Min.', { n: m.duration_min }) : ''}
                     ${project && html`<span class="meta-item"><${Dot} color=${project.color} />${project.name}</span>`}
                     ${names.length > 0 && html`<span class="meta-item muted">${names.slice(0, 3).join(', ')}${names.length > 3 ? ` +${names.length - 3}` : ''}</span>`}
                     ${m.source === 'fireflies' && html`<span class="badge">Fireflies</span>`}
@@ -161,11 +162,11 @@ function ParticipantInput({ personIds, extraNames, onChange }) {
       ${personIds.map((id) => {
         const p = getPerson(id)
         return p
-          ? html`<span class="chip">${p.name}<button type="button" aria-label=${p.name + ' entfernen'} onClick=${() => onChange(personIds.filter((x) => x !== id), extraNames)}><${Icon} name="x" size=${14} /></button></span>`
+          ? html`<span class="chip">${p.name}<button type="button" aria-label=${t('{name} entfernen', { name: p.name })} onClick=${() => onChange(personIds.filter((x) => x !== id), extraNames)}><${Icon} name="x" size=${14} /></button></span>`
           : null
       })}
       ${extraNames.map(
-        (n) => html`<span class="chip chip-free">${n}<button type="button" aria-label=${n + ' entfernen'} onClick=${() => onChange(personIds, extraNames.filter((x) => x !== n))}><${Icon} name="x" size=${14} /></button></span>`
+        (n) => html`<span class="chip chip-free">${n}<button type="button" aria-label=${t('{name} entfernen', { name: n })} onClick=${() => onChange(personIds, extraNames.filter((x) => x !== n))}><${Icon} name="x" size=${14} /></button></span>`
       )}
     </div>
     <div class="picker">
@@ -173,7 +174,7 @@ function ParticipantInput({ personIds, extraNames, onChange }) {
         id="meeting-participants"
         value=${q}
         autocomplete="off"
-        placeholder="Kontakt suchen oder Namen eintippen, Enter"
+        placeholder=${t('Kontakt suchen oder Namen eintippen, Enter')}
         onInput=${(e) => {
           setQ(e.target.value)
           setOpen(true)
@@ -196,7 +197,7 @@ function ParticipantInput({ personIds, extraNames, onChange }) {
           </button></li>`
         )}
         <li><button type="button" class="picker-new" onMouseDown=${(e) => e.preventDefault()} onClick=${addName}>
-          <${Icon} name="plus" size=${16} /> „${q.trim()}“ als Namen ohne Kontakt hinzufügen
+          <${Icon} name="plus" size=${16} /> ${t('„{name}“ als Namen ohne Kontakt hinzufügen', { name: q.trim() })}
         </button></li>
       </ul>`}
     </div>
@@ -246,7 +247,7 @@ export function MeetingEditor({ meeting, onDone }) {
       for (const pid of form.personIds) {
         if (!before.some((mp) => mp.person_id === pid)) await insert('meeting_persons', { meeting_id: saved.id, person_id: pid })
       }
-      toast(isNew ? 'Meeting angelegt' : 'Meeting gespeichert')
+      toast(isNew ? t('Meeting angelegt') : t('Meeting gespeichert'))
       if (isNew) navigate('/meetings/' + saved.id)
       else onDone && onDone()
     }
@@ -254,43 +255,43 @@ export function MeetingEditor({ meeting, onDone }) {
   }
 
   return html`<form class="meeting-form" onSubmit=${save}>
-    <${Field} label="Titel" htmlFor="meeting-title">
-      <input id="meeting-title" value=${form.title} required onInput=${(e) => set({ title: e.target.value })} placeholder="Worum ging es?" />
+    <${Field} label=${t('Titel')} htmlFor="meeting-title">
+      <input id="meeting-title" value=${form.title} required onInput=${(e) => set({ title: e.target.value })} placeholder=${t('Worum ging es?')} />
     <//>
     <div class="field-grid three">
-      <${Field} label="Datum und Uhrzeit" htmlFor="meeting-at">
+      <${Field} label=${t('Datum und Uhrzeit')} htmlFor="meeting-at">
         <input id="meeting-at" type="datetime-local" value=${form.held_at} required onInput=${(e) => set({ held_at: e.target.value })} />
       <//>
-      <${Field} label="Dauer in Minuten" htmlFor="meeting-duration">
+      <${Field} label=${t('Dauer in Minuten')} htmlFor="meeting-duration">
         <input id="meeting-duration" type="number" min="0" step="5" inputmode="numeric" value=${form.duration_min} onInput=${(e) => set({ duration_min: e.target.value })} />
       <//>
-      <${Field} label="Pipeline" htmlFor="meeting-project">
+      <${Field} label=${t('Pipeline')} htmlFor="meeting-project">
         <${ProjectSelect} id="meeting-project" value=${form.project_id} allowEmpty=${true} onChange=${(v) => set({ project_id: v })} />
       <//>
     </div>
-    <${Field} label="Teilnehmer" htmlFor="meeting-participants">
+    <${Field} label=${t('Teilnehmer')} htmlFor="meeting-participants">
       <${ParticipantInput}
         personIds=${form.personIds}
         extraNames=${form.extra_names}
         onChange=${(personIds, extra_names) => set({ personIds, extra_names })}
       />
     <//>
-    <${Field} label="Zusammenfassung" htmlFor="meeting-summary">
+    <${Field} label=${t('Zusammenfassung')} htmlFor="meeting-summary">
       <textarea id="meeting-summary" rows="6" value=${form.summary} onInput=${(e) => set({ summary: e.target.value })}></textarea>
     <//>
-    <${Field} label="Action Items" htmlFor="meeting-actions" hint="Eine pro Zeile, gern im Format „Name: To-do“">
-      <textarea id="meeting-actions" rows="5" value=${form.action_items} placeholder="Anna: Angebot schicken" onInput=${(e) => set({ action_items: e.target.value })}></textarea>
+    <${Field} label=${t('Action Items')} htmlFor="meeting-actions" hint=${t('Eine pro Zeile, gern im Format „Name: To-do“')}>
+      <textarea id="meeting-actions" rows="5" value=${form.action_items} placeholder=${t('Anna: Angebot schicken')} onInput=${(e) => set({ action_items: e.target.value })}></textarea>
     <//>
     <div class="form-actions">
-      ${isNew ? html`<a class="btn" href="#/meetings">Abbrechen</a>` : html`<button type="button" class="btn" onClick=${onDone}>Abbrechen</button>`}
-      <button type="submit" class="btn btn-primary" disabled=${!form.title.trim() || saving}>${isNew ? 'Meeting anlegen' : 'Speichern'}</button>
+      ${isNew ? html`<a class="btn" href="#/meetings">${t('Abbrechen')}</a>` : html`<button type="button" class="btn" onClick=${onDone}>${t('Abbrechen')}</button>`}
+      <button type="submit" class="btn btn-primary" disabled=${!form.title.trim() || saving}>${isNew ? t('Meeting anlegen') : t('Speichern')}</button>
     </div>
   </form>`
 }
 
 export function MeetingNew() {
   return html`<div class="page page-narrow">
-    <${PageHead} kicker="Meetings" title="Neues Meeting" back=${{ href: '#/meetings', label: 'Alle Meetings' }} />
+    <${PageHead} kicker=${t('Meetings')} title=${t('Neues Meeting')} back=${{ href: '#/meetings', label: t('Alle Meetings') }} />
     <${MeetingEditor} />
   </div>`
 }
@@ -319,18 +320,18 @@ function ActionItems({ meeting }) {
       }
     }
     const card = await createCard(fields)
-    if (card) toast('Deal liegt auf dem Board', { action: { label: 'Öffnen', run: () => openCard(card.id) } })
+    if (card) toast(t('Deal liegt auf dem Board'), { action: { label: t('Öffnen'), run: () => openCard(card.id) } })
   }
 
-  if (!items.length) return html`<${Empty}>Keine Action Items.<//>`
+  if (!items.length) return html`<${Empty}>${t('Keine Action Items.')}<//>`
   return html`<ul class="action-items">
     ${items.map((item) => {
       const card = existing.find((c) => norm(c.title) === norm(item.task))
       return html`<li class="action-item">
         <span class="ai-text">${item.name && html`<strong>${item.name}:</strong> `}${item.task}</span>
         ${card
-          ? html`<button type="button" class="link-btn ai-done" onClick=${() => openCard(card.id)}><${Icon} name="check" size=${16} /> Auf dem Board</button>`
-          : html`<button type="button" class="btn btn-small" onClick=${() => toBoard(item)}><${Icon} name="board" size=${16} /> Aufs Board</button>`}
+          ? html`<button type="button" class="link-btn ai-done" onClick=${() => openCard(card.id)}><${Icon} name="check" size=${16} /> ${t('Auf dem Board')}</button>`
+          : html`<button type="button" class="btn btn-small" onClick=${() => toBoard(item)}><${Icon} name="board" size=${16} /> ${t('Aufs Board')}</button>`}
       </li>`
     })}
   </ul>`
@@ -344,9 +345,9 @@ function Participants({ meeting }) {
     if (!person) return
     await insert('meeting_persons', { meeting_id: meeting.id, person_id: person.id })
     await update('meetings', meeting.id, { extra_names: extra.filter((n) => n !== name) })
-    toast(`„${name}“ ist jetzt ein Kontakt`, { action: { label: 'Öffnen', run: () => navigate('/kontakte/' + person.id) } })
+    toast(t('„{name}“ ist jetzt ein Kontakt', { name }), { action: { label: t('Öffnen'), run: () => navigate('/kontakte/' + person.id) } })
   }
-  if (!people.length && !extra.length) return html`<${Empty}>Keine Teilnehmer eingetragen.<//>`
+  if (!people.length && !extra.length) return html`<${Empty}>${t('Keine Teilnehmer eingetragen.')}<//>`
   return html`<div class="chips">
     ${people.map((p) => {
       const org = getOrg(p.org_id)
@@ -354,7 +355,7 @@ function Participants({ meeting }) {
     })}
     ${extra.map(
       (n) => html`<span class="chip chip-free">${n}
-        <button type="button" class="chip-add" title="Als Kontakt anlegen" onClick=${() => makeContact(n)}><${Icon} name="plus" size=${14} /> Kontakt</button>
+        <button type="button" class="chip-add" title=${t('Als Kontakt anlegen')} onClick=${() => makeContact(n)}><${Icon} name="plus" size=${14} /> ${t('Kontakt')}</button>
       </span>`
     )}
   </div>`
@@ -369,58 +370,58 @@ export function MeetingDetail({ id }) {
   }, [id])
   const loaded = state.full.meetings.has(id)
   if (!meeting) {
-    return html`<div class="page"><${PageHead} kicker="Meeting" title="Nicht gefunden" back=${{ href: '#/meetings', label: 'Alle Meetings' }} />
-      <${Empty}>Dieses Meeting gibt es nicht mehr.<//></div>`
+    return html`<div class="page"><${PageHead} kicker=${t('Meeting')} title=${t('Nicht gefunden')} back=${{ href: '#/meetings', label: t('Alle Meetings') }} />
+      <${Empty}>${t('Dieses Meeting gibt es nicht mehr.')}<//></div>`
   }
   const project = getProject(meeting.project_id)
 
   const del = async () => {
     const ok = await confirmDialog({
-      title: 'Meeting löschen?',
-      text: `„${meeting.title}“ und die Notizen dazu sind danach weg. Deals aus diesem Meeting bleiben auf dem Board.`,
-      confirmLabel: 'Löschen',
+      title: t('Meeting löschen?'),
+      text: t('„{title}“ und die Notizen dazu sind danach weg. Deals aus diesem Meeting bleiben auf dem Board.', { title: meeting.title }),
+      confirmLabel: t('Löschen'),
       danger: true,
     })
     if (!ok) return
     navigate('/meetings')
     await remove('meetings', meeting.id)
-    toast('Meeting gelöscht')
+    toast(t('Meeting gelöscht'))
   }
 
   if (editing) {
     return html`<div class="page page-narrow">
-      <${PageHead} kicker="Meeting bearbeiten" title=${meeting.title} />
+      <${PageHead} kicker=${t('Meeting bearbeiten')} title=${meeting.title} />
       <${MeetingEditor} meeting=${meeting} onDone=${() => setEditing(false)} key=${meeting.id} />
     </div>`
   }
 
   return html`<div class="page">
     <${PageHead}
-      kicker=${'Meeting · ' + fmtDateTime(meeting.held_at)}
+      kicker=${t('Meeting') + ' · ' + fmtDateTime(meeting.held_at)}
       title=${meeting.title}
-      back=${{ href: '#/meetings', label: 'Alle Meetings' }}
-      actions=${html`<button type="button" class="btn" disabled=${!loaded} onClick=${() => setEditing(true)}><${Icon} name="edit" size=${16} /> Bearbeiten</button>
-        <button type="button" class="btn btn-danger-text" onClick=${del}><${Icon} name="trash" size=${16} /> Löschen</button>`}
+      back=${{ href: '#/meetings', label: t('Alle Meetings') }}
+      actions=${html`<button type="button" class="btn" disabled=${!loaded} onClick=${() => setEditing(true)}><${Icon} name="edit" size=${16} /> ${t('Bearbeiten')}</button>
+        <button type="button" class="btn btn-danger-text" onClick=${del}><${Icon} name="trash" size=${16} /> ${t('Löschen')}</button>`}
     />
     <div class="detail-meta">
-      ${meeting.duration_min && html`<span class="meta-item"><${Icon} name="clock" size=${16} /> ${meeting.duration_min} Minuten</span>`}
+      ${meeting.duration_min && html`<span class="meta-item"><${Icon} name="clock" size=${16} /> ${t('{n} Minuten', { n: meeting.duration_min })}</span>`}
       ${project && html`<span class="meta-item"><${Dot} color=${project.color} />${project.name}</span>`}
-      <span class="badge">${meeting.source === 'fireflies' ? 'aus Fireflies' : meeting.source === 'gemini' ? 'aus Notizen von Gemini' : 'von Hand angelegt'}</span>
+      <span class="badge">${meeting.source === 'fireflies' ? t('aus Fireflies') : meeting.source === 'gemini' ? t('aus Notizen von Gemini') : t('von Hand angelegt')}</span>
     </div>
     <div class="detail-grid">
       <div class="col-main">
-        <${Tile} title="Zusammenfassung">
+        <${Tile} title=${t('Zusammenfassung')}>
           ${!loaded
-            ? html`<p class="muted">Wird geladen …</p>`
+            ? html`<p class="muted">${t('Wird geladen …')}</p>`
             : meeting.summary
               ? html`<div class="prose"><${LinkText} text=${meeting.summary} /></div>`
-              : html`<${Empty}>Keine Zusammenfassung.<//>`}
+              : html`<${Empty}>${t('Keine Zusammenfassung.')}<//>`}
         <//>
-        <${Tile} title="Action Items"><${ActionItems} meeting=${meeting} /><//>
+        <${Tile} title=${t('Action Items')}><${ActionItems} meeting=${meeting} /><//>
       </div>
       <div class="col-side">
-        <${Tile} title="Teilnehmer"><${Participants} meeting=${meeting} /><//>
-        <${Tile} title="Notizen"><${Notes} field="meeting_id" id=${meeting.id} /><//>
+        <${Tile} title=${t('Teilnehmer')}><${Participants} meeting=${meeting} /><//>
+        <${Tile} title=${t('Notizen')}><${Notes} field="meeting_id" id=${meeting.id} /><//>
       </div>
     </div>
   </div>`

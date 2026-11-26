@@ -3,6 +3,8 @@
 // Kanäle. Gruppen und Direktnachrichten nur die Beteiligten, auch kein Admin.
 import { uid } from '../lib/util.js'
 import { dbError } from './rules.js'
+// „tr“ statt „t“, weil hier lokale Variablen „t“ heißen (Text, Teammitglied)
+import { t as tr } from '../i18n.js'
 
 export const CHAT_TABLES = ['chat_raeume', 'chat_mitglieder', 'chat_nachrichten', 'chat_gelesen', 'chat_reaktionen', 'chat_dateien']
 // Dateien im Chat (33_chat_dateien.sql): Pfad <Raum-ID>/<Datei>, höchstens 10 je Nachricht
@@ -41,7 +43,7 @@ export function canSeeRoom(db, me, r) {
 
 function room(db, me, id) {
   const r = db.chat_raeume.find((x) => x.id === id)
-  if (!canSeeRoom(db, me, r)) throw noRight('Diesen Chat gibt es nicht.')
+  if (!canSeeRoom(db, me, r)) throw noRight(tr('Diesen Chat gibt es nicht.'))
   return r
 }
 
@@ -49,8 +51,8 @@ function checkPeople(db, emails, guestsAllowed) {
   const list = [...new Set((emails || []).map(low).filter(Boolean))]
   list.forEach((e) => {
     const role = roleOf(db, e)
-    if (!role) throw bad('Mindestens eine Person ist nicht (mehr) im Team.')
-    if (role === 'gast' && !guestsAllowed) throw bad('Gäste können nur in Kanäle eingeladen werden.')
+    if (!role) throw bad(tr('Mindestens eine Person ist nicht (mehr) im Team.'))
+    if (role === 'gast' && !guestsAllowed) throw bad(tr('Gäste können nur in Kanäle eingeladen werden.'))
   })
   return list
 }
@@ -118,12 +120,12 @@ function checkAttachments(db, me, raumId, list) {
   const seen = new Set()
   for (const a of list || []) {
     const p = a && a.pfad
-    if (!p || roomOfPath(p) !== raumId) throw noRight('Diese Datei gehört nicht zu diesem Chat.')
+    if (!p || roomOfPath(p) !== raumId) throw noRight(tr('Diese Datei gehört nicht zu diesem Chat.'))
     if (seen.has(p)) continue
     seen.add(p)
     const f = (db.chat_dateien || []).find((x) => x.pfad === p)
-    if (!f) throw dbError('23503', 'Die Datei fehlt im Speicher. Bitte noch einmal hochladen.')
-    if (f.owner !== me) throw noRight('Nur selbst hochgeladene Dateien lassen sich anhängen.')
+    if (!f) throw dbError('23503', tr('Die Datei fehlt im Speicher. Bitte noch einmal hochladen.'))
+    if (f.owner !== me) throw noRight(tr('Nur selbst hochgeladene Dateien lassen sich anhängen.'))
     const ok = (v) => Number.isInteger(v) && v > 0 && v <= 20000
     const dims = ok(a.breite) && ok(a.hoehe) ? { breite: a.breite, hoehe: a.hoehe } : {}
     out.push({ pfad: p, name: String(a.name || '').trim().slice(0, 200) || p.split('/')[1].replace(/^\d+-/, ''), groesse: f.groesse, typ: f.typ || 'application/octet-stream', ...dims })
@@ -135,16 +137,16 @@ function checkAttachments(db, me, raumId, list) {
 export function chatSend(db, me, { id, raum_id, text, erwaehnt, antwort_auf, anhaenge }) {
   me = low(me)
   const r = room(db, me, raum_id)
-  if (r.archiviert) throw noRight('Der Kanal ist archiviert.')
+  if (r.archiviert) throw noRight(tr('Der Kanal ist archiviert.'))
   const files = checkAttachments(db, me, raum_id, anhaenge)
   const t = String(text || '')
   if ((!t.trim() && !files.length) || t.length > 4000) throw dbError('23514', 'check')
   let parent = null
   if (antwort_auf) {
     parent = db.chat_nachrichten.find((n) => n.id === antwort_auf)
-    if (!parent || parent.raum_id !== raum_id) throw bad('Auf diese Nachricht lässt sich hier nicht antworten.')
-    if (parent.antwort_auf) throw bad('Auf eine Antwort lässt sich nicht noch einmal antworten. Bitte im selben Verlauf schreiben.')
-    if (parent.geloescht_at) throw bad('Diese Nachricht ist gelöscht.')
+    if (!parent || parent.raum_id !== raum_id) throw bad(tr('Auf diese Nachricht lässt sich hier nicht antworten.'))
+    if (parent.antwort_auf) throw bad(tr('Auf eine Antwort lässt sich nicht noch einmal antworten. Bitte im selben Verlauf schreiben.'))
+    if (parent.geloescht_at) throw bad(tr('Diese Nachricht ist gelöscht.'))
   }
   const msg = { id: id || uid(), raum_id, art: r.art, autor: me, text: t, erwaehnt: mentionable(db, erwaehnt), anhaenge: files, antwort_auf: antwort_auf || null, antworten: 0, letzte_antwort_at: null, created_at: now(), bearbeitet_at: null, geloescht_at: null }
   db.chat_nachrichten.push(msg)
@@ -159,7 +161,7 @@ export function chatSend(db, me, { id, raum_id, text, erwaehnt, antwort_auf, anh
 // Antworten auf eine Nachricht, älteste zuerst
 export function chatThread(db, me, parentId) {
   const parent = db.chat_nachrichten.find((n) => n.id === parentId)
-  if (!parent) throw noRight('Diese Nachricht gibt es nicht.')
+  if (!parent) throw noRight(tr('Diese Nachricht gibt es nicht.'))
   room(db, me, parent.raum_id)
   return db.chat_nachrichten.filter((n) => n.antwort_auf === parentId).sort((a, b) => a.created_at.localeCompare(b.created_at))
 }
@@ -174,10 +176,10 @@ export function chatReact(db, me, nachrichtId, zeichen, aktiv) {
   me = low(me)
   const n = db.chat_nachrichten.find((x) => x.id === nachrichtId)
   const r = n && db.chat_raeume.find((x) => x.id === n.raum_id)
-  if (!n || !canSeeRoom(db, me, r)) throw dbError('23503', 'Diese Nachricht gibt es nicht.')
-  if (r.archiviert) throw noRight('Der Kanal ist archiviert.')
+  if (!n || !canSeeRoom(db, me, r)) throw dbError('23503', tr('Diese Nachricht gibt es nicht.'))
+  if (r.archiviert) throw noRight(tr('Der Kanal ist archiviert.'))
   if (!REACTIONS.includes(zeichen)) throw dbError('23514', 'check')
-  if (n.geloescht_at) throw bad('Auf gelöschte Nachrichten lässt sich nicht reagieren.')
+  if (n.geloescht_at) throw bad(tr('Auf gelöschte Nachrichten lässt sich nicht reagieren.'))
   const old = db.chat_reaktionen.find((x) => x.nachricht_id === nachrichtId && x.email === me && x.zeichen === zeichen)
   if (old) Object.assign(old, { aktiv: aktiv !== false, updated_at: now() })
   else db.chat_reaktionen.push({ nachricht_id: nachrichtId, email: me, zeichen, aktiv: aktiv !== false, raum_id: n.raum_id, art: n.art, created_at: now(), updated_at: now() })
@@ -197,7 +199,7 @@ export function chatEdit(db, me, id, patch) {
   me = low(me)
   const n = db.chat_nachrichten.find((x) => x.id === id)
   if (!n || n.autor !== me || !canSeeRoom(db, me, db.chat_raeume.find((r) => r.id === n.raum_id))) throw noRight()
-  if (n.geloescht_at) throw noRight('Diese Nachricht ist gelöscht und lässt sich nicht mehr ändern.')
+  if (n.geloescht_at) throw noRight(tr('Diese Nachricht ist gelöscht und lässt sich nicht mehr ändern.'))
   if (patch.geloescht) {
     Object.assign(n, { text: '', erwaehnt: [], anhaenge: [], geloescht_at: now() })
   } else {
@@ -210,11 +212,11 @@ export function chatEdit(db, me, id, patch) {
 
 export function chatCreateChannel(db, me, { name, beschreibung, offen, mitglieder }) {
   me = low(me)
-  if (!isTeam(db, me)) throw noRight('Kanäle legen nur Mitglieder des Teams an.')
+  if (!isTeam(db, me)) throw noRight(tr('Kanäle legen nur Mitglieder des Teams an.'))
   const n = String(name || '').trim()
-  if (!n) throw bad('Bitte gib dem Kanal einen Namen.')
+  if (!n) throw bad(tr('Bitte gib dem Kanal einen Namen.'))
   if (n.length > 80) throw dbError('23514', 'check')
-  if (db.chat_raeume.some((r) => r.art === 'kanal' && !r.archiviert && low(r.name) === low(n))) throw bad('Einen Kanal mit diesem Namen gibt es schon.')
+  if (db.chat_raeume.some((r) => r.art === 'kanal' && !r.archiviert && low(r.name) === low(n))) throw bad(tr('Einen Kanal mit diesem Namen gibt es schon.'))
   const people = checkPeople(db, [...(mitglieder || []), me], true)
   const r = { id: uid(), art: 'kanal', name: n, beschreibung: String(beschreibung || '').trim() || null, offen: offen !== false, project_id: null, direkt_schluessel: null, created_by: me, archiviert: false, letzte_at: null, created_at: now(), updated_at: now() }
   db.chat_raeume.push(r)
@@ -225,8 +227,8 @@ export function chatCreateChannel(db, me, { name, beschreibung, offen, mitgliede
 export function chatDirect(db, me, email) {
   me = low(me)
   const du = low(email)
-  if (!isTeam(db, me)) throw noRight('Direktnachrichten schreiben nur Mitglieder des Teams.')
-  if (du === me) throw bad('Eine Direktnachricht an dich selbst gibt es nicht.')
+  if (!isTeam(db, me)) throw noRight(tr('Direktnachrichten schreiben nur Mitglieder des Teams.'))
+  if (du === me) throw bad(tr('Eine Direktnachricht an dich selbst gibt es nicht.'))
   checkPeople(db, [du], false)
   const key = [me, du].sort().join(' ')
   const found = db.chat_raeume.find((r) => r.direkt_schluessel === key)
@@ -239,9 +241,9 @@ export function chatDirect(db, me, email) {
 
 export function chatCreateGroup(db, me, { mitglieder, name }) {
   me = low(me)
-  if (!isTeam(db, me)) throw noRight('Gruppen legen nur Mitglieder des Teams an.')
+  if (!isTeam(db, me)) throw noRight(tr('Gruppen legen nur Mitglieder des Teams an.'))
   const people = checkPeople(db, [...(mitglieder || []), me], false)
-  if (people.length < 2) throw bad('Bitte wähl mindestens eine Person aus.')
+  if (people.length < 2) throw bad(tr('Bitte wähl mindestens eine Person aus.'))
   if (people.length === 2) return chatDirect(db, me, people.find((e) => e !== me))
   const r = { id: uid(), art: 'gruppe', name: String(name || '').trim() || null, beschreibung: null, offen: true, project_id: null, direkt_schluessel: null, created_by: me, archiviert: false, letzte_at: null, created_at: now(), updated_at: now() }
   db.chat_raeume.push(r)
@@ -252,10 +254,10 @@ export function chatCreateGroup(db, me, { mitglieder, name }) {
 export function chatAddMembers(db, me, raumId, emails) {
   me = low(me)
   const r = room(db, me, raumId)
-  if (!isTeam(db, me)) throw noRight('Diesen Chat gibt es nicht oder du darfst dort niemanden hinzufügen.')
-  if (r.art === 'direkt') throw bad('In eine Direktnachricht kommt niemand dazu. Leg dafür eine Gruppe an.')
-  if (r.archiviert) throw bad('Der Kanal ist archiviert.')
-  if (r.art === 'gruppe' && !isMember(db, r.id, me)) throw noRight('Nur wer in der Gruppe ist, fügt Personen hinzu.')
+  if (!isTeam(db, me)) throw noRight(tr('Diesen Chat gibt es nicht oder du darfst dort niemanden hinzufügen.'))
+  if (r.art === 'direkt') throw bad(tr('In eine Direktnachricht kommt niemand dazu. Leg dafür eine Gruppe an.'))
+  if (r.archiviert) throw bad(tr('Der Kanal ist archiviert.'))
+  if (r.art === 'gruppe' && !isMember(db, r.id, me)) throw noRight(tr('Nur wer in der Gruppe ist, fügt Personen hinzu.'))
   addMembers(db, r, checkPeople(db, emails, r.art === 'kanal'), me)
 }
 
@@ -263,10 +265,10 @@ export function chatRemoveMember(db, me, raumId, email) {
   me = low(me)
   const who = low(email)
   const r = room(db, me, raumId)
-  if (r.art === 'direkt') throw bad('Aus einer Direktnachricht lässt sich niemand entfernen.')
+  if (r.art === 'direkt') throw bad(tr('Aus einer Direktnachricht lässt sich niemand entfernen.'))
   if (who !== me) {
-    if (r.art !== 'kanal') throw noRight('In Gruppen kann jede Person nur sich selbst entfernen.')
-    if (!isTeam(db, me) || !(r.created_by === me || isAdminRole(db, me))) throw noRight('Andere entfernt nur, wer den Kanal angelegt hat, oder ein Admin.')
+    if (r.art !== 'kanal') throw noRight(tr('In Gruppen kann jede Person nur sich selbst entfernen.'))
+    if (!isTeam(db, me) || !(r.created_by === me || isAdminRole(db, me))) throw noRight(tr('Andere entfernt nur, wer den Kanal angelegt hat, oder ein Admin.'))
   }
   db.chat_mitglieder = db.chat_mitglieder.filter((m) => !(m.raum_id === r.id && m.email === who))
   db.chat_gelesen = db.chat_gelesen.filter((g) => !(g.raum_id === r.id && g.email === who))
@@ -275,18 +277,18 @@ export function chatRemoveMember(db, me, raumId, email) {
 export function chatChangeRoom(db, me, raumId, patch) {
   me = low(me)
   const r = room(db, me, raumId)
-  if (!isTeam(db, me)) throw noRight('Diesen Chat gibt es nicht oder du darfst ihn nicht ändern.')
-  if (r.art === 'direkt') throw bad('Direktnachrichten haben keinen Namen.')
+  if (!isTeam(db, me)) throw noRight(tr('Diesen Chat gibt es nicht oder du darfst ihn nicht ändern.'))
+  if (r.art === 'direkt') throw bad(tr('Direktnachrichten haben keinen Namen.'))
   if (r.art === 'gruppe') {
-    if (!isMember(db, r.id, me)) throw noRight('Nur wer in der Gruppe ist, ändert ihren Namen.')
+    if (!isMember(db, r.id, me)) throw noRight(tr('Nur wer in der Gruppe ist, ändert ihren Namen.'))
     if (patch.name !== undefined && patch.name !== null) r.name = String(patch.name).trim() || null
     r.updated_at = now()
     return
   }
-  if (!(r.created_by === me || isAdminRole(db, me))) throw noRight('Den Kanal ändert, wer ihn angelegt hat, oder ein Admin.')
+  if (!(r.created_by === me || isAdminRole(db, me))) throw noRight(tr('Den Kanal ändert, wer ihn angelegt hat, oder ein Admin.'))
   const name = String(patch.name || '').trim() || r.name
   const archiviert = patch.archiviert ?? r.archiviert
-  if (!archiviert && db.chat_raeume.some((x) => x.art === 'kanal' && !x.archiviert && x.id !== r.id && low(x.name) === low(name))) throw bad('Einen Kanal mit diesem Namen gibt es schon.')
+  if (!archiviert && db.chat_raeume.some((x) => x.art === 'kanal' && !x.archiviert && x.id !== r.id && low(x.name) === low(name))) throw bad(tr('Einen Kanal mit diesem Namen gibt es schon.'))
   r.name = name
   if (patch.beschreibung !== undefined && patch.beschreibung !== null) r.beschreibung = String(patch.beschreibung).trim() || null
   if (patch.offen !== undefined && patch.offen !== null) r.offen = !!patch.offen

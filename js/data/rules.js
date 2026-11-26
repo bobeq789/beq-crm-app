@@ -1,6 +1,7 @@
 // Regeln, die in Supabase die Datenbank selbst übernimmt (Standardwerte, Trigger, Kaskaden, Grenzen für Gäste).
 // Der Demo-Modus nutzt sie als „Datenbank“, die App nutzt sie, um Änderungen sofort anzuzeigen.
 import { uid, nowIso } from '../lib/util.js'
+import { t } from '../i18n.js'
 
 export const TABLES = [
   'team_members',
@@ -204,7 +205,7 @@ export function checkInsert(db, table, row) {
     throw dbError('23514', 'notes_has_parent')
   }
   if (table === 'aktivitaeten' && !row.card_id && !row.person_id && !row.org_id) {
-    throw dbError('23514', 'Eine Aktivität braucht einen Deal, einen Kontakt oder eine Firma.')
+    throw dbError('23514', t('Eine Aktivität braucht einen Deal, einen Kontakt oder eine Firma.'))
   }
   const pairs = { meeting_persons: ['meeting_id', 'person_id'], event_persons: ['event_id', 'person_id'], email_persons: ['email_id', 'person_id'] }
   if (pairs[table]) {

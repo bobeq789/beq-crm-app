@@ -27,6 +27,7 @@ import {
 } from '../store.js'
 import { Tile } from './common.js'
 import { AuthShell } from './auth.js'
+import { t } from '../i18n.js'
 
 const config = window.CRM_CONFIG || {}
 export const MCP_URL = config.supabaseUrl ? config.supabaseUrl.replace(/\/$/, '') + '/functions/v1/crm-mcp' : '[Adresse nach dem Einrichten von Supabase]'
@@ -40,7 +41,7 @@ export function redirectInfo(uri) {
   } catch {
     return { host: '', allowed: false, label: '[unbekannt]' }
   }
-  if (LOCAL_HOSTS.includes(host)) return { host, allowed: true, label: 'Claude Code auf diesem Rechner' }
+  if (LOCAL_HOSTS.includes(host)) return { host, allowed: true, label: t('Claude Code auf diesem Rechner') }
   if (['claude.ai', 'claude.com'].some((d) => host === d || host.endsWith('.' + d))) return { host, allowed: true, label: host }
   return { host, allowed: false, label: host }
 }
@@ -52,19 +53,19 @@ const clientOf = (d) => {
 
 function CanList() {
   return html`<div class="claude-rights">
-    <p class="claude-rights-head"><${Icon} name="check" size=${16} /> Claude darf, mit deinen Rechten im CRM</p>
+    <p class="claude-rights-head"><${Icon} name="check" size=${16} /> ${t('Claude darf, mit deinen Rechten im CRM')}</p>
     <ul>
-      <li>Deals mit Wert und Status, Notizen, Aktivitäten, Kontakte, Firmen und Meetings lesen, anlegen und ändern</li>
-      <li>Deals in andere Spalten und Pipelines verschieben</li>
-      <li>Termine lesen, die du im CRM siehst</li>
-      <li>Mails lesen, nur aus deinen eigenen Postfächern</li>
+      <li>${t('Deals mit Wert und Status, Notizen, Aktivitäten, Kontakte, Firmen und Meetings lesen, anlegen und ändern')}</li>
+      <li>${t('Deals in andere Spalten und Pipelines verschieben')}</li>
+      <li>${t('Termine lesen, die du im CRM siehst')}</li>
+      <li>${t('Mails lesen, nur aus deinen eigenen Postfächern')}</li>
     </ul>
-    <p class="claude-rights-head"><${Icon} name="x" size=${16} /> Claude darf nie</p>
+    <p class="claude-rights-head"><${Icon} name="x" size=${16} /> ${t('Claude darf nie')}</p>
     <ul>
-      <li>etwas löschen</li>
-      <li>Mails senden</li>
-      <li>Pipelines und Spalten anlegen, umbenennen oder löschen</li>
-      <li>Team, Rechte, Postfächer, Produkte oder deine Einstellungen ändern</li>
+      <li>${t('etwas löschen')}</li>
+      <li>${t('Mails senden')}</li>
+      <li>${t('Pipelines und Spalten anlegen, umbenennen oder löschen')}</li>
+      <li>${t('Team, Rechte, Postfächer, Produkte oder deine Einstellungen ändern')}</li>
     </ul>
   </div>`
 }
@@ -112,12 +113,12 @@ export function ClaudeConsent() {
       let url
       if (allow) {
         const client = clientOf(d)
-        if (!client.id) throw Object.assign(new Error('Die Anfrage enthält keine Kennung. Bitte in Claude noch einmal verbinden.'), { code: 'meldung' })
+        if (!client.id) throw Object.assign(new Error(t('Die Anfrage enthält keine Kennung. Bitte in Claude noch einmal verbinden.')), { code: 'meldung' })
         url = await claudeApprove(id, { clientId: client.id, clientName: client.name, redirectHost: redirectInfo(d.redirect_uri).host })
         setView({ ...view, done: true })
         // Demo: keine Weiterleitung, stattdessen in die Einstellungen
         if (!url) {
-          toast('Claude ist verbunden (Demo). Den Zugang siehst du unter „Claude verbinden“.')
+          toast(t('Claude ist verbunden (Demo). Den Zugang siehst du unter „Claude verbinden“.'))
           location.hash = '#/einstellungen'
         }
       } else {
@@ -132,26 +133,26 @@ export function ClaudeConsent() {
 
   if (!view) {
     return html`<${AuthShell}>
-      <h1 class="auth-title">Claude verbinden</h1>
-      <p class="auth-text" aria-busy="true">Einen Moment, die Anfrage von Claude wird geladen …</p>
+      <h1 class="auth-title">${t('Claude verbinden')}</h1>
+      <p class="auth-text" aria-busy="true">${t('Einen Moment, die Anfrage von Claude wird geladen …')}</p>
     <//>`
   }
   if (view.expired) {
     return html`<${AuthShell}>
-      <h1 class="auth-title">Anfrage abgelaufen</h1>
-      <p class="auth-text">Die Anfrage von Claude ist abgelaufen oder wurde schon beantwortet. Bitte in Claude noch einmal auf „Verbinden“ tippen.</p>
-      <button type="button" class="btn btn-block" onClick=${leaveClaudeConsent}>Weiter ins CRM</button>
+      <h1 class="auth-title">${t('Anfrage abgelaufen')}</h1>
+      <p class="auth-text">${t('Die Anfrage von Claude ist abgelaufen oder wurde schon beantwortet. Bitte in Claude noch einmal auf „Verbinden“ tippen.')}</p>
+      <button type="button" class="btn btn-block" onClick=${leaveClaudeConsent}>${t('Weiter ins CRM')}</button>
     <//>`
   }
   if (view.reconnect) {
     return html`<${AuthShell}>
-      <h1 class="auth-title">Bitte neu verbinden</h1>
+      <h1 class="auth-title">${t('Bitte neu verbinden')}</h1>
       <p class="auth-text">
         ${isGuest()
-          ? 'Den Claude-Zugang gibt es nur für Mitglieder des Teams, nicht für Gäste.'
-          : 'Dieser Zugang war im CRM entzogen. Er ist jetzt auch bei Claude beendet. Bitte in Claude noch einmal auf „Verbinden“ tippen, dann kannst du ihn hier neu freigeben.'}
+          ? t('Den Claude-Zugang gibt es nur für Mitglieder des Teams, nicht für Gäste.')
+          : t('Dieser Zugang war im CRM entzogen. Er ist jetzt auch bei Claude beendet. Bitte in Claude noch einmal auf „Verbinden“ tippen, dann kannst du ihn hier neu freigeben.')}
       </p>
-      <button type="button" class="btn btn-block" onClick=${leaveClaudeConsent}>Weiter ins CRM</button>
+      <button type="button" class="btn btn-block" onClick=${leaveClaudeConsent}>${t('Weiter ins CRM')}</button>
     <//>`
   }
 
@@ -161,31 +162,30 @@ export function ClaudeConsent() {
   const guest = isGuest()
   const blocked = guest || !target.allowed
   return html`<${AuthShell}>
-    <p class="claude-kicker">Claude verbinden</p>
-    <h1 class="auth-title">Zugang für ${client.name} freigeben?</h1>
+    <p class="claude-kicker">${t('Claude verbinden')}</p>
+    <h1 class="auth-title">${t('Zugang für {name} freigeben?', { name: client.name })}</h1>
     ${guest
-      ? html`<p class="auth-text">Den Claude-Zugang gibt es nur für Mitglieder des Teams, nicht für Gäste. Bitte lehne die Anfrage ab.</p>`
+      ? html`<p class="auth-text">${t('Den Claude-Zugang gibt es nur für Mitglieder des Teams, nicht für Gäste. Bitte lehne die Anfrage ab.')}</p>`
       : !target.allowed
         ? html`<p class="auth-text">
-            Diese Anfrage kommt nicht von Claude, sie leitet nach <strong>${target.label}</strong> weiter. Aus Sicherheitsgründen lässt sich hier nur Claude verbinden. Bitte
-            lehne ab.
+            ${t('Diese Anfrage kommt nicht von Claude, sie leitet nach {host} weiter. Aus Sicherheitsgründen lässt sich hier nur Claude verbinden. Bitte lehne ab.', { host: target.label })}
           </p>`
-        : html`<p class="auth-text">„${client.name}“ möchte mit deinem Konto auf das beQ CRM zugreifen.</p>
+        : html`<p class="auth-text">${t('„{name}“ möchte mit deinem Konto auf das beQ CRM zugreifen.', { name: client.name })}</p>
             <${CanList} />
             <p class="auth-hint claude-hint">
-              Alles, was Claude ändert, steht im Verlauf mit „über Claude“. Entziehen kannst du den Zugang jederzeit unter Einstellungen, „Claude verbinden“.
+              ${t('Alles, was Claude ändert, steht im Verlauf mit „über Claude“. Entziehen kannst du den Zugang jederzeit unter Einstellungen, „Claude verbinden“.')}
             </p>`}
     <dl class="claude-facts">
-      <dt>Konto</dt>
+      <dt>${t('Konto')}</dt>
       <dd>${state.sessionEmail}</dd>
-      <dt>Zurück zu</dt>
+      <dt>${t('Zurück zu')}</dt>
       <dd>${target.label}</dd>
     </dl>
     ${error && html`<p class="auth-error" role="alert">${error}</p>`}
     ${view.done
-      ? html`<p class="auth-info" role="status">Verbunden. Du wirst zu Claude zurückgeschickt …</p>`
-      : html`${!blocked && html`<button type="button" class="btn btn-primary btn-block" disabled=${busy} onClick=${() => decide(true)}>Erlauben</button>`}
-          <button type="button" class=${'btn btn-block' + (blocked ? ' btn-primary' : '')} disabled=${busy} onClick=${() => decide(false)}>Ablehnen</button>`}
+      ? html`<p class="auth-info" role="status">${t('Verbunden. Du wirst zu Claude zurückgeschickt …')}</p>`
+      : html`${!blocked && html`<button type="button" class="btn btn-primary btn-block" disabled=${busy} onClick=${() => decide(true)}>${t('Erlauben')}</button>`}
+          <button type="button" class=${'btn btn-block' + (blocked ? ' btn-primary' : '')} disabled=${busy} onClick=${() => decide(false)}>${t('Ablehnen')}</button>`}
   <//>`
 }
 
@@ -195,9 +195,9 @@ export function ClaudeConsent() {
 async function copy(text) {
   try {
     await navigator.clipboard.writeText(text)
-    toast('Adresse kopiert')
+    toast(t('Adresse kopiert'))
   } catch {
-    toast('Kopieren ging nicht. Bitte die Adresse markieren und kopieren.', { error: true })
+    toast(t('Kopieren ging nicht. Bitte die Adresse markieren und kopieren.'), { error: true })
   }
 }
 
@@ -210,7 +210,7 @@ export function ClaudeTile() {
       setError(null)
     } catch (err) {
       setList([])
-      setError(/claude|function|schema cache|PGRST202/i.test(String(err && (err.message || err.code))) ? 'Der Claude-Zugang ist in Supabase noch nicht eingerichtet.' : errorText(err))
+      setError(/claude|function|schema cache|PGRST202/i.test(String(err && (err.message || err.code))) ? t('Der Claude-Zugang ist in Supabase noch nicht eingerichtet.') : errorText(err))
     }
   }
   useEffect(() => {
@@ -218,44 +218,40 @@ export function ClaudeTile() {
   }, [])
   const revoke = async (a) => {
     const ok = await confirmDialog({
-      title: 'Zugang entziehen?',
-      text: `${a.client_name || 'Claude'} kommt danach nicht mehr ins CRM. Was Claude schon angelegt hat, bleibt. Neu verbinden geht jederzeit.`,
-      confirmLabel: 'Entziehen',
+      title: t('Zugang entziehen?'),
+      text: t('{name} kommt danach nicht mehr ins CRM. Was Claude schon angelegt hat, bleibt. Neu verbinden geht jederzeit.', { name: a.client_name || 'Claude' }),
+      confirmLabel: t('Entziehen'),
       danger: true,
     })
     if (!ok) return
     try {
       await claudeRevoke(a.client_id)
-      toast('Zugang entzogen')
+      toast(t('Zugang entzogen'))
     } catch (err) {
-      toast('Im CRM ist der Zugang gesperrt, bei Claude ließ er sich nicht abmelden. Bitte gleich noch einmal versuchen.', { error: true })
+      toast(t('Im CRM ist der Zugang gesperrt, bei Claude ließ er sich nicht abmelden. Bitte gleich noch einmal versuchen.'), { error: true })
     }
     load()
   }
-  return html`<${Tile} title="Claude verbinden" count=${list && list.length ? list.length : undefined}>
+  return html`<${Tile} title=${t('Claude verbinden')} count=${list && list.length ? list.length : undefined}>
     <p class="muted small">
-      Verbinde dein eigenes Claude mit dem CRM, im Browser, in der Desktop-App oder in Claude Code. Claude arbeitet dann mit deinen Rechten: Deals,
-      Notizen, Aktivitäten, Kontakte, Firmen, Meetings und Termine lesen und schreiben, Mails nur aus deinen eigenen Postfächern lesen. Claude löscht nie und
-      sendet keine Mails.
+      ${t('Verbinde dein eigenes Claude mit dem CRM, im Browser, in der Desktop-App oder in Claude Code. Claude arbeitet dann mit deinen Rechten: Deals, Notizen, Aktivitäten, Kontakte, Firmen, Meetings und Termine lesen und schreiben, Mails nur aus deinen eigenen Postfächern lesen. Claude löscht nie und sendet keine Mails.')}
     </p>
     <div class="claude-url">
-      <label class="field-label" for="claude-url">Adresse des CRM für Claude</label>
+      <label class="field-label" for="claude-url">${t('Adresse des CRM für Claude')}</label>
       <div class="claude-url-row">
         <input id="claude-url" readonly value=${MCP_URL} onFocus=${(e) => e.target.select()} />
-        <button type="button" class="btn" onClick=${() => copy(MCP_URL)}>Kopieren</button>
+        <button type="button" class="btn" onClick=${() => copy(MCP_URL)}>${t('Kopieren')}</button>
       </div>
     </div>
     <ol class="claude-steps">
       <li>
-        <strong>Claude im Browser oder in der Desktop-App:</strong> „Customize“ (Anpassen), „Connectors“, beim Connector „beQ CRM“ auf „Connect“ klicken. Fehlt er, legt ihn
-        ein Owner eures Claude-Teams einmal an: „Organization settings“, „Connectors“, „Add“, „Custom“, „Web“, Name „beQ CRM“, diese Adresse, bei der Anmeldung „Register
-        automatically“.
+        <strong>${t('Claude im Browser oder in der Desktop-App:')}</strong> ${t('„Customize“ (Anpassen), „Connectors“, beim Connector „beQ CRM“ auf „Connect“ klicken. Fehlt er, legt ihn ein Owner eures Claude-Teams einmal an: „Organization settings“, „Connectors“, „Add“, „Custom“, „Web“, Name „beQ CRM“, diese Adresse, bei der Anmeldung „Register automatically“.')}
       </li>
       <li>
-        <strong>Claude Code:</strong> Im Terminal <code>claude mcp add --transport http --scope user beq-crm ${MCP_URL}</code>, dann in Claude Code <code>/mcp</code>,
-        „beq-crm“ wählen und anmelden.
+        <strong>Claude Code:</strong> ${t('Im Terminal')} <code>claude mcp add --transport http --scope user beq-crm ${MCP_URL}</code>, ${t('dann in Claude Code')} <code>/mcp</code>,
+        ${t('„beq-crm“ wählen und anmelden.')}
       </li>
-      <li>Claude öffnet das CRM. Dort meldest du dich an (mit zweitem Faktor) und klickst auf „Erlauben“.</li>
+      <li>${t('Claude öffnet das CRM. Dort meldest du dich an (mit zweitem Faktor) und klickst auf „Erlauben“.')}</li>
     </ol>
     ${error && html`<p class="form-error" role="alert">${error}</p>`}
     ${list && list.length > 0
@@ -264,12 +260,12 @@ export function ClaudeTile() {
             (a) => html`<li key=${a.client_id}>
               <span class="claude-list-name">
                 <strong>${a.client_name || 'Claude'}</strong>
-                <span class="muted small">${a.redirect_host && LOCAL_HOSTS.includes(a.redirect_host) ? 'Claude Code' : a.redirect_host || ''} · freigegeben ${fmtRelative(a.erteilt_at)}</span>
+                <span class="muted small">${a.redirect_host && LOCAL_HOSTS.includes(a.redirect_host) ? 'Claude Code' : a.redirect_host || ''} · ${t('freigegeben {when}', { when: fmtRelative(a.erteilt_at) })}</span>
               </span>
-              <button type="button" class="btn" onClick=${() => revoke(a)}>Zugang entziehen</button>
+              <button type="button" class="btn" onClick=${() => revoke(a)}>${t('Zugang entziehen')}</button>
             </li>`
           )}
         </ul>`
-      : list && !error && html`<p class="muted small">Noch kein Claude verbunden.${isDemo ? ' Zum Ausprobieren: ?demo&authorization_id=test an die Adresse hängen.' : ''}</p>`}
+      : list && !error && html`<p class="muted small">${t('Noch kein Claude verbunden.')}${isDemo ? ' ' + t('Zum Ausprobieren: ?demo&authorization_id=test an die Adresse hängen.') : ''}</p>`}
   <//>`
 }

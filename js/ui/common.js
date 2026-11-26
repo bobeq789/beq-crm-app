@@ -37,6 +37,7 @@ import {
 } from '../store.js'
 import { mentionPeople, parseMentions, NoteText } from './mentions.js'
 import { openCard } from '../router.js'
+import { t } from '../i18n.js'
 
 // „beQ“ bleibt auch in Großbuchstaben-Zeilen (Kicker) richtig geschrieben
 export function brandSafe(text) {
@@ -47,9 +48,9 @@ export function brandSafe(text) {
 export function PageHead({ kicker, title, actions, back }) {
   return html`<header class="page-head">
     <div class="page-head-text">
-      ${back && html`<a class="back-link" href=${back.href}><${Icon} name="back" size=${16} /> ${back.label}</a>`}
-      ${kicker && html`<div class="kicker">${brandSafe(kicker)}</div>`}
-      <h1 class="page-title">${title}</h1>
+      ${back && html`<a class="back-link" href=${back.href}><${Icon} name="back" size=${16} /> ${t(back.label)}</a>`}
+      ${kicker && html`<div class="kicker">${brandSafe(t(kicker))}</div>`}
+      <h1 class="page-title">${t(title)}</h1>
     </div>
     ${actions && html`<div class="page-actions">${actions}</div>`}
   </header>`
@@ -64,8 +65,8 @@ export function Tile({ title, count, actions, children, cls = '', drag = null })
       onPointerDown=${drag ? drag.onPointerDown : undefined}
       onDragStart=${drag ? (e) => e.preventDefault() : undefined}
     >
-      ${drag && html`<span class="tile-grip" title="Ziehen zum Verschieben" aria-hidden="true"><${Icon} name="grip" size=${18} /></span>`}
-      <h2 class="tile-title">${title}${count !== undefined && html` <span class="count">${count}</span>`}</h2>
+      ${drag && html`<span class="tile-grip" title=${t('Ziehen zum Verschieben')} aria-hidden="true"><${Icon} name="grip" size=${18} /></span>`}
+      <h2 class="tile-title">${t(title)}${count !== undefined && html` <span class="count">${count}</span>`}</h2>
       ${actions}
     </div>`}
     ${children}
@@ -77,7 +78,7 @@ export function Tile({ title, count, actions, children, cls = '', drag = null })
 export function CallLink({ name, phones }) {
   const phone = (phones || []).find((x) => telHref(x))
   if (!phone) return null
-  return html`<a class="call-btn" href=${telHref(phone)} aria-label=${(name || 'Kontakt') + ' anrufen'} title=${'Anrufen: ' + phone}>
+  return html`<a class="call-btn" href=${telHref(phone)} aria-label=${t('{name} anrufen', { name: name || t('Kontakt') })} title=${t('Anrufen: {phone}', { phone })}>
     <${Icon} name="phone" size=${20} />
   </a>`
 }
@@ -110,10 +111,10 @@ const WD_SHORT = ['So.', 'Mo.', 'Di.', 'Mi.', 'Do.', 'Fr.', 'Sa.']
 export function activityWhen(a) {
   const diff = dayDiff(todayStr(), a.faellig)
   const time = a.uhrzeit ? ' ' + String(a.uhrzeit).slice(0, 5) : ''
-  if (diff < 0) return { text: diff === -1 ? 'seit gestern' : `seit ${-diff} Tagen`, tone: 'overdue' }
-  if (diff === 0) return { text: 'heute' + time, tone: 'today' }
-  if (diff === 1) return { text: 'morgen' + time, tone: 'soon' }
-  if (diff < 7) return { text: WD_SHORT[parseYmd(a.faellig).getDay()] + time, tone: 'soon' }
+  if (diff < 0) return { text: diff === -1 ? t('seit gestern') : t('seit {n} Tagen', { n: -diff }), tone: 'overdue' }
+  if (diff === 0) return { text: t('heute') + time, tone: 'today' }
+  if (diff === 1) return { text: t('morgen') + time, tone: 'soon' }
+  if (diff < 7) return { text: t(WD_SHORT[parseYmd(a.faellig).getDay()]) + time, tone: 'soon' }
   return { text: fmtDate(a.faellig) + time, tone: 'later' }
 }
 
@@ -126,21 +127,21 @@ export function ActivityBadge({ cardId }) {
   const kind = activityKind(a.art)
   const when = activityWhen(a)
   const more = open.length - 1
-  const tip = `Nächste Aktivität: ${kind.label}${a.titel ? ', ' + a.titel : ''}${more ? `, dazu ${more} weitere` : ''}`
+  const tip = t('Nächste Aktivität: {kind}', { kind: t(kind.label) }) + (a.titel ? ', ' + a.titel : '') + (more ? t(', dazu {n} weitere', { n: more }) : '')
   return html`<span class=${'badge act-badge due-' + when.tone} title=${tip} aria-label=${tip}><${Icon} name=${kind.icon} size=${12} />${when.text}</span>`
 }
 
 // Marke „Neu“: Kollegen haben seit meinem letzten Öffnen etwas geändert
 export function NewBadge({ cardId }) {
-  if (isMentioned(cardId)) return html`<span class="badge badge-new" title="Du wurdest erwähnt">@ dich</span>`
+  if (isMentioned(cardId)) return html`<span class="badge badge-new" title=${t('Du wurdest erwähnt')}>${t('@ dich')}</span>`
   if (!isNew(cardId)) return null
-  return html`<span class="badge badge-new" title="Kollegen haben seit deinem letzten Öffnen etwas geändert">Neu</span>`
+  return html`<span class="badge badge-new" title=${t('Kollegen haben seit deinem letzten Öffnen etwas geändert')}>${t('Neu')}</span>`
 }
 
 export function PrioBadge({ priority }) {
   if (!priority) return null
   const p = SETTINGS.priorities.find((x) => x.value === priority)
-  return html`<span class=${'badge prio-' + priority}>${p ? p.label : priority}</span>`
+  return html`<span class=${'badge prio-' + priority}>${p ? t(p.label) : priority}</span>`
 }
 
 export function Labels({ labels }) {
@@ -156,10 +157,10 @@ export function LinkText({ text }) {
 }
 
 export function Segmented({ options, value, onChange, label }) {
-  return html`<div class="segmented" role="group" aria-label=${label}>
+  return html`<div class="segmented" role="group" aria-label=${t(label)}>
     ${options.map(
       (o) => html`<button type="button" class=${value === o.value ? 'active' : ''} aria-pressed=${value === o.value} onClick=${() => onChange(o.value)}>
-        ${o.label}
+        ${t(o.label)}
       </button>`
     )}
   </div>`
@@ -167,7 +168,7 @@ export function Segmented({ options, value, onChange, label }) {
 
 // Dringlichkeit: drei Knöpfe, abwählbar
 export function PriorityPicker({ value, onChange }) {
-  return html`<div class="prio-picker" role="group" aria-label="Dringlichkeit">
+  return html`<div class="prio-picker" role="group" aria-label=${t('Dringlichkeit')}>
     ${SETTINGS.priorities.map(
       (p) => html`<button
         type="button"
@@ -175,7 +176,7 @@ export function PriorityPicker({ value, onChange }) {
         aria-pressed=${value === p.value}
         onClick=${() => onChange(value === p.value ? null : p.value)}
       >
-        ${p.label}
+        ${t(p.label)}
       </button>`
     )}
   </div>`
@@ -184,7 +185,7 @@ export function PriorityPicker({ value, onChange }) {
 export function ProjectSelect({ value, onChange, includeArchived = false, allowEmpty = false, id }) {
   const list = state.db.projects.filter((p) => includeArchived || !p.archived || p.id === value).sort((a, b) => a.sort - b.sort)
   return html`<select id=${id} value=${value || ''} onChange=${(e) => onChange(e.target.value || null)}>
-    ${allowEmpty && html`<option value="">Keine Pipeline</option>`}
+    ${allowEmpty && html`<option value="">${t('Keine Pipeline')}</option>`}
     ${list.map((p) => html`<option value=${p.id}>${p.name}</option>`)}
   </select>`
 }
@@ -194,16 +195,16 @@ export function AssigneeSelect({ value, onChange, id, emptyLabel = 'Niemand' }) 
     .filter((t) => (t.active && t.role !== 'gast') || t.email === value)
     .sort((a, b) => a.name.localeCompare(b.name, 'de'))
   return html`<select id=${id} value=${value || ''} onChange=${(e) => onChange(e.target.value || null)}>
-    <option value="">${emptyLabel}</option>
+    <option value="">${t(emptyLabel)}</option>
     ${list.map((t) => html`<option value=${t.email}>${t.name}</option>`)}
   </select>`
 }
 
 export function Field({ label, children, hint, htmlFor }) {
   return html`<div class="field">
-    ${label && html`<label class="field-label" for=${htmlFor}>${label}</label>`}
+    ${label && html`<label class="field-label" for=${htmlFor}>${t(label)}</label>`}
     ${children}
-    ${hint && html`<div class="field-hint">${hint}</div>`}
+    ${hint && html`<div class="field-hint">${t(hint)}</div>`}
   </div>`
 }
 
@@ -219,8 +220,8 @@ export function TaskRow({ card, showSince, sinceText, checkActivity }) {
       ? html`<button
           type="button"
           class="check"
-          title="Aktivität abhaken, der Deal bleibt"
-          aria-label=${'Aktivität „' + activityText(checkActivity) + '“ abhaken, der Deal bleibt'}
+          title=${t('Aktivität abhaken, der Deal bleibt')}
+          aria-label=${t('Aktivität „{name}“ abhaken, der Deal bleibt', { name: t(activityText(checkActivity)) })}
           onClick=${() => completeActivity(checkActivity)}
         >
           <${Icon} name="check" size=${16} />
@@ -228,8 +229,8 @@ export function TaskRow({ card, showSince, sinceText, checkActivity }) {
       : html`<button
           type="button"
           class=${'check' + (done ? ' checked' : '')}
-          title=${done ? 'Erledigt' : 'Abhaken'}
-          aria-label=${'„' + card.title + '“ abhaken'}
+          title=${done ? t('Erledigt') : t('Abhaken')}
+          aria-label=${t('„{name}“ abhaken', { name: card.title })}
           onClick=${() => !done && completeCard(card)}
         >
           <${Icon} name="check" size=${16} />
@@ -291,10 +292,10 @@ export function useOverlay(onClose) {
 export function Modal({ title, onClose, children, footer, wide = false, cls = '' }) {
   useOverlay(onClose)
   return html`<div class="backdrop" onClick=${(e) => e.target === e.currentTarget && onClose()}>
-    <div class=${'modal' + (wide ? ' modal-wide' : '') + (cls ? ' ' + cls : '')} role="dialog" aria-modal="true" aria-label=${title}>
+    <div class=${'modal' + (wide ? ' modal-wide' : '') + (cls ? ' ' + cls : '')} role="dialog" aria-modal="true" aria-label=${t(title)}>
       <div class="modal-head">
-        <h2 class="modal-title">${title}</h2>
-        <button type="button" class="icon-btn" aria-label="Schließen" onClick=${onClose}><${Icon} name="x" /></button>
+        <h2 class="modal-title">${t(title)}</h2>
+        <button type="button" class="icon-btn" aria-label=${t('Schließen')} onClick=${onClose}><${Icon} name="x" /></button>
       </div>
       <div class="modal-body">${children}</div>
       ${footer && html`<div class="modal-foot">${footer}</div>`}
@@ -310,10 +311,10 @@ function ConfirmDialog({ d }) {
   return html`<${Modal}
     title=${d.title}
     onClose=${() => done(false)}
-    footer=${html`<button type="button" class="btn" onClick=${() => done(false)}>${d.cancelLabel || 'Abbrechen'}</button>
-      <button type="button" class=${d.danger ? 'btn btn-danger' : 'btn btn-primary'} onClick=${() => done(true)}>${d.confirmLabel}</button>`}
+    footer=${html`<button type="button" class="btn" onClick=${() => done(false)}>${t(d.cancelLabel || 'Abbrechen')}</button>
+      <button type="button" class=${d.danger ? 'btn btn-danger' : 'btn btn-primary'} onClick=${() => done(true)}>${t(d.confirmLabel)}</button>`}
   >
-    ${d.text && html`<p>${d.text}</p>`}
+    ${d.text && html`<p>${t(d.text)}</p>`}
   <//>`
 }
 
@@ -335,8 +336,8 @@ function PromptDialog({ d }) {
         <input id="prompt-input" ref=${ref} value=${value} onInput=${(e) => setValue(e.target.value)} />
       <//>
       <div class="form-actions">
-        <button type="button" class="btn" onClick=${() => done(null)}>Abbrechen</button>
-        <button type="submit" class="btn btn-primary" disabled=${!value.trim()}>${d.confirmLabel}</button>
+        <button type="button" class="btn" onClick=${() => done(null)}>${t('Abbrechen')}</button>
+        <button type="submit" class="btn btn-primary" disabled=${!value.trim()}>${t(d.confirmLabel)}</button>
       </div>
     </form>
   <//>`
@@ -355,20 +356,20 @@ export function Dialogs() {
 export function Toasts() {
   return html`<div class="toasts" role="status" aria-live="polite">
     ${state.toasts.map(
-      (t) => html`<div class=${'toast' + (t.error ? ' toast-error' : '')} key=${t.id}>
-        <span class="toast-text">${t.text}</span>
-        ${t.action &&
+      (x) => html`<div class=${'toast' + (x.error ? ' toast-error' : '')} key=${x.id}>
+        <span class="toast-text">${t(x.text)}</span>
+        ${x.action &&
         html`<button
           type="button"
           class="toast-action"
           onClick=${() => {
-            dismissToast(t.id)
-            t.action.run()
+            dismissToast(x.id)
+            x.action.run()
           }}
         >
-          ${t.action.label}
+          ${t(x.action.label)}
         </button>`}
-        <button type="button" class="toast-close" aria-label="Meldung schließen" onClick=${() => dismissToast(t.id)}>
+        <button type="button" class="toast-close" aria-label=${t('Meldung schließen')} onClick=${() => dismissToast(x.id)}>
           <${Icon} name="x" size=${16} />
         </button>
       </div>`
@@ -391,7 +392,7 @@ export function EntityPicker({ kind, value, onChange, placeholder, inputId }) {
     return html`<div class="picked">
       <a class="picked-name" href=${hrefBase + selected.id}>${selected.name}</a>
       ${org && html`<span class="muted small">${org.name}</span>`}
-      <button type="button" class="icon-btn small" aria-label="Auswahl entfernen" onClick=${() => onChange(null)}><${Icon} name="x" size=${16} /></button>
+      <button type="button" class="icon-btn small" aria-label=${t('Auswahl entfernen')} onClick=${() => onChange(null)}><${Icon} name="x" size=${16} /></button>
     </div>`
   }
 
@@ -417,7 +418,7 @@ export function EntityPicker({ kind, value, onChange, placeholder, inputId }) {
     <input
       id=${inputId}
       value=${q}
-      placeholder=${placeholder}
+      placeholder=${t(placeholder)}
       autocomplete="off"
       onInput=${(e) => {
         setQ(e.target.value)
@@ -447,7 +448,7 @@ export function EntityPicker({ kind, value, onChange, placeholder, inputId }) {
       ${!exact &&
       html`<li>
         <button type="button" class="picker-new" onMouseDown=${(e) => e.preventDefault()} onClick=${create}>
-          <${Icon} name="plus" size=${16} /> „${q.trim()}“ als ${kind === 'person' ? 'neuen Kontakt' : 'neue Firma'} anlegen
+          <${Icon} name="plus" size=${16} /> ${kind === 'person' ? t('„{name}“ als neuen Kontakt anlegen', { name: q.trim() }) : t('„{name}“ als neue Firma anlegen', { name: q.trim() })}
         </button>
       </li>`}
     </ul>`}
@@ -461,14 +462,14 @@ export function ListInput({ values, onChange, placeholder, type = 'text', addLab
   return html`<div class="list-input">
     ${list.map(
       (v, i) => html`<div class="list-input-row">
-        <input id=${i === 0 ? idPrefix : undefined} type=${type} value=${v} placeholder=${placeholder} onInput=${(e) => set(i, e.target.value)} />
+        <input id=${i === 0 ? idPrefix : undefined} type=${type} value=${v} placeholder=${t(placeholder)} onInput=${(e) => set(i, e.target.value)} />
         ${list.length > 1 &&
-        html`<button type="button" class="icon-btn small" aria-label="Entfernen" onClick=${() => onChange(list.filter((_, j) => j !== i))}>
+        html`<button type="button" class="icon-btn small" aria-label=${t('Entfernen')} onClick=${() => onChange(list.filter((_, j) => j !== i))}>
           <${Icon} name="x" size=${16} />
         </button>`}
       </div>`
     )}
-    <button type="button" class="link-btn" onClick=${() => onChange([...list, ''])}><${Icon} name="plus" size=${16} /> ${addLabel}</button>
+    <button type="button" class="link-btn" onClick=${() => onChange([...list, ''])}><${Icon} name="plus" size=${16} /> ${t(addLabel)}</button>
   </div>`
 }
 
@@ -579,13 +580,13 @@ export function LabelPicker({ value, onChange, inputId }) {
       ${current.map(
         (l) => html`<span class="chip label-chip" key=${l}>
           ${l}
-          <button type="button" aria-label=${'Label „' + l + '“ entfernen'} onClick=${() => onChange(current.filter((x) => x !== l))}>
+          <button type="button" aria-label=${t('Label „{name}“ entfernen', { name: l })} onClick=${() => onChange(current.filter((x) => x !== l))}>
             <${Icon} name="x" size=${14} />
           </button>
         </span>`
       )}
       ${!editing &&
-      html`<button type="button" ref=${addRef} class="label-add" onClick=${() => setEditing(true)}><${Icon} name="plus" size=${14} /> Label</button>`}
+      html`<button type="button" ref=${addRef} class="label-add" onClick=${() => setEditing(true)}><${Icon} name="plus" size=${14} /> ${t('Label')}</button>`}
     </div>`}
     ${editing &&
     html`<div class="picker label-editor">
@@ -593,8 +594,8 @@ export function LabelPicker({ value, onChange, inputId }) {
         ref=${inputRef}
         id=${inputId}
         value=${text}
-        placeholder="Label suchen oder neu"
-        aria-label="Label suchen oder neu"
+        placeholder=${t('Label suchen oder neu')}
+        aria-label=${t('Label suchen oder neu')}
         autocomplete="off"
         role="combobox"
         aria-autocomplete="list"
@@ -610,18 +611,18 @@ export function LabelPicker({ value, onChange, inputId }) {
         onBlur=${onBlur}
       />
       ${listOpen &&
-      html`<ul class="picker-list label-list" id=${listId} role="listbox" aria-label="Labels">
-        ${!q && html`<li class="picker-hint" role="presentation">Neues Label: einfach eintippen</li>`}
+      html`<ul class="picker-list label-list" id=${listId} role="listbox" aria-label=${t('Labels')}>
+        ${!q && html`<li class="picker-hint" role="presentation">${t('Neues Label: einfach eintippen')}</li>`}
         ${items.map(
           (it, i) => html`<li role="option" id=${listId + '-' + i} aria-selected=${i === active} key=${(it.isNew ? 'neu:' : '') + it.label}>
             <button type="button" tabindex="-1" class=${(it.isNew ? 'picker-new' : '') + (i === active ? ' is-active' : '')} onMouseDown=${(e) => e.preventDefault()} onClick=${() => add(it.label)}>
-              ${it.isNew ? html`<${Icon} name="plus" size=${16} /> „${it.label}“ als neues Label anlegen` : html`<span>${it.label}</span>`}
+              ${it.isNew ? html`<${Icon} name="plus" size=${16} /> ${t('„{name}“ als neues Label anlegen', { name: it.label })}` : html`<span>${it.label}</span>`}
             </button>
           </li>`
         )}
-        ${taken && html`<li class="picker-hint" role="presentation">„${existing}“ ist schon vergeben</li>`}
-        ${autoOnly && html`<li class="picker-hint" role="presentation">„${existing}“ vergibt der Abgleich selbst</li>`}
-        ${!q && !items.length && html`<li class="picker-hint" role="presentation">Alle vorhandenen Labels sind hier schon vergeben.</li>`}
+        ${taken && html`<li class="picker-hint" role="presentation">${t('„{name}“ ist schon vergeben', { name: existing })}</li>`}
+        ${autoOnly && html`<li class="picker-hint" role="presentation">${t('„{name}“ vergibt der Abgleich selbst', { name: existing })}</li>`}
+        ${!q && !items.length && html`<li class="picker-hint" role="presentation">${t('Alle vorhandenen Labels sind hier schon vergeben.')}</li>`}
       </ul>`}
     </div>`}
   </div>`
@@ -661,22 +662,22 @@ function NoteItem({ note, guestRelevant }) {
     setEditing(false)
   }
   const del = async () => {
-    if (await confirmDialog({ title: 'Notiz löschen?', text: 'Die Notiz ist danach weg.', confirmLabel: 'Löschen', danger: true })) {
+    if (await confirmDialog({ title: t('Notiz löschen?'), text: t('Die Notiz ist danach weg.'), confirmLabel: t('Löschen'), danger: true })) {
       remove('notes', note.id)
     }
   }
   return html`<li class=${'note' + (note.internal ? ' note-internal' : '')}>
     ${editing
-      ? html`<textarea rows="4" value=${text} aria-label="Notiz bearbeiten" onInput=${(e) => setText(e.target.value)}></textarea>
+      ? html`<textarea rows="4" value=${text} aria-label=${t('Notiz bearbeiten')} onInput=${(e) => setText(e.target.value)}></textarea>
           <div class="form-actions">
-            <button type="button" class="btn" onClick=${cancel}>Abbrechen</button>
-            <button type="button" class="btn btn-primary" disabled=${!text.trim()} onClick=${save}>Speichern</button>
+            <button type="button" class="btn" onClick=${cancel}>${t('Abbrechen')}</button>
+            <button type="button" class="btn btn-primary" disabled=${!text.trim()} onClick=${save}>${t('Speichern')}</button>
           </div>`
       : html`<div class="note-content"><${NoteText} text=${note.content} mentions=${note.mentions} /></div>`}
     <div class="note-meta">
       <span>
-        ${note.internal && guestRelevant && html`<span class="note-lock" title="Nur für das Team, Gäste sehen diese Notiz nicht"><${Icon} name="lock" size=${14} /> Nur Team · </span>`}
-        <${Avatar} email=${note.author} /> ${memberName(note.author) || 'Unbekannt'}${note.via === 'claude' ? ' über Claude' : ''} · ${fmtRelative(note.created_at)}${edited ? ' · bearbeitet' : ''}
+        ${note.internal && guestRelevant && html`<span class="note-lock" title=${t('Nur für das Team, Gäste sehen diese Notiz nicht')}><${Icon} name="lock" size=${14} /> ${t('Nur Team')} · </span>`}
+        <${Avatar} email=${note.author} /> ${memberName(note.author) || t('Unbekannt')}${note.via === 'claude' ? ' ' + t('über Claude') : ''} · ${fmtRelative(note.created_at)}${edited ? ' · ' + t('bearbeitet') : ''}
       </span>
       ${!editing &&
       html`<span class="note-actions">
@@ -686,14 +687,14 @@ function NoteItem({ note, guestRelevant }) {
           type="button"
           class="icon-btn small"
           aria-pressed=${!!note.internal}
-          aria-label=${note.internal ? 'Für Gäste sichtbar machen' : 'Nur für das Team'}
-          title=${note.internal ? 'Für Gäste sichtbar machen' : 'Nur für das Team'}
+          aria-label=${note.internal ? t('Für Gäste sichtbar machen') : t('Nur für das Team')}
+          title=${note.internal ? t('Für Gäste sichtbar machen') : t('Nur für das Team')}
           onClick=${() => update('notes', note.id, { internal: !note.internal })}
         >
           <${Icon} name=${note.internal ? 'lock' : 'lockOpen'} size=${16} />
         </button>`}
-        ${canEdit && html`<button type="button" class="icon-btn small" aria-label="Notiz bearbeiten" onClick=${() => setEditing(true)}><${Icon} name="edit" size=${16} /></button>`}
-        ${!guest && html`<button type="button" class="icon-btn small" aria-label="Notiz löschen" onClick=${del}><${Icon} name="trash" size=${16} /></button>`}
+        ${canEdit && html`<button type="button" class="icon-btn small" aria-label=${t('Notiz bearbeiten')} onClick=${() => setEditing(true)}><${Icon} name="edit" size=${16} /></button>`}
+        ${!guest && html`<button type="button" class="icon-btn small" aria-label=${t('Notiz löschen')} onClick=${del}><${Icon} name="trash" size=${16} /></button>`}
       </span>`}
     </div>
   </li>`
@@ -738,8 +739,8 @@ export function Notes({ field, id }) {
       <textarea
         ref=${area}
         rows="3"
-        placeholder="Notiz schreiben …"
-        aria-label="Neue Notiz"
+        placeholder=${t('Notiz schreiben …')}
+        aria-label=${t('Neue Notiz')}
         value=${text}
         onInput=${(e) => setText(e.target.value)}
         onKeyDown=${(e) => {
@@ -747,9 +748,9 @@ export function Notes({ field, id }) {
         }}
       ></textarea>
       ${showMentions &&
-      html`<div class="mention-buttons" role="group" aria-label="Erwähnen">
+      html`<div class="mention-buttons" role="group" aria-label=${t('Erwähnen')}>
         ${people.buttons.map(
-          (p) => html`<button type="button" class="chip-btn small" title=${p.name + (p.guest ? ' (Gast)' : '')} onClick=${() => mention(p)}>@${p.label}</button>`
+          (p) => html`<button type="button" class="chip-btn small" title=${p.name + (p.guest ? ' (' + t('Gast') + ')' : '')} onClick=${() => mention(p)}>@${p.label}</button>`
         )}
       </div>`}
       <div class="form-actions">
@@ -758,12 +759,12 @@ export function Notes({ field, id }) {
           type="button"
           class=${'chip-btn' + (internal ? ' active' : '')}
           aria-pressed=${internal}
-          title="Nur für das Team: Gäste sehen diese Notiz nicht"
+          title=${t('Nur für das Team: Gäste sehen diese Notiz nicht')}
           onClick=${() => setInternal(!internal)}
         >
-          <${Icon} name=${internal ? 'lock' : 'lockOpen'} size=${16} /> Nur Team
+          <${Icon} name=${internal ? 'lock' : 'lockOpen'} size=${16} /> ${t('Nur Team')}
         </button>`}
-        <button type="button" class="btn btn-primary" disabled=${!text.trim()} onClick=${save}>Notiz speichern</button>
+        <button type="button" class="btn btn-primary" disabled=${!text.trim()} onClick=${save}>${t('Notiz speichern')}</button>
       </div>
     </div>
     ${list.length ? html`<ul class="note-list">${list.map((n) => html`<${NoteItem} note=${n} guestRelevant=${guestRelevant} key=${n.id} />`)}</ul>` : null}
@@ -799,7 +800,7 @@ export function MultiSelect({ options, value, onToggle, label, empty = 'Niemand'
     return () => document.removeEventListener('pointerdown', away)
   }, [open])
   const chosen = options.filter((o) => value.includes(o.value))
-  const summary = chosen.length ? chosen.map((o) => o.label).join(', ') : empty
+  const summary = chosen.length ? chosen.map((o) => o.label).join(', ') : t(empty)
   const onKeyDown = (e) => {
     if (e.key === 'Escape' && open) {
       e.stopPropagation()
@@ -807,12 +808,12 @@ export function MultiSelect({ options, value, onToggle, label, empty = 'Niemand'
     }
   }
   return html`<div class="multi-select" ref=${ref} onKeyDown=${onKeyDown}>
-    <button type="button" id=${id} class=${'multi-select-btn' + (chosen.length ? '' : ' is-empty')} aria-haspopup="listbox" aria-expanded=${open} aria-controls=${listId} aria-label=${label + ': ' + summary} onClick=${() => setOpen(!open)}>
+    <button type="button" id=${id} class=${'multi-select-btn' + (chosen.length ? '' : ' is-empty')} aria-haspopup="listbox" aria-expanded=${open} aria-controls=${listId} aria-label=${t(label) + ': ' + summary} onClick=${() => setOpen(!open)}>
       <span class="multi-select-text">${summary}</span>
       <span class=${'pp-chevron' + (open ? ' open' : '')}><${Icon} name="chevron" size=${16} /></span>
     </button>
     ${open &&
-    html`<ul class="multi-select-list" id=${listId} role="listbox" aria-multiselectable="true" aria-label=${label}>
+    html`<ul class="multi-select-list" id=${listId} role="listbox" aria-multiselectable="true" aria-label=${t(label)}>
       ${options.map((o) => {
         const on = value.includes(o.value)
         return html`<li key=${o.value} role="option" aria-selected=${on}>

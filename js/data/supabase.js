@@ -1,6 +1,7 @@
 // Echte Datenbank: Supabase. Gleiche Schnittstelle wie demo.js.
 // Die Bibliothek wird erst geladen, wenn sie gebraucht wird (im Demo-Modus nie).
 import { TABLES, OPTIONAL_TABLES } from './rules.js'
+import { t } from '../i18n.js'
 
 function loadScript(src) {
   return new Promise((resolve, reject) => {
@@ -38,7 +39,7 @@ const TEAM_ONLY = new Set(['meetings', 'meeting_persons', 'events', 'event_perso
 // Meldung eines Dienstes als Fehler für errorText() (schon für Menschen geschrieben)
 function functionError(res, body) {
   const e = new Error(
-    body.error || (res.status === 404 ? 'Dieser Dienst ist in Supabase noch nicht eingerichtet. Bitte melde dich beim Admin.' : 'Google ist gerade nicht erreichbar. Bitte gleich noch einmal versuchen.')
+    body.error || (res.status === 404 ? t('Dieser Dienst ist in Supabase noch nicht eingerichtet. Bitte melde dich beim Admin.') : t('Google ist gerade nicht erreichbar. Bitte gleich noch einmal versuchen.'))
   )
   e.code = 'meldung'
   return e
@@ -557,7 +558,7 @@ export async function createSupabaseApi(config) {
       const body = await res.json().catch(() => ({}))
       if (res.ok && body.url) return body.url
       const e = new Error(
-        body.error || (res.status === 404 ? 'Die Verbindung zu Google ist noch nicht eingerichtet. Bitte melde dich beim Admin.' : 'Google ist gerade nicht erreichbar. Bitte gleich noch einmal versuchen.')
+        body.error || (res.status === 404 ? t('Die Verbindung zu Google ist noch nicht eingerichtet. Bitte melde dich beim Admin.') : t('Google ist gerade nicht erreichbar. Bitte gleich noch einmal versuchen.'))
       )
       e.code = 'meldung'
       throw e

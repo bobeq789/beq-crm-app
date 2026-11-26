@@ -1747,3 +1747,9 @@ img.avatar-img { display: inline-block; object-fit: cover; padding: 0; backgroun
 .ct-who .avatar, .team-table .ct-link .avatar, .note-meta .avatar { vertical-align: middle; margin-right: 4px; }
 .team-list li > .avatar { flex: none; }
 .pl-acts-hint { margin: 0 0 8px; }
+
+/* Sprache auf der Anmeldeseite (i18n.js, Wunsch vom 26.11.2026): zwei kleine Textknöpfe oben rechts */
+.auth-lang { position: absolute; top: max(16px, env(safe-area-inset-top)); right: 16px; display: flex; gap: 2px; z-index: 1; }
+.auth-lang button { border: 0; background: none; color: var(--grey); font: inherit; font-size: 14px; font-weight: 500; padding: 8px 10px; min-height: 40px; border-radius: 8px; cursor: pointer; }
+.auth-lang button:hover { color: var(--white); }
+.auth-lang button.active { color: var(--white); background: var(--navy-2); }

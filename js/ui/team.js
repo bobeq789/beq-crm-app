@@ -10,12 +10,13 @@ import { todayStr, endOfWeekStr, addDays, norm } from '../lib/util.js'
 import { state, activeMembers, activeProjects, cardKind, isCardOf, activityHolder, isSuperAdmin } from '../store.js'
 import { navigate } from '../router.js'
 import { PageHead, Tile, Empty, Dot, Avatar } from './common.js'
+import { t } from '../i18n.js'
 
 function Stat({ label, value, sub, main = false, alert = false }) {
   return html`<div class=${'stat' + (main ? ' stat-main' : '')}>
-    <span class="stat-label">${label}</span>
+    <span class="stat-label">${t(label)}</span>
     <span class=${'stat-value' + (alert && value > 0 ? ' stat-alert' : '')}>${value}</span>
-    ${sub && html`<span class="muted small">${sub}</span>`}
+    ${sub && html`<span class="muted small">${t(sub)}</span>`}
   </div>`
 }
 
@@ -35,7 +36,7 @@ const num = (n, alert = false) => html`<td class=${'ct-num' + (alert && n > 0 ? 
 
 export function TeamPage() {
   if (!isSuperAdmin()) {
-    return html`<div class="page"><${PageHead} kicker="Team" title="Team-Überblick" /><${Empty}>Diese Seite sieht nur beQ Backoffice.<//></div>`
+    return html`<div class="page"><${PageHead} kicker="Team" title="Team-Überblick" /><${Empty}>${t('Diese Seite sieht nur beQ Backoffice.')}<//></div>`
   }
   const today = todayStr()
   const weekEnd = endOfWeekStr()
@@ -66,7 +67,7 @@ export function TeamPage() {
 
   return html`<div class="page page-team">
     <${PageHead} kicker="Team" title="Team-Überblick" />
-    <p class="muted">Deals aller Pipelines ohne Archiv. Nur du siehst diese Seite. Deals mit mehreren Zuständigen zählen bei jeder Person.</p>
+    <p class="muted">${t('Deals aller Pipelines ohne Archiv. Nur du siehst diese Seite. Deals mit mehreren Zuständigen zählen bei jeder Person.')}</p>
     <div class="stats">
       <${Stat} main=${true} label="Offen" value=${total.open} sub="ohne Erledigt" />
       <${Stat} label="Überfällig" value=${total.overdue} alert=${true} sub="Fälligkeit vorbei" />
@@ -79,14 +80,14 @@ export function TeamPage() {
       <div class="card-table-wrap">
         <table class="sales-table team-table">
           <thead>
-            <tr><th>Person</th><th>Offen</th><th>Überfällig</th><th>Diese Woche</th><th>Wartet</th><th>Aktivitäten offen</th><th>Erledigt (7 Tage)</th></tr>
+            <tr><th>${t('Person')}</th><th>${t('Offen')}</th><th>${t('Überfällig')}</th><th>${t('Diese Woche')}</th><th>${t('Wartet')}</th><th>${t('Aktivitäten offen')}</th><th>${t('Erledigt (7 Tage)')}</th></tr>
           </thead>
           <tbody>
             ${people.map(
               (p) => html`<tr key=${p.member.email}>
-                <td><button type="button" class="ct-link" title="Pipeline öffnen" onClick=${() => navigate('/board/meine', { von: norm(p.member.email) })}><${Avatar} email=${p.member.email} /> ${p.member.name}</button></td>
+                <td><button type="button" class="ct-link" title=${t('Pipeline öffnen')} onClick=${() => navigate('/board/meine', { von: norm(p.member.email) })}><${Avatar} email=${p.member.email} /> ${p.member.name}</button></td>
                 ${num(p.open)}${num(p.overdue, true)}${num(p.week)}${num(p.waiting)}
-                <td class=${'ct-num' + (p.actsOverdue > 0 ? ' team-alert' : '')}>${p.acts}${p.actsOverdue > 0 ? ` (${p.actsOverdue} überfällig)` : ''}</td>
+                <td class=${'ct-num' + (p.actsOverdue > 0 ? ' team-alert' : '')}>${p.acts}${p.actsOverdue > 0 ? ' ' + t('({n} überfällig)', { n: p.actsOverdue }) : ''}</td>
                 ${num(p.done)}
               </tr>`
             )}
@@ -99,12 +100,12 @@ export function TeamPage() {
       <div class="card-table-wrap">
         <table class="sales-table team-table">
           <thead>
-            <tr><th>Pipeline</th><th>Offen</th><th>Überfällig</th><th>Diese Woche</th><th>Wartet</th><th>Ohne Zuständige</th><th>Erledigt (7 Tage)</th></tr>
+            <tr><th>${t('Pipeline')}</th><th>${t('Offen')}</th><th>${t('Überfällig')}</th><th>${t('Diese Woche')}</th><th>${t('Wartet')}</th><th>${t('Ohne Zuständige')}</th><th>${t('Erledigt (7 Tage)')}</th></tr>
           </thead>
           <tbody>
             ${projects.map(
               (p) => html`<tr key=${p.project.id}>
-                <td><button type="button" class="ct-link" title="Pipeline öffnen" onClick=${() => navigate('/board/' + p.project.id)}><${Dot} color=${p.project.color} /> ${p.project.name}</button></td>
+                <td><button type="button" class="ct-link" title=${t('Pipeline öffnen')} onClick=${() => navigate('/board/' + p.project.id)}><${Dot} color=${p.project.color} /> ${p.project.name}</button></td>
                 ${num(p.open)}${num(p.overdue, true)}${num(p.week)}${num(p.waiting)}${num(p.nobody, true)}${num(p.done)}
               </tr>`
             )}

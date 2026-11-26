@@ -1,4 +1,5 @@
 // Kleine Helfer: IDs, deutsche Datumsangaben, Suche, Links, Telefonnummern
+import { t, getLang, isEnglish, locale } from '../i18n.js'
 
 export function uid() {
   if (globalThis.crypto && crypto.randomUUID) return crypto.randomUUID()
@@ -43,21 +44,40 @@ export function endOfWeekStr() {
   return ymd(d)
 }
 
-const WD = ['So.', 'Mo.', 'Di.', 'Mi.', 'Do.', 'Fr.', 'Sa.']
-const WD_LONG = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
-const MON = ['Jan.', 'Feb.', 'März', 'Apr.', 'Mai', 'Juni', 'Juli', 'Aug.', 'Sept.', 'Okt.', 'Nov.', 'Dez.']
-const MON_LONG = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember']
+// Namen für Tage und Monate je Sprache (i18n.js). Als Proxy, damit WEEKDAYS_SHORT usw. unten
+// beim Lesen immer die aktuelle Sprache liefern.
+const NAMES = {
+  de: {
+    WD: ['So.', 'Mo.', 'Di.', 'Mi.', 'Do.', 'Fr.', 'Sa.'],
+    WD_LONG: ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'],
+    MON: ['Jan.', 'Feb.', 'März', 'Apr.', 'Mai', 'Juni', 'Juli', 'Aug.', 'Sept.', 'Okt.', 'Nov.', 'Dez.'],
+    MON_LONG: ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'],
+  },
+  en: {
+    WD: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+    WD_LONG: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+    MON: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    MON_LONG: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+  },
+}
+const names = (key) => new Proxy([], { get: (_, p) => (p === 'length' ? NAMES.de[key].length : NAMES[getLang()][key][p]) })
+const WD = names('WD')
+const WD_LONG = names('WD_LONG')
+const MON = names('MON')
+const MON_LONG = names('MON_LONG')
 
-// „Mo., 3. Nov.“ (mit Jahr, wenn nicht das laufende Jahr)
+// „Mo., 3. Nov.“ / „Mon, 3 Nov“ (mit Jahr, wenn nicht das laufende Jahr)
 export function fmtDate(value) {
   if (!value) return ''
   const d = typeof value === 'string' && value.length <= 10 ? parseYmd(value) : new Date(value)
   const year = d.getFullYear() !== new Date().getFullYear() ? ` ${d.getFullYear()}` : ''
+  if (isEnglish()) return `${WD[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()]}${year}`
   return `${WD[d.getDay()]}, ${d.getDate()}. ${MON[d.getMonth()]}${year}`
 }
 
-// „Montag, 2. November“
+// „Montag, 2. November“ / „Monday, 2 November“
 export function fmtDateLong(d = new Date()) {
+  if (isEnglish()) return `${WD_LONG[d.getDay()]}, ${d.getDate()} ${MON_LONG[d.getMonth()]}`
   return `${WD_LONG[d.getDay()]}, ${d.getDate()}. ${MON_LONG[d.getMonth()]}`
 }
 
@@ -80,15 +100,15 @@ export function monthLabel(iso) {
 export function fmtRelative(iso) {
   if (!iso) return ''
   const diffMin = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
-  if (diffMin < 1) return 'gerade eben'
-  if (diffMin < 60) return diffMin === 1 ? 'vor 1 Minute' : `vor ${diffMin} Minuten`
+  if (diffMin < 1) return t('gerade eben')
+  if (diffMin < 60) return diffMin === 1 ? t('vor 1 Minute') : t('vor {n} Minuten', { n: diffMin })
   const days = dayDiff(ymd(new Date(iso)), todayStr())
   if (days === 0) {
     const h = Math.round(diffMin / 60)
-    return h === 1 ? 'vor 1 Stunde' : `vor ${h} Stunden`
+    return h === 1 ? t('vor 1 Stunde') : t('vor {n} Stunden', { n: h })
   }
-  if (days === 1) return 'gestern'
-  if (days < 7) return `vor ${days} Tagen`
+  if (days === 1) return t('gestern')
+  if (days < 7) return t('vor {n} Tagen', { n: days })
   return fmtDate(iso)
 }
 
@@ -96,11 +116,11 @@ export function fmtRelative(iso) {
 export function sinceLabel(iso) {
   if (!iso) return ''
   const days = dayDiff(ymd(new Date(iso)), todayStr())
-  if (days <= 0) return 'seit heute'
-  if (days === 1) return 'seit gestern'
-  if (days < 14) return `seit ${days} Tagen`
-  if (days < 60) return `seit ${Math.floor(days / 7)} Wochen`
-  return `seit ${Math.floor(days / 30)} Monaten`
+  if (days <= 0) return t('seit heute')
+  if (days === 1) return t('seit gestern')
+  if (days < 14) return t('seit {n} Tagen', { n: days })
+  if (days < 60) return t('seit {n} Wochen', { n: Math.floor(days / 7) })
+  return t('seit {n} Monaten', { n: Math.floor(days / 30) })
 }
 
 // Fälligkeit als kleine Marke: Text und Ton (overdue, today, soon, later)
@@ -109,10 +129,10 @@ export function dueInfo(due) {
   const diff = dayDiff(todayStr(), due)
   if (diff < 0) {
     const n = -diff
-    return { text: n === 1 ? 'seit gestern fällig' : `seit ${n} Tagen fällig`, tone: 'overdue' }
+    return { text: n === 1 ? t('seit gestern fällig') : t('seit {n} Tagen fällig', { n }), tone: 'overdue' }
   }
-  if (diff === 0) return { text: 'heute fällig', tone: 'today' }
-  if (diff === 1) return { text: 'morgen', tone: 'soon' }
+  if (diff === 0) return { text: t('heute fällig'), tone: 'today' }
+  if (diff === 1) return { text: t('morgen'), tone: 'soon' }
   if (diff < 7) return { text: WD_LONG[parseYmd(due).getDay()], tone: 'soon' }
   return { text: fmtDate(due).replace(/^\S+ /, ''), tone: 'later' }
 }
@@ -309,9 +329,9 @@ export function sameDay(a, b) {
 
 // „10:00 bis 11:00“, ganztägig „ganztägig“
 export function fmtTimeRange(start, end, allDay) {
-  if (allDay) return 'ganztägig'
+  if (allDay) return t('ganztägig')
   if (!end) return fmtTime(start)
-  return `${fmtTime(start)} bis ${fmtTime(end)}`
+  return t('{a} bis {b}', { a: fmtTime(start), b: fmtTime(end) })
 }
 
 // Text aus HTML gewinnen, ohne etwas davon auszuführen (DOMParser führt keine Skripte aus)
@@ -392,12 +412,13 @@ export function fmtSize(bytes) {
   if (bytes == null) return ''
   if (bytes < 1024) return `${bytes} Byte`
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
-  return `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`
+  const mb = (bytes / 1024 / 1024).toFixed(1)
+  return `${isEnglish() ? mb : mb.replace('.', ',')} MB`
 }
 
 // Euro aus Cent: „9.800 €“ (ohne Nachkommastellen, wenn glatt)
 export function fmtEuro(cents) {
   const v = Number(cents || 0) / 100
   const whole = Math.round(v) === v
-  return v.toLocaleString('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 })
+  return v.toLocaleString(locale(), { style: 'currency', currency: 'EUR', minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 })
 }

@@ -26,6 +26,7 @@ import { Modal, dialogKinds } from './ui/common.js'
 import { openDialog, closeDialog } from './store.js'
 import { Login, SetPassword, NotMember, AuthError, AuthOffline, Splash, MfaEnroll, MfaVerify } from './ui/auth.js'
 import { ClaudeConsent } from './ui/claude.js'
+import { t } from './i18n.js'
 
 const NAV_TEAM = [
   { key: '', label: 'Übersicht', icon: 'home' },
@@ -55,14 +56,14 @@ const NAV_MINOR = ['meetings', 'firmen', 'team']
 
 function NavMore() {
   const more = navTeam().filter((n) => !MOBILE_MAIN.includes(n.key))
-  return html`<${Modal} title="Mehr" onClose=${closeDialog}>
+  return html`<${Modal} title=${t('Mehr')} onClose=${closeDialog}>
     <ul class="nav-more">
       ${more.map(
         (n) => html`<li key=${n.key}>
-          <a href=${'#/' + n.key} onClick=${closeDialog}><${Icon} name=${n.icon} size=${22} /> ${n.label}</a>
+          <a href=${'#/' + n.key} onClick=${closeDialog}><${Icon} name=${n.icon} size=${22} /> ${t(n.label)}</a>
         </li>`
       )}
-      <li><a href="#/einstellungen" onClick=${closeDialog}><${Icon} name="gear" size=${22} /> Einstellungen</a></li>
+      <li><a href="#/einstellungen" onClick=${closeDialog}><${Icon} name="gear" size=${22} /> ${t('Einstellungen')}</a></li>
     </ul>
   <//>`
 }
@@ -129,7 +130,7 @@ function Page({ route }) {
 // da“, am „Postfach“ die neuen Mails seit dem letzten Blick. Kreis in Grün mit Navy-Schrift.
 function NavCount({ n, what }) {
   if (!n) return null
-  return html`<span class="nav-count" title=${n + ' ' + what}><span aria-hidden="true">${n > 99 ? '99+' : n}</span><span class="sr-only">, ${n} ${what}</span></span>`
+  return html`<span class="nav-count" title=${n + ' ' + t(what)}><span aria-hidden="true">${n > 99 ? '99+' : n}</span><span class="sr-only">, ${n} ${t(what)}</span></span>`
 }
 
 // Dieselbe Zahl wie an „Übersicht“ am App-Symbol (wo der Browser es kann), in der Hauptansicht
@@ -157,32 +158,32 @@ function Shell({ route }) {
   const home = guest ? '#/geteilt' : '#/'
   return html`<div class="shell">
     <header class="topbar">
-      <a class="brand" href=${home} aria-label="beQ CRM, zur Startseite">
+      <a class="brand" href=${home} aria-label=${t('beQ CRM, zur Startseite')}>
         <img src="img/logo-dunkel.svg" alt="beQ CRM" width="104" height="26" />
       </a>
       ${!guest && html`<div class="topsearch"><${TopSearch} /></div>`}
-      <nav class="topnav" aria-label="Bereiche">
+      <nav class="topnav" aria-label=${t('Bereiche')}>
         ${nav.map(
           (n) => html`<a
             href=${'#/' + n.key}
             class=${[section === n.key ? 'active' : '', !guest && !MOBILE_MAIN.includes(n.key) ? 'nav-extra' : '', !guest && NAV_MINOR.includes(n.key) ? 'nav-minor' : ''].filter(Boolean).join(' ')}
             aria-current=${section === n.key ? 'page' : undefined}
           >
-            ${n.label}<${NavCount} n=${counts[n.key]} what=${countText[n.key]} />
+            ${t(n.label)}<${NavCount} n=${counts[n.key]} what=${countText[n.key]} />
           </a>`
         )}
         ${!guest &&
         html`<button type="button" class=${'topnav-more' + (!MOBILE_MAIN.includes(section) && section !== 'einstellungen' ? ' active' : '')} onClick=${() => openDialog({ kind: 'nav-more' })}>
-          Mehr
+          ${t('Mehr')}
         </button>`}
       </nav>
       <div class="topbar-right">
-        ${isDemo && html`<span class="demo-badge" title="Alle Daten sind erfunden und liegen nur in diesem Browser">${guest ? 'Demo · Gast' : 'Demo'}</span>`}
+        ${isDemo && html`<span class="demo-badge" title=${t('Alle Daten sind erfunden und liegen nur in diesem Browser')}>${guest ? t('Demo · Gast') : 'Demo'}</span>`}
         <a
           class=${'header-icon' + (section === 'einstellungen' ? ' active' : '')}
           href="#/einstellungen"
-          aria-label="Einstellungen"
-          title="Einstellungen"
+          aria-label=${t('Einstellungen')}
+          title=${t('Einstellungen')}
           aria-current=${section === 'einstellungen' ? 'page' : undefined}
         >
           <${Icon} name="gear" size=${22} />
@@ -193,17 +194,17 @@ function Shell({ route }) {
       <${Page} route=${route} />
     </main>
     ${nav.length > 1 &&
-    html`<nav class="bottomnav" aria-label="Bereiche">
+    html`<nav class="bottomnav" aria-label=${t('Bereiche')}>
       ${(guest ? nav : nav.filter((n) => MOBILE_MAIN.includes(n.key))).map(
         (n) => html`<a href=${'#/' + n.key} class=${section === n.key ? 'active' : ''} aria-current=${section === n.key ? 'page' : undefined}>
           <span class="bottomnav-icon"><${Icon} name=${n.icon} size=${22} /><${NavCount} n=${counts[n.key]} what=${countText[n.key]} /></span>
-          <span>${n.label}</span>
+          <span>${t(n.label)}</span>
         </a>`
       )}
       ${!guest &&
       html`<button type="button" class=${'bottomnav-more' + (!MOBILE_MAIN.includes(section) && section !== 'einstellungen' ? ' active' : '')} onClick=${() => openDialog({ kind: 'nav-more' })}>
         <${Icon} name="more" size=${22} />
-        <span>Mehr</span>
+        <span>${t('Mehr')}</span>
       </button>`}
     </nav>`}
     ${cardId && html`<${CardPanel} id=${cardId} key=${cardId} />`}

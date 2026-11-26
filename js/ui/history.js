@@ -4,11 +4,12 @@ import { Icon } from '../lib/icons.js'
 import { fmtDate, fmtRelative, firstName, norm } from '../lib/util.js'
 import { fetchCardEvents, memberName, myEmail, state } from '../store.js'
 import { Avatar } from './common.js'
+import { t, isEnglish, stageLabel, locale } from '../i18n.js'
 
 const PRIO = { hoch: 'Hoch', mittel: 'Mittel', niedrig: 'Niedrig' }
 
 // Aktivitäten im Verlauf (19_aktivitaeten.sql): detail ist „art|datum|text“ bzw. „art|text“.
-// Artikel je Art für ganze Sätze.
+// Artikel je Art für ganze Sätze (Englisch über t()).
 const ACT = {
   wiedervorlage: ['eine Wiedervorlage', 'die Wiedervorlage'],
   anruf: ['einen Anruf', 'den Anruf'],
@@ -16,86 +17,95 @@ const ACT = {
   termin: ['einen Termin', 'den Termin'],
   aufgabe: ['ein To-do', 'das To-do'],
 }
+// Text in Anführungszeichen der jeweiligen Sprache
+const quote = (x) => (isEnglish() ? `“${x}”` : `„${x}“`)
 function actParts(kind, detail) {
   const parts = String(detail || '').split('|')
   const art = ACT[parts[0]] ? parts[0] : 'wiedervorlage'
   const withDate = kind !== 'aktivitaet_erledigt'
   const date = withDate ? parts[1] : null
   const text = (withDate ? parts.slice(2) : parts.slice(1)).join('|')
-  return { a: ACT[art][0], the: ACT[art][1], date: date ? fmtDate(date) : '', text: text ? ` „${text}“` : '' }
+  return { a: t(ACT[art][0]), the: t(ACT[art][1]), date: date ? fmtDate(date) : '', text: text ? ' ' + quote(text) : '' }
 }
-function activitySentence(kind, detail, who, hat) {
+// Satz in zwei Fassungen: eigener Eintrag („Du hast …“) und der anderer („{who} hat …“)
+const say = (self, mine, other, vars) => t(self ? mine : other, vars)
+function activitySentence(kind, detail, who, self) {
   const x = actParts(kind, detail)
-  if (kind === 'aktivitaet') return `${who} ${hat} ${x.a}${x.text} für ${x.date} geplant`
-  if (kind === 'aktivitaet_erledigt') return `${who} ${hat} ${x.the}${x.text} erledigt`
-  return `${who} ${hat} ${x.the}${x.text} auf ${x.date} verschoben`
+  const v = { who, a: x.a, the: x.the, text: x.text, date: x.date }
+  if (kind === 'aktivitaet') return say(self, 'Du hast {a}{text} für {date} geplant', '{who} hat {a}{text} für {date} geplant', v)
+  if (kind === 'aktivitaet_erledigt') return say(self, 'Du hast {the}{text} erledigt', '{who} hat {the}{text} erledigt', v)
+  return say(self, 'Du hast {the}{text} auf {date} verschoben', '{who} hat {the}{text} auf {date} verschoben', v)
 }
 
 // Ein Eintrag als Satz. Eigene Einträge mit „Du“.
 export function eventSentence(e, me = myEmail()) {
-  const self = e.actor && norm(e.actor) === norm(me)
-  const who = !e.actor ? 'Automatisch' : self ? 'Du' : firstName(memberName(e.actor)) || e.actor
-  const hat = self ? 'hast' : 'hat'
+  const self = !!e.actor && norm(e.actor) === norm(me)
+  const who = firstName(memberName(e.actor)) || e.actor
   const d = e.detail || ''
-  const person = (address) => (norm(address) === norm(me) ? 'dich' : firstName(memberName(address)) || address)
+  const person = (address) => (norm(address) === norm(me) ? t('dich') : firstName(memberName(address)) || address)
+  const v = { who, d, q: quote(d) }
   // Ohne Person (Skript, Import, nächtliches Archivieren aus 24_archiv.sql) ohne Subjekt formulieren,
   // zum Beispiel „Automatisch archiviert“
   if (!e.actor) {
     if (e.kind === 'aktivitaet') {
       const x = actParts(e.kind, d)
-      return `${who} ${x.a}${x.text} für ${x.date} geplant`
+      return t('Automatisch {a}{text} für {date} geplant', { a: x.a, text: x.text, date: x.date })
     }
-    const passive = {
-      angelegt: 'angelegt',
-      spalte: `nach „${d}“ verschoben`,
-      projekt: `in die Pipeline ${d} verschoben`,
-      archiv: d === 'archiviert' ? 'archiviert' : 'aus dem Archiv geholt',
-    }
-    return `${who} ${passive[e.kind] || 'geändert'}`
+    if (e.kind === 'angelegt') return t('Automatisch angelegt')
+    if (e.kind === 'spalte') return t('Automatisch nach {q} verschoben', { q: quote(stageLabel(d)) })
+    if (e.kind === 'projekt') return t('Automatisch in die Pipeline {d} verschoben', v)
+    if (e.kind === 'archiv') return d === 'archiviert' ? t('Automatisch archiviert') : t('Automatisch aus dem Archiv geholt')
+    return t('Automatisch geändert')
   }
   switch (e.kind) {
     case 'angelegt':
-      return `${who} ${hat} ihn angelegt`
+      return say(self, 'Du hast ihn angelegt', '{who} hat ihn angelegt', v)
     case 'spalte':
-      return `${who} ${hat} ihn nach „${d}“ verschoben`
+      return say(self, 'Du hast ihn nach {q} verschoben', '{who} hat ihn nach {q} verschoben', { ...v, q: quote(stageLabel(d)) })
     case 'projekt':
-      return `${who} ${hat} ihn in die Pipeline ${d} verschoben`
+      return say(self, 'Du hast ihn in die Pipeline {d} verschoben', '{who} hat ihn in die Pipeline {d} verschoben', v)
     case 'dringlichkeit':
-      return d ? `${who} ${hat} die Dringlichkeit auf ${PRIO[d] || d} gesetzt` : `${who} ${hat} die Dringlichkeit entfernt`
+      return d
+        ? say(self, 'Du hast die Dringlichkeit auf {p} gesetzt', '{who} hat die Dringlichkeit auf {p} gesetzt', { ...v, p: t(PRIO[d] || d) })
+        : say(self, 'Du hast die Dringlichkeit entfernt', '{who} hat die Dringlichkeit entfernt', v)
     case 'faelligkeit':
-      return d ? `${who} ${hat} die Fälligkeit auf ${fmtDate(d)} gesetzt` : `${who} ${hat} die Fälligkeit entfernt`
+      return d
+        ? say(self, 'Du hast die Fälligkeit auf {date} gesetzt', '{who} hat die Fälligkeit auf {date} gesetzt', { ...v, date: fmtDate(d) })
+        : say(self, 'Du hast die Fälligkeit entfernt', '{who} hat die Fälligkeit entfernt', v)
     case 'zustaendig':
-      if (!d) return `${who} ${hat} die Zuständigkeit entfernt`
-      if (self && norm(d) === norm(me)) return `Du hast dich zuständig gemacht`
-      return `${who} ${hat} ${person(d)} zuständig gemacht`
+      if (!d) return say(self, 'Du hast die Zuständigkeit entfernt', '{who} hat die Zuständigkeit entfernt', v)
+      if (self && norm(d) === norm(me)) return t('Du hast dich zuständig gemacht')
+      return say(self, 'Du hast {person} zuständig gemacht', '{who} hat {person} zuständig gemacht', { ...v, person: person(d) })
     case 'titel':
-      return `${who} ${hat} den Titel geändert`
+      return say(self, 'Du hast den Titel geändert', '{who} hat den Titel geändert', v)
     case 'archiv':
-      return d === 'archiviert' ? `${who} ${hat} ihn archiviert` : `${who} ${hat} ihn aus dem Archiv geholt`
+      return d === 'archiviert'
+        ? say(self, 'Du hast ihn archiviert', '{who} hat ihn archiviert', v)
+        : say(self, 'Du hast ihn aus dem Archiv geholt', '{who} hat ihn aus dem Archiv geholt', v)
     case 'notiz':
-      return `${who} ${hat} eine Notiz geschrieben`
+      return say(self, 'Du hast eine Notiz geschrieben', '{who} hat eine Notiz geschrieben', v)
     case 'erwaehnung':
-      return `${who} ${hat} ${person(d)} erwähnt`
+      return say(self, 'Du hast {person} erwähnt', '{who} hat {person} erwähnt', { ...v, person: person(d) })
     case 'datei':
-      return `${who} ${hat} „${d}“ hochgeladen`
+      return say(self, 'Du hast {q} hochgeladen', '{who} hat {q} hochgeladen', v)
     case 'aktivitaet':
     case 'aktivitaet_erledigt':
     case 'aktivitaet_verschoben':
-      return activitySentence(e.kind, d, who, hat)
+      return activitySentence(e.kind, d, who, self)
     // Meine Pipeline (36_meine_pipeline.sql)
     case 'mitzustaendig_dazu':
-      if (self && norm(d) === norm(me)) return `Du hast dich als weitere zuständige Person eingetragen`
-      return `${who} ${hat} ${person(d)} als weitere zuständige Person eingetragen`
+      if (self && norm(d) === norm(me)) return t('Du hast dich als weitere zuständige Person eingetragen')
+      return say(self, 'Du hast {person} als weitere zuständige Person eingetragen', '{who} hat {person} als weitere zuständige Person eingetragen', { ...v, person: person(d) })
     case 'mitzustaendig_weg':
-      return `${who} ${hat} ${person(d)} als weitere zuständige Person ausgetragen`
+      return say(self, 'Du hast {person} als weitere zuständige Person ausgetragen', '{who} hat {person} als weitere zuständige Person ausgetragen', { ...v, person: person(d) })
     case 'unteraufgabe':
-      return `${who} ${hat} „${d}“ zur Checkliste hinzugefügt`
+      return say(self, 'Du hast {q} zur Checkliste hinzugefügt', '{who} hat {q} zur Checkliste hinzugefügt', v)
     case 'unteraufgabe_erledigt':
-      return `${who} ${hat} „${d}“ auf der Checkliste abgehakt`
+      return say(self, 'Du hast {q} auf der Checkliste abgehakt', '{who} hat {q} auf der Checkliste abgehakt', v)
     case 'unteraufgabe_geloescht':
-      return `${who} ${hat} „${d}“ von der Checkliste gelöscht`
+      return say(self, 'Du hast {q} von der Checkliste gelöscht', '{who} hat {q} von der Checkliste gelöscht', v)
     default:
-      return `${who} ${hat} etwas geändert`
+      return say(self, 'Du hast etwas geändert', '{who} hat etwas geändert', v)
   }
 }
 
@@ -107,31 +117,32 @@ export function History({ card }) {
     if (!open) return
     let stale = false
     // Kurz warten, damit eigene Änderungen schon in der Datenbank stehen
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       const list = await fetchCardEvents(card.id)
       if (!stale) setEvents(list)
     }, 300)
     return () => {
       stale = true
-      clearTimeout(t)
+      clearTimeout(timer)
     }
   }, [open, card.id, card.updated_at, state.historyTick])
 
   return html`<section class="history">
     <button type="button" class="history-toggle" aria-expanded=${open} onClick=${() => setOpen(!open)}>
-      <${Icon} name="chevron" size=${16} /> Verlauf
+      ${/* „Verlauf“ heißt im Chat „Thread“ (en-comm.js), hier „History“, deshalb ohne Wörterbuch */ ''}
+      <${Icon} name="chevron" size=${16} /> ${isEnglish() ? 'History' : 'Verlauf'}
     </button>
     ${open &&
     (events === null
-      ? html`<p class="muted small">Wird geladen …</p>`
+      ? html`<p class="muted small">${t('Wird geladen …')}</p>`
       : events.length === 0
-        ? html`<p class="muted small">Noch keine Einträge.</p>`
+        ? html`<p class="muted small">${t('Noch keine Einträge.')}</p>`
         : html`<ul class="history-list">
             ${events.map(
               (e) => html`<li key=${e.id}>
                 ${e.actor ? html`<${Avatar} email=${e.actor} />` : html`<span class="avatar avatar-sm avatar-auto" aria-hidden="true"></span>`}
-                <span class="history-text">${eventSentence(e)}${e.via === 'claude' && html` <span class="via-claude">über Claude</span>`}</span>
-                <span class="muted small" title=${new Date(e.at).toLocaleString('de-DE')}>${fmtRelative(e.at)}</span>
+                <span class="history-text">${eventSentence(e)}${e.via === 'claude' && html` <span class="via-claude">${t('über Claude')}</span>`}</span>
+                <span class="muted small" title=${new Date(e.at).toLocaleString(locale())}>${fmtRelative(e.at)}</span>
               </li>`
             )}
           </ul>`)}

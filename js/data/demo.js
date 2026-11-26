@@ -42,6 +42,8 @@ import {
   touchCard,
 } from './rules.js'
 import * as chat from './chat_rules.js'
+// „tr“ statt „t“, weil hier lokale Variablen „t“ heißen (Teammitglied, Zeitgeber)
+import { t as tr } from '../i18n.js'
 
 const KEY = 'beqcrm-demo-v3'
 // Claude-Zugänge im Demo-Modus (nur in diesem Browser)
@@ -73,13 +75,13 @@ export function createDemoApi({ asGuest = false } = {}) {
   // Weitere Zuständige und Zuständige von Unteraufgaben nur aktive Teammitglieder (36_meine_pipeline.sql)
   const checkHolders = (row, old = null) => {
     const added = (row.mitzustaendig || []).filter((x) => !(old && (old.mitzustaendig || []).includes(x)))
-    if (added.some((x) => !isTeamAddress(db, x))) throw dbError('23514', 'Weitere Zuständige können nur Teammitglieder sein.')
+    if (added.some((x) => !isTeamAddress(db, x))) throw dbError('23514', tr('Weitere Zuständige können nur Teammitglieder sein.'))
   }
   const checkSubtask = (row, old = null) => {
     if (row.zustaendig && (!old || row.zustaendig !== old.zustaendig) && !isTeamAddress(db, row.zustaendig)) {
-      throw dbError('23514', 'Zuständig für einen Punkt der Checkliste können nur Teammitglieder sein.')
+      throw dbError('23514', tr('Zuständig für einen Punkt der Checkliste können nur Teammitglieder sein.'))
     }
-    if (!old && db.unteraufgaben.filter((u) => u.card_id === row.card_id).length >= 100) throw dbError('23514', 'Höchstens 100 Punkte auf der Checkliste je Deal.')
+    if (!old && db.unteraufgaben.filter((u) => u.card_id === row.card_id).length >= 100) throw dbError('23514', tr('Höchstens 100 Punkte auf der Checkliste je Deal.'))
   }
   // Deal gewonnen oder verloren: Aufgabe nach „Erledigt“ (wie 28_deal_abschluss.sql), mit Verlauf
   const moveClosedDeal = (oldDeal, deal) => {
@@ -126,10 +128,10 @@ export function createDemoApi({ asGuest = false } = {}) {
     async signIn() {},
     async signOut() {},
     async resetPassword() {
-      throw dbError('demo', 'Im Demo-Modus nicht verfügbar')
+      throw dbError('demo', tr('Im Demo-Modus nicht verfügbar'))
     },
     async updatePassword() {
-      throw dbError('demo', 'Im Demo-Modus nicht verfügbar')
+      throw dbError('demo', tr('Im Demo-Modus nicht verfügbar'))
     },
     async myRole() {
       const m = db.team_members.find((t) => t.email === me && t.active)
@@ -204,7 +206,7 @@ export function createDemoApi({ asGuest = false } = {}) {
       return []
     },
     async pushSave() {
-      throw dbError('meldung', 'Im Demo-Modus gibt es keine Mitteilungen aufs Handy.')
+      throw dbError('meldung', tr('Im Demo-Modus gibt es keine Mitteilungen aufs Handy.'))
     },
     async pushRemove() {},
     async pushTest() {
@@ -550,7 +552,7 @@ export function createDemoApi({ asGuest = false } = {}) {
       save()
     },
     async fileUrl() {
-      throw dbError('demo', 'Im Demo-Modus haben Dateien keinen Inhalt.')
+      throw dbError('demo', tr('Im Demo-Modus haben Dateien keinen Inhalt.'))
     },
     async removeFile(path) {
       if (asGuest) throw notAllowed()
@@ -566,7 +568,7 @@ export function createDemoApi({ asGuest = false } = {}) {
     // Postfach verbinden: Google gibt es in der Demo nicht. Die Demo legt ein erfundenes
     // Postfach an und springt zurück wie nach der Zustimmung bei Google.
     async connectMailbox() {
-      if (asGuest) throw dbError('meldung', 'Postfächer verbinden dürfen nur Teammitglieder.')
+      if (asGuest) throw dbError('meldung', tr('Postfächer verbinden dürfen nur Teammitglieder.'))
       const taken = new Set(db.mailboxes.filter((b) => b.status !== 'getrennt').map((b) => b.address))
       let n = 2
       while (taken.has(`postfach${n}@example.com`)) n++
@@ -603,9 +605,9 @@ export function createDemoApi({ asGuest = false } = {}) {
       if (asGuest) throw notAllowed()
       if (action === 'senden') {
         const box = db.mailboxes.find((b) => b.address === payload.von && b.owner === me && b.status === 'aktiv')
-        if (!box) throw dbError('meldung', 'Senden geht nur aus deinen eigenen Postfächern.')
+        if (!box) throw dbError('meldung', tr('Senden geht nur aus deinen eigenen Postfächern.'))
         const to = [].concat(payload.an || []).map((a) => String(a).trim().toLowerCase()).filter(Boolean)
-        if (!to.length) throw dbError('meldung', 'Bitte mindestens eine Adresse eintragen.')
+        if (!to.length) throw dbError('meldung', tr('Bitte mindestens eine Adresse eintragen.'))
         const orig = payload.antwort_auf ? db.emails.find((m) => m.id === payload.antwort_auf) : null
         const self = db.team_members.find((t) => t.email === me)
         const id = crypto.randomUUID()
@@ -636,16 +638,16 @@ export function createDemoApi({ asGuest = false } = {}) {
         const mail = db.emails.find((m) => m.id === payload.email_id)
         if (!mail) return { ok: true }
         const box = db.mailboxes.find((b) => b.address === mail.mailbox && b.status === 'aktiv')
-        if (!box || box.owner !== me) throw dbError('meldung', 'Löschen geht nur in deinen eigenen Postfächern.')
+        if (!box || box.owner !== me) throw dbError('meldung', tr('Löschen geht nur in deinen eigenen Postfächern.'))
         db.emails = db.emails.filter((m) => m.id !== mail.id)
         db.email_persons = db.email_persons.filter((x) => x.email_id !== mail.id)
         save()
         return { ok: true }
       }
-      throw dbError('meldung', 'Unbekannte Aktion.')
+      throw dbError('meldung', tr('Unbekannte Aktion.'))
     },
     async mailAttachmentLink() {
-      throw dbError('demo', 'Im Demo-Modus haben Anhänge keinen Inhalt.')
+      throw dbError('demo', tr('Im Demo-Modus haben Anhänge keinen Inhalt.'))
     },
     // Weitere Kalender je Postfach wie 35_weitere_kalender.sql: nur eigene, Hauptkalender fest
     async mailboxCalendars() {

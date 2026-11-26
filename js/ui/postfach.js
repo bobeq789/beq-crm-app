@@ -36,6 +36,7 @@ import {
 } from '../store.js'
 import { PageHead, Segmented, Empty, LinkText, Modal, Field, dialogKinds, useIsMobile } from './common.js'
 import { MailAttachments, attachmentsOf, SpurBadges, SpurBox, SPUR_HINT, GeminiImport } from './emails.js'
+import { t } from '../i18n.js'
 
 const PAGE = 60
 const MAX_FILES = 18 * 1024 * 1024
@@ -64,18 +65,18 @@ function mailboxesOf(m) {
 // Neu seit dem letzten Blick: fett mit gefülltem Pfeil, wie ungelesen (Gmail bleibt unberührt)
 function MailItem({ mail, active, onOpen }) {
   const out = mail.direction === 'out'
-  const who = out ? 'An ' + (mail.to_emails || []).map(nameFor).join(', ') : fromName(mail)
+  const who = out ? t('An {who}', { who: (mail.to_emails || []).map(nameFor).join(', ') }) : fromName(mail)
   const files = attachmentsOf(mail)
   const fresh = isNewMail(mail)
   return html`<li>
     <button type="button" class=${'pf-item' + (active ? ' active' : '') + (fresh ? ' pf-new' : '')} aria-current=${active ? 'true' : undefined} onClick=${() => onOpen(mail.id)}>
       <span class="pf-line1">
-        <span class="pf-who">${fresh && html`<span class="pf-new-mark" aria-label="Neu"></span>`}${who || '(unbekannt)'}</span>
+        <span class="pf-who">${fresh && html`<span class="pf-new-mark" aria-label=${t('Neu')}></span>`}${who || t('(unbekannt)')}</span>
         <span class="pf-time">${shortTime(mail.sent_at)}</span>
       </span>
       <span class="pf-subject">
         ${files.length > 0 && html`<${Icon} name="paperclip" size=${14} cls="pf-clip" />`}
-        ${mail.subject || '(ohne Betreff)'}
+        ${mail.subject || t('(ohne Betreff)')}
       </span>
       ${mail.snippet && html`<span class="pf-snippet">${mail.snippet}</span>`}
       <${SpurBadges} mail=${mail} />
@@ -100,48 +101,48 @@ function MailReader({ mail, onBack }) {
   const reply = (mode) => openCompose({ mode, mail })
   const remove = async () => {
     const ok = await confirmDialog({
-      title: 'Mail löschen?',
-      text: 'Die Mail kommt in den Papierkorb von Gmail und verschwindet aus dem CRM. Im Papierkorb lässt sie sich 30 Tage lang wiederherstellen.',
-      confirmLabel: 'Löschen',
+      title: t('Mail löschen?'),
+      text: t('Die Mail kommt in den Papierkorb von Gmail und verschwindet aus dem CRM. Im Papierkorb lässt sie sich 30 Tage lang wiederherstellen.'),
+      confirmLabel: t('Löschen'),
       danger: true,
     })
     if (ok && (await deleteMail(mail))) (onBack || (() => setParam('mail', null, true)))()
   }
   return html`<article class="pf-reader">
-    ${onBack && html`<button type="button" class="link-btn pf-back" onClick=${onBack}><${Icon} name="back" size=${16} /> Zurück zur Liste</button>`}
-    <h2 class="pf-reader-subject">${mail.subject || '(ohne Betreff)'}</h2>
+    ${onBack && html`<button type="button" class="link-btn pf-back" onClick=${onBack}><${Icon} name="back" size=${16} /> ${t('Zurück zur Liste')}</button>`}
+    <h2 class="pf-reader-subject">${mail.subject || t('(ohne Betreff)')}</h2>
     <div class="pf-reader-meta">
       <div><strong>${fromName(mail)}</strong> <span class="muted small">${mail.from_email}</span></div>
-      ${(mail.to_emails || []).length > 0 && html`<div class="muted small">An: ${mail.to_emails.map(nameFor).join(', ')}</div>`}
-      ${(mail.cc_emails || []).length > 0 && html`<div class="muted small">Kopie: ${mail.cc_emails.map(nameFor).join(', ')}</div>`}
-      <div class="muted small">${fmtDateTime(mail.sent_at)}, Postfach ${mailboxesOf(mail).join(', ')}</div>
+      ${(mail.to_emails || []).length > 0 && html`<div class="muted small">${t('An: {list}', { list: mail.to_emails.map(nameFor).join(', ') })}</div>`}
+      ${(mail.cc_emails || []).length > 0 && html`<div class="muted small">${t('Kopie: {list}', { list: mail.cc_emails.map(nameFor).join(', ') })}</div>`}
+      <div class="muted small">${fmtDateTime(mail.sent_at)}, ${t('Postfach {box}', { box: mailboxesOf(mail).join(', ') })}</div>
     </div>
     <div class="pf-actions">
-      <button type="button" class="btn btn-small" onClick=${() => reply('antworten')}><${Icon} name="reply" size=${16} /> Antworten</button>
-      <button type="button" class="btn btn-small" onClick=${() => reply('allen')}><${Icon} name="replyAll" size=${16} /> Allen antworten</button>
-      <button type="button" class="btn btn-small" onClick=${() => reply('weiter')}><${Icon} name="forward" size=${16} /> Weiterleiten</button>
-      ${own && html`<button type="button" class="btn btn-small btn-danger-text" onClick=${remove}><${Icon} name="trash" size=${16} /> Löschen</button>`}
+      <button type="button" class="btn btn-small" onClick=${() => reply('antworten')}><${Icon} name="reply" size=${16} /> ${t('Antworten')}</button>
+      <button type="button" class="btn btn-small" onClick=${() => reply('allen')}><${Icon} name="replyAll" size=${16} /> ${t('Allen antworten')}</button>
+      <button type="button" class="btn btn-small" onClick=${() => reply('weiter')}><${Icon} name="forward" size=${16} /> ${t('Weiterleiten')}</button>
+      ${own && html`<button type="button" class="btn btn-small btn-danger-text" onClick=${remove}><${Icon} name="trash" size=${16} /> ${t('Löschen')}</button>`}
       ${!isDemo &&
       own &&
       mail.provider_id &&
-      html`<a class="btn btn-small" href=${gmailUrl(mail.mailbox, mail.provider_id)} target="_blank" rel="noopener noreferrer"><${Icon} name="external" size=${16} /> In Gmail</a>`}
+      html`<a class="btn btn-small" href=${gmailUrl(mail.mailbox, mail.provider_id)} target="_blank" rel="noopener noreferrer"><${Icon} name="external" size=${16} /> ${t('In Gmail')}</a>`}
     </div>
     <${GeminiImport} mail=${mail} />
     <${MailAttachments} mail=${mail} cls="pf-attachments" />
     <${SpurBox} mail=${mail} />
     <div class="pf-body">
       ${!loaded
-        ? html`<p class="muted">Wird geladen …</p>`
-        : html`<div class="prose"><${LinkText} text=${parts.main || '(kein Text)'} /></div>
+        ? html`<p class="muted">${t('Wird geladen …')}</p>`
+        : html`<div class="prose"><${LinkText} text=${parts.main || t('(kein Text)')} /></div>
             ${parts.quoted &&
             html`<button type="button" class="link-btn" onClick=${() => setShowQuoted(!showQuoted)}>
-                ${showQuoted ? 'Zitierten Verlauf ausblenden' : 'Zitierten Verlauf anzeigen'}
+                ${showQuoted ? t('Zitierten Verlauf ausblenden') : t('Zitierten Verlauf anzeigen')}
               </button>
               ${showQuoted && html`<div class="prose quoted"><${LinkText} text=${parts.quoted} /></div>`}`}`}
     </div>
     ${persons.length > 0 &&
     html`<div class="pf-persons">
-      <span class="muted small">Kontakte:</span>
+      <span class="muted small">${t('Kontakte:')}</span>
       ${persons.map((p) => html`<a key=${p.id} href=${'#/kontakte/' + p.id}>${p.name}</a>`)}
     </div>`}
   </article>`
@@ -154,21 +155,21 @@ function MailReader({ mail, onBack }) {
 function NoReplyItem({ item, open, onToggle }) {
   const mail = state.db.emails.find((m) => m.id === item.email_id)
   const to = (item.to_emails || []).map(nameFor).join(', ')
-  const since = item.tage === 1 ? 'seit 1 Tag' : `seit ${item.tage} Tagen`
+  const since = item.tage === 1 ? t('seit 1 Tag') : t('seit {n} Tagen', { n: item.tage })
   return html`<li class=${'pf-noreply' + (open ? ' open' : '')}>
     <div class="pf-noreply-row">
       <button type="button" class="pf-item" aria-expanded=${open} onClick=${onToggle}>
-        <span class="pf-line1"><span class="pf-who">An ${to || '(unbekannt)'}</span><span class="pf-time">${shortTime(item.sent_at)}</span></span>
-        <span class="pf-subject"><span class="badge due-later">${since}</span> ${item.subject || '(ohne Betreff)'}</span>
+        <span class="pf-line1"><span class="pf-who">${t('An {who}', { who: to || t('(unbekannt)') })}</span><span class="pf-time">${shortTime(item.sent_at)}</span></span>
+        <span class="pf-subject"><span class="badge due-later">${since}</span> ${item.subject || t('(ohne Betreff)')}</span>
       </button>
-      <button type="button" class="check pf-noreply-check" title="Braucht keine Antwort" aria-label=${'Braucht keine Antwort: ' + (item.subject || 'ohne Betreff')} onClick=${() => dismissNoReply(item)}>
+      <button type="button" class="check pf-noreply-check" title=${t('Braucht keine Antwort')} aria-label=${t('Braucht keine Antwort: {subject}', { subject: item.subject || t('ohne Betreff') })} onClick=${() => dismissNoReply(item)}>
         <${Icon} name="check" size=${16} />
       </button>
     </div>
     ${open &&
     html`<div class="pf-noreply-actions">
-      ${mail && html`<button type="button" class="btn btn-small btn-primary" onClick=${() => openReply(mail)}><${Icon} name="reply" size=${16} /> Nachhaken</button>`}
-      <button type="button" class="btn btn-small" onClick=${() => dismissNoReply(item)}><${Icon} name="check" size=${16} /> Braucht keine Antwort</button>
+      ${mail && html`<button type="button" class="btn btn-small btn-primary" onClick=${() => openReply(mail)}><${Icon} name="reply" size=${16} /> ${t('Nachhaken')}</button>`}
+      <button type="button" class="btn btn-small" onClick=${() => dismissNoReply(item)}><${Icon} name="check" size=${16} /> ${t('Braucht keine Antwort')}</button>
     </div>`}
   </li>`
 }
@@ -176,8 +177,8 @@ function NoReplyItem({ item, open, onToggle }) {
 function NoReplyList({ box }) {
   const [openKey, setOpenKey] = useState(null)
   const items = (state.followUp.noReply || []).filter((x) => !box || x.mailbox === box)
-  if (state.followUp.noReply === null) return html`<p class="muted pf-loading">Wird geladen …</p>`
-  if (!items.length) return html`<${Empty}>Gerade wartest du auf keine Antwort. Hier stehen eigene Mails an Fremde, auf die nach 3 Tagen niemand geantwortet hat.<//>`
+  if (state.followUp.noReply === null) return html`<p class="muted pf-loading">${t('Wird geladen …')}</p>`
+  if (!items.length) return html`<${Empty}>${t('Gerade wartest du auf keine Antwort. Hier stehen eigene Mails an Fremde, auf die nach 3 Tagen niemand geantwortet hat.')}<//>`
   return html`<ul class="pf-items">
     ${items.map((x) => {
       const key = x.mailbox + '|' + x.verlauf
@@ -233,8 +234,8 @@ export function PostfachPage() {
   }
   const actions = html`<div class="pf-head-actions">
     ${mine.length > 0 &&
-    html`<button type="button" class="btn" disabled=${syncing} onClick=${runSync}><${Icon} name="sync" size=${18} /> ${syncing ? 'Gleicht ab …' : 'Jetzt abgleichen'}</button>`}
-    <button type="button" class="btn btn-primary" onClick=${() => openCompose({ mode: 'neu' })}><${Icon} name="plus" size=${18} /> Neue Mail</button>
+    html`<button type="button" class="btn" disabled=${syncing} onClick=${runSync}><${Icon} name="sync" size=${18} /> ${syncing ? t('Gleicht ab …') : t('Jetzt abgleichen')}</button>`}
+    <button type="button" class="btn btn-primary" onClick=${() => openCompose({ mode: 'neu' })}><${Icon} name="plus" size=${18} /> ${t('Neue Mail')}</button>
   </div>`
 
   // Handy: entweder Liste oder Mail
@@ -243,40 +244,40 @@ export function PostfachPage() {
   }
 
   const listView = folder === 'ohne'
-    ? html`<section class="pf-list" aria-label="Ohne Antwort"><${NoReplyList} box=${box} /></section>`
-    : html`<section class="pf-list" aria-label="Mails">
+    ? html`<section class="pf-list" aria-label=${t('Ohne Antwort')}><${NoReplyList} box=${box} /></section>`
+    : html`<section class="pf-list" aria-label=${t('Mails')}>
     ${list.length === 0
-      ? html`<${Empty}>${state.db.emails.length ? 'Keine Mails für diese Auswahl.' : boxes.length ? 'Noch keine Mails. Der erste Abgleich läuft in den nächsten Minuten.' : 'Noch kein Postfach verbunden. Unter Einstellungen, „Postfächer und Kalender“ verbindest du deins.'}<//>`
+      ? html`<${Empty}>${state.db.emails.length ? t('Keine Mails für diese Auswahl.') : boxes.length ? t('Noch keine Mails. Der erste Abgleich läuft in den nächsten Minuten.') : t('Noch kein Postfach verbunden. Unter Einstellungen, „Postfächer und Kalender“ verbindest du deins.')}<//>`
       : html`<ul class="pf-items">${list.slice(0, limit).map((m) => html`<${MailItem} key=${m.id} mail=${m} active=${m.id === selectedId} onOpen=${open} />`)}</ul>
-          ${list.length > limit && html`<button type="button" class="link-btn pf-more" onClick=${() => setLimit(limit + PAGE)}>Ältere anzeigen (${list.length - limit})</button>`}`}
+          ${list.length > limit && html`<button type="button" class="link-btn pf-more" onClick=${() => setLimit(limit + PAGE)}>${t('Ältere anzeigen ({n})', { n: list.length - limit })}</button>`}`}
   </section>`
 
   return html`<div class="page page-wide">
-    <${PageHead} kicker="Postfach" title="Postfach" actions=${actions} />
+    <${PageHead} kicker=${t('Postfach')} title=${t('Postfach')} actions=${actions} />
     <div class="pf-toolbar">
       ${/* Postfach zuerst (Wunsch vom 24.11.2026), dann Ordner und Suche */ ''}
       ${boxes.length > 1 &&
-      html`<select class="pf-box" aria-label="Postfach" value=${box} onChange=${(e) => setBox(e.target.value)}>
-        <option value="">Alle Postfächer</option>
+      html`<select class="pf-box" aria-label=${t('Postfach wählen')} value=${box} onChange=${(e) => setBox(e.target.value)}>
+        <option value="">${t('Alle Postfächer')}</option>
         ${boxes.map((b) => html`<option value=${b.address}>${b.address}</option>`)}
       </select>`}
       <${Segmented}
-        label="Ordner"
+        label=${t('Ordner')}
         value=${folder}
         onChange=${(v) => {
           setFolder(v)
           setLimit(PAGE)
         }}
         options=${[
-          { value: 'eingang', label: 'Eingang' },
-          { value: 'gesendet', label: 'Gesendet' },
-          { value: 'alle', label: 'Alle' },
-          { value: 'ohne', label: 'Ohne Antwort' },
+          { value: 'eingang', label: t('Eingang') },
+          { value: 'gesendet', label: t('Gesendet') },
+          { value: 'alle', label: t('Alle') },
+          { value: 'ohne', label: t('Ohne Antwort') },
         ]}
       />
       <label class="search pf-search">
         <${Icon} name="search" size=${18} />
-        <input type="search" value=${query} placeholder="Suchen: Betreff, Absender, Empfänger" aria-label="Mails durchsuchen" onInput=${(e) => setQuery(e.target.value)} />
+        <input type="search" value=${query} placeholder=${t('Suchen: Betreff, Absender, Empfänger')} aria-label=${t('Mails durchsuchen')} onInput=${(e) => setQuery(e.target.value)} />
       </label>
     </div>
     ${mobile
@@ -284,7 +285,7 @@ export function PostfachPage() {
       : html`<div class="pf-split">
           ${listView}
           <div class="pf-reader-wrap">
-            ${selected ? html`<${MailReader} mail=${selected} key=${selected.id} />` : html`<div class="pf-empty-reader"><${Icon} name="inbox" size=${32} /><p class="muted">Wähl links eine Mail aus.</p></div>`}
+            ${selected ? html`<${MailReader} mail=${selected} key=${selected.id} />` : html`<div class="pf-empty-reader"><${Icon} name="inbox" size=${32} /><p class="muted">${t('Wähl links eine Mail aus.')}</p></div>`}
           </div>
         </div>`}
   </div>`
@@ -407,20 +408,20 @@ function MailCompose({ d }) {
   }
   const saveTerminlink = async () => {
     const link = normalizeLink(linkField.value)
-    if (link === '') return setLinkField({ ...linkField, error: 'Bitte deinen Terminlink eintragen.' })
-    if (link === null) return setLinkField({ ...linkField, error: 'Das sieht nicht wie ein Link aus. Bitte prüfen, zum Beispiel https://calendly.com/dein-name.' })
+    if (link === '') return setLinkField({ ...linkField, error: t('Bitte deinen Terminlink eintragen.') })
+    if (link === null) return setLinkField({ ...linkField, error: t('Das sieht nicht wie ein Link aus. Bitte prüfen, zum Beispiel https://calendly.com/dein-name.') })
     setLinkField(null)
     insertLink(link)
     await savePrefs({ terminlink: link })
   }
   const close = () => closeDialog()
-  const title = { neu: 'Neue Mail', antworten: 'Antworten', allen: 'Allen antworten', weiter: 'Weiterleiten' }[d.mode] || 'Neue Mail'
+  const title = t({ neu: 'Neue Mail', antworten: 'Antworten', allen: 'Allen antworten', weiter: 'Weiterleiten' }[d.mode] || 'Neue Mail')
   const addresses = [...new Set([...state.db.persons.flatMap((p) => p.emails || []), ...state.db.team_members.map((t) => t.email)].map(norm))].sort()
 
   const addFiles = (list) => {
     const next = [...files, ...Array.from(list || [])]
     if (next.reduce((n, f) => n + f.size, 0) > MAX_FILES) {
-      setError('Die Anhänge sind zusammen größer als 18 MB. Bitte weniger oder kleinere Dateien anhängen.')
+      setError(t('Die Anhänge sind zusammen größer als 18 MB. Bitte weniger oder kleinere Dateien anhängen.'))
       return
     }
     setError(null)
@@ -430,10 +431,10 @@ function MailCompose({ d }) {
     e.preventDefault()
     const an = form.an.split(/[,;]/).map((a) => a.trim()).filter(Boolean)
     const cc = form.cc.split(/[,;]/).map((a) => a.trim()).filter(Boolean)
-    if (!form.von) return setError('Verbinde zuerst dein Postfach unter Einstellungen, „Postfächer und Kalender“.')
-    if (!an.length && !cc.length) return setError('Bitte mindestens eine Adresse eintragen.')
+    if (!form.von) return setError(t('Verbinde zuerst dein Postfach unter Einstellungen, „Postfächer und Kalender“.'))
+    if (!an.length && !cc.length) return setError(t('Bitte mindestens eine Adresse eintragen.'))
     const bad = [...an, ...cc].find((a) => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(a))
-    if (bad) return setError(`Die Adresse „${bad}“ stimmt nicht. Bitte prüfen.`)
+    if (bad) return setError(t('Die Adresse „{bad}“ stimmt nicht. Bitte prüfen.', { bad }))
     setBusy(true)
     setError(null)
     try {
@@ -457,40 +458,40 @@ function MailCompose({ d }) {
       if (ok) close()
     } catch {
       setBusy(false)
-      setError('Eine Datei ließ sich nicht lesen. Bitte noch einmal anhängen.')
+      setError(t('Eine Datei ließ sich nicht lesen. Bitte noch einmal anhängen.'))
     }
   }
 
   if (!mine.length) {
-    return html`<${Modal} title=${title} onClose=${close} footer=${html`<button type="button" class="btn" onClick=${close}>Schließen</button>`}>
-      <p>Um Mails zu schreiben, verbinde zuerst dein Postfach.</p>
-      <a class="btn btn-primary" href="#/einstellungen" onClick=${close}>Zu „Postfächer und Kalender“</a>
+    return html`<${Modal} title=${title} onClose=${close} footer=${html`<button type="button" class="btn" onClick=${close}>${t('Schließen')}</button>`}>
+      <p>${t('Um Mails zu schreiben, verbinde zuerst dein Postfach.')}</p>
+      <a class="btn btn-primary" href="#/einstellungen" onClick=${close}>${t('Zu „Postfächer und Kalender“')}</a>
     <//>`
   }
   return html`<${Modal}
     title=${title}
     onClose=${close}
     wide=${true}
-    footer=${html`<button type="button" class="btn" onClick=${close}>Abbrechen</button>
-      <button type="submit" form="mail-compose-form" class="btn btn-primary" disabled=${busy}><${Icon} name="send" size=${18} /> ${busy ? 'Wird gesendet …' : 'Senden'}</button>`}
+    footer=${html`<button type="button" class="btn" onClick=${close}>${t('Abbrechen')}</button>
+      <button type="submit" form="mail-compose-form" class="btn btn-primary" disabled=${busy}><${Icon} name="send" size=${18} /> ${busy ? t('Wird gesendet …') : t('Senden')}</button>`}
   >
     <form id="mail-compose-form" class="pf-compose" onSubmit=${submit}>
       ${mine.length > 1
-        ? html`<${Field} label="Von" htmlFor="mc-von">
+        ? html`<${Field} label=${t('Von')} htmlFor="mc-von">
             <select id="mc-von" value=${form.von} onChange=${(e) => set({ von: e.target.value })}>
               ${mine.map((b) => html`<option value=${b.address}>${b.address}</option>`)}
             </select>
           <//>`
-        : html`<p class="muted small">Von ${form.von}</p>`}
-      <${Field} label="An" htmlFor="mc-an" hint="Mehrere Adressen mit Komma trennen">
+        : html`<p class="muted small">${t('Von {box}', { box: form.von })}</p>`}
+      <${Field} label=${t('Empfänger')} htmlFor="mc-an" hint=${t('Mehrere Adressen mit Komma trennen')}>
         <input id="mc-an" list="mc-adressen" value=${form.an} onInput=${(e) => set({ an: e.target.value })} autocomplete="off" />
       <//>
       <datalist id="mc-adressen">${addresses.map((a) => html`<option value=${a}></option>`)}</datalist>
       ${showCc || form.cc
-        ? html`<${Field} label="Kopie (Cc)" htmlFor="mc-cc"><input id="mc-cc" list="mc-adressen" value=${form.cc} onInput=${(e) => set({ cc: e.target.value })} autocomplete="off" /><//>`
-        : html`<button type="button" class="link-btn pf-cc" onClick=${() => setShowCc(true)}>Kopie (Cc) hinzufügen</button>`}
-      <${Field} label="Betreff" htmlFor="mc-betreff"><input id="mc-betreff" value=${form.betreff} onInput=${(e) => set({ betreff: e.target.value })} /><//>
-      <${Field} label="Nachricht" htmlFor="mc-text">
+        ? html`<${Field} label=${t('Kopie (Cc)')} htmlFor="mc-cc"><input id="mc-cc" list="mc-adressen" value=${form.cc} onInput=${(e) => set({ cc: e.target.value })} autocomplete="off" /><//>`
+        : html`<button type="button" class="link-btn pf-cc" onClick=${() => setShowCc(true)}>${t('Kopie (Cc) hinzufügen')}</button>`}
+      <${Field} label=${t('Betreff')} htmlFor="mc-betreff"><input id="mc-betreff" value=${form.betreff} onInput=${(e) => set({ betreff: e.target.value })} /><//>
+      <${Field} label=${t('Nachricht')} htmlFor="mc-text">
         <textarea
           id="mc-text"
           ref=${textRef}
@@ -508,51 +509,51 @@ function MailCompose({ d }) {
       <div class="pf-signature">
         <label class="check-label">
           <input type="checkbox" checked=${withSig && sig.status === 'da'} disabled=${sig.status !== 'da'} onChange=${(e) => setWithSig(e.target.checked)} />
-          Signatur aus Gmail anhängen
+          ${t('Signatur aus Gmail anhängen')}
         </label>
         ${sig.status === 'laden'
-          ? html`<p class="muted small">Signatur wird geladen …</p>`
+          ? html`<p class="muted small">${t('Signatur wird geladen …')}</p>`
           : sig.status === 'da'
           ? withSig &&
-            html`<div class="pf-signature-preview" aria-label="Vorschau der Signatur">${sig.text}</div>
-              <p class="muted small">In der Mail steht sie mit Logo und Formatierung wie in Gmail${form.marker ? ', über dem zitierten Verlauf' : ''}.</p>`
+            html`<div class="pf-signature-preview" aria-label=${t('Vorschau der Signatur')}>${sig.text}</div>
+              <p class="muted small">${form.marker ? t('In der Mail steht sie mit Logo und Formatierung wie in Gmail, über dem zitierten Verlauf.') : t('In der Mail steht sie mit Logo und Formatierung wie in Gmail.')}</p>`
           : sig.status === 'keine'
-          ? html`<p class="muted small">Für ${form.von} ist in Gmail keine Signatur hinterlegt. Du legst sie in Gmail unter „Einstellungen“, „Signatur“ an.</p>`
-          : html`<p class="muted small">Die Signatur ließ sich nicht laden, die Mail geht ohne Signatur raus. ${sig.text}</p>`}
+          ? html`<p class="muted small">${t('Für {box} ist in Gmail keine Signatur hinterlegt. Du legst sie in Gmail unter „Einstellungen“, „Signatur“ an.', { box: form.von })}</p>`
+          : html`<p class="muted small">${t('Die Signatur ließ sich nicht laden, die Mail geht ohne Signatur raus.')} ${sig.text}</p>`}
       </div>
       <div class="pf-track">
         <label class="check-label">
           <input type="checkbox" checked=${track} onChange=${(e) => setTrack(e.target.checked)} />
-          Öffnen und Klicks verfolgen
+          ${t('Öffnen und Klicks verfolgen')}
         </label>
         ${track &&
-        html`<p class="muted small">Die Mail bekommt ein unsichtbares Bild, Links laufen über das CRM. Ob und wann sie geöffnet oder ein Link angeklickt wurde, siehst nur du an der Mail. ${SPUR_HINT}</p>`}
+        html`<p class="muted small">${t('Die Mail bekommt ein unsichtbares Bild, Links laufen über das CRM. Ob und wann sie geöffnet oder ein Link angeklickt wurde, siehst nur du an der Mail.')} ${t(SPUR_HINT)}</p>`}
       </div>
-      ${d.mode === 'weiter' && attachmentsOf(d.mail || {}).length > 0 && html`<p class="muted small">Die Anhänge der ursprünglichen Mail sind nicht dabei. Häng sie bei Bedarf neu an.</p>`}
+      ${d.mode === 'weiter' && attachmentsOf(d.mail || {}).length > 0 && html`<p class="muted small">${t('Die Anhänge der ursprünglichen Mail sind nicht dabei. Häng sie bei Bedarf neu an.')}</p>`}
       <div class="pf-files">
         ${files.map(
           (f, i) => html`<span class="pf-file" key=${i + f.name}>
             <${Icon} name="paperclip" size=${14} /> ${f.name} <span class="muted small">${fmtSize(f.size)}</span>
-            <button type="button" class="icon-btn small" aria-label=${'„' + f.name + '“ entfernen'} onClick=${() => setFiles(files.filter((_, k) => k !== i))}><${Icon} name="x" size=${14} /></button>
+            <button type="button" class="icon-btn small" aria-label=${t('„{name}“ entfernen', { name: f.name })} onClick=${() => setFiles(files.filter((_, k) => k !== i))}><${Icon} name="x" size=${14} /></button>
           </span>`
         )}
         <input ref=${fileInput} type="file" multiple hidden onChange=${(e) => {
           addFiles(e.target.files)
           e.target.value = ''
         }} />
-        <button type="button" class="btn btn-small" onClick=${() => fileInput.current.click()}><${Icon} name="paperclip" size=${16} /> Datei anhängen</button>
-        <button type="button" class="btn btn-small" onClick=${onTerminlink}><${Icon} name="calendar" size=${16} /> Terminlink</button>
-        ${files.length > 0 && html`<span class="muted small">zusammen ${fmtSize(total)} von höchstens 18 MB</span>`}
+        <button type="button" class="btn btn-small" onClick=${() => fileInput.current.click()}><${Icon} name="paperclip" size=${16} /> ${t('Datei anhängen')}</button>
+        <button type="button" class="btn btn-small" onClick=${onTerminlink}><${Icon} name="calendar" size=${16} /> ${t('Terminlink')}</button>
+        ${files.length > 0 && html`<span class="muted small">${t('zusammen {size} von höchstens 18 MB', { size: fmtSize(total) })}</span>`}
       </div>
       ${linkField &&
       html`<div class="terminlink-field">
-        <label class="field-label" for="mc-terminlink">Dein Terminlink</label>
+        <label class="field-label" for="mc-terminlink">${t('Dein Terminlink')}</label>
         <div class="terminlink-row">
           <input
             id="mc-terminlink"
             ref=${linkRef}
             value=${linkField.value}
-            placeholder="https://calendly.com/dein-name"
+            placeholder=${t('https://calendly.com/dein-name')}
             autocomplete="off"
             inputmode="url"
             onInput=${(e) => setLinkField({ ...linkField, value: e.target.value, error: null, focus: false })}
@@ -568,10 +569,10 @@ function MailCompose({ d }) {
               }
             }}
           />
-          <button type="button" class="btn btn-small btn-primary" onClick=${saveTerminlink}>Speichern und einfügen</button>
-          <button type="button" class="btn btn-small" onClick=${() => setLinkField(null)}>Abbrechen</button>
+          <button type="button" class="btn btn-small btn-primary" onClick=${saveTerminlink}>${t('Speichern und einfügen')}</button>
+          <button type="button" class="btn btn-small" onClick=${() => setLinkField(null)}>${t('Abbrechen')}</button>
         </div>
-        ${linkField.error ? html`<p class="form-error" role="alert">${linkField.error}</p>` : html`<p class="muted small">Zum Beispiel dein Buchungslink bei Calendly. Ändern kannst du ihn unter Einstellungen, „Terminlink“.</p>`}
+        ${linkField.error ? html`<p class="form-error" role="alert">${linkField.error}</p>` : html`<p class="muted small">${t('Zum Beispiel dein Buchungslink bei Calendly. Ändern kannst du ihn unter Einstellungen, „Terminlink“.')}</p>`}
       </div>`}
       ${error && html`<p class="form-error" role="alert">${error}</p>`}
     </form>

@@ -5,6 +5,7 @@
 // Wer was sieht, regelt die Datenbank. Die App zeigt nur, was sie bekommt.
 import { state, emit, toast, errorText, myEmail, memberName, getApi, confirmDialog, isGuest } from './store.js'
 import { uid, norm, firstName, safeFileName } from './lib/util.js'
+import { t } from './i18n.js'
 
 const PAGE = 50
 const api = () => getApi()
@@ -14,7 +15,7 @@ export function chatErrorText(err) {
   const msg = String((err && err.message) || '')
   const code = err && err.code
   if (['22023', '23505', '42501', '23503', 'meldung'].includes(code) && /[a-zäöüß]{3} [a-zäöüß]/i.test(msg) && !/permission denied|row-level|violates/i.test(msg)) return msg
-  if (code === '23514') return 'Die Nachricht ist leer oder zu lang (höchstens 4.000 Zeichen und 10 Dateien).'
+  if (code === '23514') return t('Die Nachricht ist leer oder zu lang (höchstens 4.000 Zeichen und 10 Dateien).')
   return errorText(err)
 }
 
@@ -111,14 +112,14 @@ export const getRoom = (id) => state.chat.rooms.find((r) => r.id === id) || null
 export function roomTitle(room) {
   if (!room) return ''
   const me = norm(myEmail())
-  if (room.art === 'kanal') return room.name || '[Kanal]'
+  if (room.art === 'kanal') return room.name || t('[Kanal]')
   if (room.art === 'direkt') {
     const other = (room.mitglieder || []).find((e) => norm(e) !== me)
-    return other ? memberName(other) : 'Direktnachricht'
+    return other ? memberName(other) : t('Direktnachricht')
   }
   if (room.name) return room.name
   const others = (room.mitglieder || []).filter((e) => norm(e) !== me)
-  return others.map((e) => firstName(memberName(e))).join(', ') || 'Gruppe'
+  return others.map((e) => firstName(memberName(e))).join(', ') || t('Gruppe')
 }
 
 // Zahl in der Navigation: ungelesene Nachrichten in Räumen, die nicht archiviert sind
@@ -275,16 +276,16 @@ export async function sendMessage(raumId, text, erwaehnt, antwortAuf = null, fil
     if (uploaded.length) api().chatRemoveFiles(uploaded.map((u) => u.pfad)).catch(() => {})
     const after = get()
     put({ ...after, list: after.list.map((m) => (m.id === id ? { ...m, pending: false, failed: true } : m)) })
-    toast(err.uploadName ? `„${err.uploadName}“ ließ sich nicht hochladen. ${uploadErrorText(err)}` : chatErrorText(err), { error: true })
+    toast(err.uploadName ? t('„{name}“ ließ sich nicht hochladen. {err}', { name: err.uploadName, err: uploadErrorText(err) }) : chatErrorText(err), { error: true })
     return false
   }
 }
 
 function uploadErrorText(err) {
   const msg = String((err && err.message) || '')
-  if (/exceeded|too large|413/i.test(msg)) return 'Die Datei ist zu groß (höchstens 25 MB).'
-  if (/row-level security|403|Unauthorized/i.test(msg)) return 'Dafür fehlt dir die Berechtigung.'
-  if (/Bucket not found/i.test(msg)) return 'Der Speicher ist noch nicht eingerichtet (33_chat_dateien.sql).'
+  if (/exceeded|too large|413/i.test(msg)) return t('Die Datei ist zu groß (höchstens 25 MB).')
+  if (/row-level security|403|Unauthorized/i.test(msg)) return t('Dafür fehlt dir die Berechtigung.')
+  if (/Bucket not found/i.test(msg)) return t('Der Speicher ist noch nicht eingerichtet (33_chat_dateien.sql).')
   return errorText(err)
 }
 
@@ -406,11 +407,11 @@ export async function editMessage(msg, text, erwaehnt) {
 
 export async function deleteMessage(msg) {
   const ok = await confirmDialog({
-    title: 'Nachricht löschen?',
+    title: t('Nachricht löschen?'),
     text: (msg.anhaenge || []).length
-      ? 'Text und Dateien sind danach für alle weg. Im Verlauf steht „Nachricht gelöscht“.'
-      : 'Der Text ist danach für alle weg. Im Verlauf steht „Nachricht gelöscht“.',
-    confirmLabel: 'Löschen',
+      ? t('Text und Dateien sind danach für alle weg. Im Verlauf steht „Nachricht gelöscht“.')
+      : t('Der Text ist danach für alle weg. Im Verlauf steht „Nachricht gelöscht“.'),
+    confirmLabel: t('Löschen'),
     danger: true,
   })
   if (!ok) return
@@ -475,13 +476,13 @@ export async function openChatFile(att) {
   const win = window.open('', '_blank')
   try {
     const rows = await api().chatFileUrls([att.pfad])
-    if (!rows.length) throw Object.assign(new Error('Im Demo-Modus haben Dateien keinen Inhalt.'), { code: 'meldung' })
+    if (!rows.length) throw Object.assign(new Error(t('Im Demo-Modus haben Dateien keinen Inhalt.')), { code: 'meldung' })
     rememberUrl(att.pfad, rows[0].signedUrl, 55 * 60 * 1000)
     if (win) win.location.href = rows[0].signedUrl
     else window.location.href = rows[0].signedUrl
   } catch (err) {
     if (win) win.close()
-    toast(err.code === 'meldung' ? err.message : `Die Datei ließ sich nicht öffnen. ${errorText(err)}`, { error: !(err.code === 'meldung') })
+    toast(err.code === 'meldung' ? err.message : t('Die Datei ließ sich nicht öffnen. {err}', { err: errorText(err) }), { error: !(err.code === 'meldung') })
   }
 }
 

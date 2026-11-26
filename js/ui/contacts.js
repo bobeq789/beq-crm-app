@@ -30,6 +30,7 @@ import { navigate, openCard, openEvent } from '../router.js'
 import { EmailList, emailCount } from './emails.js'
 import { ActivitySection } from './activities.js'
 import { PageHead, Tile, Empty, Labels, TaskRow, Notes, Field, ListInput, LabelPicker, EntityPicker, Segmented, Avatar, CallLink } from './common.js'
+import { t, locale } from '../i18n.js'
 
 // Beim Sortieren Titel wie „Dr.“ überspringen
 const sortName = (name) => String(name || '').replace(/^(Dr\.|Prof\.)\s+/i, '')
@@ -65,39 +66,39 @@ export function ContactsList() {
 
   return html`<div class="page">
     <${PageHead}
-      kicker="Adressbuch"
-      title="Kontakte"
-      actions=${html`<a class="btn btn-primary" href="#/kontakte/neu"><${Icon} name="plus" size=${18} /> Neuer Kontakt</a>`}
+      kicker=${t('Adressbuch')}
+      title=${t('Kontakte')}
+      actions=${html`<a class="btn btn-primary" href="#/kontakte/neu"><${Icon} name="plus" size=${18} /> ${t('Neuer Kontakt')}</a>`}
     />
     <div class="list-filters">
       <label class="search">
         <${Icon} name="search" size=${18} />
-        <input type="search" value=${query} placeholder="Suchen: Name, Firma, E-Mail, Telefon" aria-label="Kontakte durchsuchen" onInput=${(e) => setQuery(e.target.value)} />
+        <input type="search" value=${query} placeholder=${t('Suchen: Name, Firma, E-Mail, Telefon')} aria-label=${t('Kontakte durchsuchen')} onInput=${(e) => setQuery(e.target.value)} />
       </label>
       ${!guest &&
       html`<${Segmented}
-        label="Betreuer"
+        label=${t('Betreuer')}
         value=${scope}
         onChange=${(v) => {
           setScope(v)
           local.set('beqcrm-contacts-scope', v)
         }}
         options=${[
-          { value: 'meine', label: 'Meine' },
-          { value: 'alle', label: 'Alle' },
+          { value: 'meine', label: t('Meine') },
+          { value: 'alle', label: t('Alle') },
         ]}
       />`}
       <select value=${label} aria-label="Label" onChange=${(e) => setLabel(e.target.value)}>
-        <option value="">Alle Labels</option>
+        <option value="">${t('Alle Labels')}</option>
         ${allLabels().map((l) => html`<option value=${l}>${l}</option>`)}
       </select>
       ${sources.length > 0 &&
-      html`<select value=${source} aria-label="Herkunft" onChange=${(e) => setSource(e.target.value)}>
-        <option value="">Alle Herkünfte</option>
+      html`<select value=${source} aria-label=${t('Herkunft')} onChange=${(e) => setSource(e.target.value)}>
+        <option value="">${t('Alle Herkünfte')}</option>
         ${sources.map((s) => html`<option value=${s}>${s}</option>`)}
       </select>`}
       <${Segmented}
-        label="Sortierung"
+        label=${t('Sortierung')}
         value=${sort}
         onChange=${(v) => {
           setSort(v)
@@ -105,11 +106,11 @@ export function ContactsList() {
         }}
         options=${[
           { value: 'name', label: 'Name' },
-          { value: 'recent', label: 'Zuletzt geändert' },
+          { value: 'recent', label: t('Zuletzt geändert') },
         ]}
       />
     </div>
-    <p class="muted small list-count">${list.length.toLocaleString('de-DE')} ${list.length === 1 ? 'Kontakt' : 'Kontakte'}</p>
+    <p class="muted small list-count">${list.length === 1 ? t('1 Kontakt') : t('{n} Kontakte', { n: list.length.toLocaleString(locale()) })}</p>
     ${list.length
       ? html`<ul class="row-list">
           ${list.slice(0, limit).map((p) => {
@@ -133,28 +134,28 @@ export function ContactsList() {
         </ul>
         ${list.length > limit &&
         html`<button type="button" class="link-btn list-more" onClick=${() => setLimit(limit + PAGE)}>
-          Weitere ${Math.min(PAGE, list.length - limit)} anzeigen (noch ${(list.length - limit).toLocaleString('de-DE')})
+          ${t('Weitere {n} anzeigen (noch {rest})', { n: Math.min(PAGE, list.length - limit), rest: (list.length - limit).toLocaleString(locale()) })}
         </button>`}`
-      : html`<${Empty}>${query || label || source ? 'Keine Kontakte gefunden.' : scope === 'meine' && !guest ? 'Du betreust noch keine Kontakte. Unter „Alle“ siehst du alle.' : 'Noch keine Kontakte.'}<//>`}
+      : html`<${Empty}>${query || label || source ? t('Keine Kontakte gefunden.') : scope === 'meine' && !guest ? t('Du betreust noch keine Kontakte. Unter „Alle“ siehst du alle.') : t('Noch keine Kontakte.')}<//>`}
   </div>`
 }
 
 // Betreuer des Kontakts (29_altcrm.sql): wer im Team ihn betreut. Gäste sehen nur den Namen.
 function BetreuerField({ person }) {
   const current = norm(person.betreuer)
-  if (isGuest()) return current ? html`<p class="muted small betreuer-line">Betreut von ${memberName(current)}</p>` : null
+  if (isGuest()) return current ? html`<p class="muted small betreuer-line">${t('Betreut von {name}', { name: memberName(current) })}</p>` : null
   const team = activeMembers()
-  const known = !current || team.some((t) => norm(t.email) === current)
+  const known = !current || team.some((m) => norm(m.email) === current)
   return html`<label class="betreuer-line">
-    <span class="muted small">Betreut von</span>
+    <span class="muted small">${t('Betreut von')}</span>
     <select
       value=${current}
-      aria-label="Betreuer"
+      aria-label=${t('Betreuer')}
       onChange=${(e) => update('persons', person.id, { betreuer: e.target.value || null })}
     >
-      <option value="">[niemand]</option>
-      ${!known && html`<option value=${current}>${memberName(current) || current} (nicht mehr im Team)</option>`}
-      ${team.map((t) => html`<option value=${norm(t.email)}>${norm(t.email) === norm(myEmail()) ? t.name + ' (ich)' : t.name}</option>`)}
+      <option value="">${t('[niemand]')}</option>
+      ${!known && html`<option value=${current}>${memberName(current) || current} ${t('(nicht mehr im Team)')}</option>`}
+      ${team.map((m) => html`<option value=${norm(m.email)}>${norm(m.email) === norm(myEmail()) ? m.name + ' ' + t('(ich)') : m.name}</option>`)}
     </select>
   </label>`
 }
@@ -169,15 +170,15 @@ function OldCrmData({ person }) {
     let current = true
     setText(undefined)
     setOpen(false)
-    if (!isGuest()) loadAltdaten(person.id).then((t) => current && setText(t))
+    if (!isGuest()) loadAltdaten(person.id).then((txt) => current && setText(txt))
     return () => {
       current = false
     }
   }, [person.id])
   if (isGuest() || !text) return null
-  return html`<${Tile} title="Aus dem alten CRM">
+  return html`<${Tile} title=${t('Aus dem alten CRM')}>
     <button type="button" class="link-btn" aria-expanded=${open} onClick=${() => setOpen(!open)}>
-      ${open ? 'Ausblenden' : 'Anzeigen'}
+      ${open ? t('Ausblenden') : t('Anzeigen')}
     </button>
     ${open && html`<div class="old-crm">${text}</div>`}
   <//>`
@@ -191,22 +192,22 @@ function EventsOfPerson({ personId }) {
   const last = all.filter((e) => (e.end_at || e.start_at) < now).reverse().slice(0, 3)
   const row = (e) => html`<li key=${e.id}>
     <button type="button" class="mini-event" onClick=${() => openEvent(e.id)}>
-      <span class="mm-title">${e.title || '(ohne Titel)'}</span>
+      <span class="mm-title">${e.title || t('(ohne Titel)')}</span>
       <span class="mm-meta">${fmtDate(e.start_at)}, ${fmtTimeRange(e.start_at, e.end_at, e.all_day)}</span>
     </button>
   </li>`
-  return html`<${Tile} title="Termine" count=${all.length}>
-    ${!all.length && html`<${Empty}>Keine Termine mit diesem Kontakt.<//>`}
-    ${next.length > 0 && html`<h3 class="group-title">Nächste</h3><ul class="meeting-mini">${next.map(row)}</ul>`}
-    ${last.length > 0 && html`<h3 class="group-title">Letzte</h3><ul class="meeting-mini">${last.map(row)}</ul>`}
+  return html`<${Tile} title=${t('Termine')} count=${all.length}>
+    ${!all.length && html`<${Empty}>${t('Keine Termine mit diesem Kontakt.')}<//>`}
+    ${next.length > 0 && html`<h3 class="group-title">${t('Nächste')}</h3><ul class="meeting-mini">${next.map(row)}</ul>`}
+    ${last.length > 0 && html`<h3 class="group-title">${t('Letzte')}</h3><ul class="meeting-mini">${last.map(row)}</ul>`}
   <//>`
 }
 
 export function ContactDetail({ id }) {
   const p = getPerson(id)
   if (!p) {
-    return html`<div class="page"><${PageHead} kicker="Kontakt" title="Nicht gefunden" back=${{ href: '#/kontakte', label: 'Alle Kontakte' }} />
-      <${Empty}>Diesen Kontakt gibt es nicht mehr.<//></div>`
+    return html`<div class="page"><${PageHead} kicker=${t('Kontakt')} title=${t('Nicht gefunden')} back=${{ href: '#/kontakte', label: t('Alle Kontakte') }} />
+      <${Empty}>${t('Diesen Kontakt gibt es nicht mehr.')}<//></div>`
   }
   const org = getOrg(p.org_id)
   const cards = state.db.cards.filter((c) => c.person_id === p.id && isOpen(c))
@@ -218,18 +219,18 @@ export function ContactDetail({ id }) {
 
   const del = async () => {
     const ok = await confirmDialog({
-      title: 'Kontakt löschen?',
-      text: `„${p.name}“ und alle Notizen dazu sind danach weg. Deals und Meetings bleiben, nur ohne diesen Kontakt.`,
-      confirmLabel: 'Löschen',
+      title: t('Kontakt löschen?'),
+      text: t('„{name}“ und alle Notizen dazu sind danach weg. Deals und Meetings bleiben, nur ohne diesen Kontakt.', { name: p.name }),
+      confirmLabel: t('Löschen'),
       danger: true,
     })
     if (!ok) return
     navigate('/kontakte')
     await remove('persons', p.id)
-    toast('Kontakt gelöscht')
+    toast(t('Kontakt gelöscht'))
   }
   const newTask = async () => {
-    const title = await promptDialog({ title: `Neuer Deal zu ${p.name}`, label: 'Titel', confirmLabel: 'Anlegen' })
+    const title = await promptDialog({ title: t('Neuer Deal zu {name}', { name: p.name }), label: t('Titel'), confirmLabel: t('Anlegen') })
     if (!title) return
     const card = await createCard({ title, person_id: p.id, org_id: p.org_id, kind: 'todo', assignee: state.me && state.me.email })
     if (card) openCard(card.id)
@@ -237,16 +238,16 @@ export function ContactDetail({ id }) {
 
   return html`<div class="page">
     <${PageHead}
-      kicker="Kontakt"
+      kicker=${t('Kontakt')}
       title=${p.name}
-      back=${{ href: '#/kontakte', label: 'Alle Kontakte' }}
-      actions=${html`<a class="btn" href=${'#/kontakte/' + p.id + '/bearbeiten'}><${Icon} name="edit" size=${16} /> Bearbeiten</a>
-        <button type="button" class="btn btn-danger-text" onClick=${del}><${Icon} name="trash" size=${16} /> Löschen</button>`}
+      back=${{ href: '#/kontakte', label: t('Alle Kontakte') }}
+      actions=${html`<a class="btn" href=${'#/kontakte/' + p.id + '/bearbeiten'}><${Icon} name="edit" size=${16} /> ${t('Bearbeiten')}</a>
+        <button type="button" class="btn btn-danger-text" onClick=${del}><${Icon} name="trash" size=${16} /> ${t('Löschen')}</button>`}
     />
     <div class="detail-meta">
       ${p.position && html`<span>${p.position}</span>`}
       ${org && html`<a class="meta-item" href=${'#/firmen/' + org.id}><${Icon} name="orgs" size=${16} /> ${org.name}</a>`}
-      ${p.herkunft && html`<span class="meta-item">Herkunft: ${p.herkunft}</span>`}
+      ${p.herkunft && html`<span class="meta-item">${t('Herkunft: {source}', { source: p.herkunft })}</span>`}
     </div>
     <${BetreuerField} person=${p} />
     <div class="detail-labels">
@@ -255,42 +256,42 @@ export function ContactDetail({ id }) {
         : html`<${LabelPicker} value=${p.labels} inputId="person-label-inline" onChange=${(labels) => update('persons', p.id, { labels })} />`}
     </div>
     <div class="quick-actions">
-      ${email && html`<button type="button" class="btn" onClick=${() => openDialog({ kind: 'new-event', guests: [email] })}><${Icon} name="calendar" size=${18} /> Termin einladen</button>`}
-      ${phone && html`<a class="btn" href=${telHref(phone)}><${Icon} name="phone" size=${18} /> Anrufen</a>`}
-      ${email && html`<a class="btn" href=${'mailto:' + email}><${Icon} name="mail" size=${18} /> Mailen</a>`}
+      ${email && html`<button type="button" class="btn" onClick=${() => openDialog({ kind: 'new-event', guests: [email] })}><${Icon} name="calendar" size=${18} /> ${t('Termin einladen')}</button>`}
+      ${phone && html`<a class="btn" href=${telHref(phone)}><${Icon} name="phone" size=${18} /> ${t('Anrufen')}</a>`}
+      ${email && html`<a class="btn" href=${'mailto:' + email}><${Icon} name="mail" size=${18} /> ${t('Mailen')}</a>`}
       ${waPhone && html`<a class="btn" href=${waHref(waPhone)} target="_blank" rel="noopener noreferrer"><${Icon} name="whatsapp" size=${18} /> WhatsApp</a>`}
     </div>
     <div class="detail-grid">
       <div class="col-main">
-        <${Tile} title="Offene Deals" count=${cards.length} actions=${html`<button type="button" class="link-btn" onClick=${newTask}><${Icon} name="plus" size=${16} /> Deal</button>`}>
-          ${cards.length ? html`<ul class="task-list">${cards.map((c) => html`<${TaskRow} card=${c} key=${c.id} />`)}</ul>` : html`<${Empty}>Keine offenen Deals.<//>`}
+        <${Tile} title=${t('Offene Deals')} count=${cards.length} actions=${html`<button type="button" class="link-btn" onClick=${newTask}><${Icon} name="plus" size=${16} /> Deal</button>`}>
+          ${cards.length ? html`<ul class="task-list">${cards.map((c) => html`<${TaskRow} card=${c} key=${c.id} />`)}</ul>` : html`<${Empty}>${t('Keine offenen Deals.')}<//>`}
         <//>
         ${!isGuest() && html`<${ActivitySection} list=${activitiesForPerson(p.id)} here="person" target=${{ person_id: p.id }} />`}
-        <${Tile} title="Notizen"><${Notes} field="person_id" id=${p.id} /><//>
-        <${Tile} title="E-Mails" count=${emailCount([p.id])}><${EmailList} personIds=${[p.id]} /><//>
+        <${Tile} title=${t('Notizen')}><${Notes} field="person_id" id=${p.id} /><//>
+        <${Tile} title=${t('E-Mails')} count=${emailCount([p.id])}><${EmailList} personIds=${[p.id]} /><//>
       </div>
       <div class="col-side">
-        <${Tile} title="Kontaktdaten">
+        <${Tile} title=${t('Kontaktdaten')}>
           <ul class="contact-data">
             ${(p.phones || []).map(
               (ph) => html`<li>
                 ${telHref(ph)
                   ? html`<a href=${telHref(ph)}><${Icon} name="phone" size=${18} /> ${ph}</a>`
-                  : html`<span class="contact-plain" title="Diese Nummer lässt sich nicht automatisch wählen. Bitte unter „Bearbeiten“ prüfen."><${Icon} name="phone" size=${18} /> ${ph}</span>`}
-                ${waHref(ph) && html`<a class="icon-btn small" href=${waHref(ph)} target="_blank" rel="noopener noreferrer" aria-label=${'WhatsApp an ' + ph} title="WhatsApp"><${Icon} name="whatsapp" size=${18} /></a>`}
+                  : html`<span class="contact-plain" title=${t('Diese Nummer lässt sich nicht automatisch wählen. Bitte unter „Bearbeiten“ prüfen.')}><${Icon} name="phone" size=${18} /> ${ph}</span>`}
+                ${waHref(ph) && html`<a class="icon-btn small" href=${waHref(ph)} target="_blank" rel="noopener noreferrer" aria-label=${t('WhatsApp an {phone}', { phone: ph })} title="WhatsApp"><${Icon} name="whatsapp" size=${18} /></a>`}
               </li>`
             )}
             ${(p.emails || []).map((m) => html`<li><a href=${'mailto:' + m}><${Icon} name="mail" size=${18} /> ${m}</a></li>`)}
             ${p.linkedin_url && html`<li><a href=${webHref(p.linkedin_url)} target="_blank" rel="noopener noreferrer"><${Icon} name="linkedin" size=${18} /> LinkedIn</a></li>`}
           </ul>
-          ${!(p.phones || []).length && !(p.emails || []).length && !p.linkedin_url && html`<${Empty}>Noch keine Kontaktdaten.<//>`}
+          ${!(p.phones || []).length && !(p.emails || []).length && !p.linkedin_url && html`<${Empty}>${t('Noch keine Kontaktdaten.')}<//>`}
         <//>
         <${EventsOfPerson} personId=${p.id} />
         <${OldCrmData} person=${p} />
         <${Tile} title="Meetings" count=${meetings.length}>
           ${meetings.length
             ? html`<ul class="meeting-mini">${meetings.map((m) => html`<li key=${m.id}><a href=${'#/meetings/' + m.id}><span class="mm-title">${m.title}</span><span class="mm-meta">${fmtDateTime(m.held_at)}</span></a></li>`)}</ul>`
-            : html`<${Empty}>Noch keine Meetings.<//>`}
+            : html`<${Empty}>${t('Noch keine Meetings.')}<//>`}
         <//>
       </div>
     </div>
@@ -314,7 +315,7 @@ export function ContactForm({ id }) {
   }))
   const [saving, setSaving] = useState(false)
   const set = (patch) => setForm({ ...form, ...patch })
-  if (id && !existing) return html`<div class="page"><${Empty}>Diesen Kontakt gibt es nicht mehr.<//></div>`
+  if (id && !existing) return html`<div class="page"><${Empty}>${t('Diesen Kontakt gibt es nicht mehr.')}<//></div>`
 
   const save = async (e) => {
     e.preventDefault()
@@ -333,14 +334,14 @@ export function ContactForm({ id }) {
     const saved = existing ? await update('persons', existing.id, row) : await insert('persons', row)
     setSaving(false)
     if (saved) {
-      toast(existing ? 'Kontakt gespeichert' : 'Kontakt angelegt')
+      toast(existing ? t('Kontakt gespeichert') : t('Kontakt angelegt'))
       navigate('/kontakte/' + saved.id)
     }
   }
 
   const back = existing ? '#/kontakte/' + existing.id : '#/kontakte'
   return html`<div class="page page-narrow">
-    <${PageHead} kicker=${existing ? 'Kontakt bearbeiten' : 'Kontakte'} title=${existing ? existing.name : 'Neuer Kontakt'} back=${{ href: back, label: 'Zurück' }} />
+    <${PageHead} kicker=${existing ? t('Kontakt bearbeiten') : t('Kontakte')} title=${existing ? existing.name : t('Neuer Kontakt')} back=${{ href: back, label: t('Zurück') }} />
     <form class="form" onSubmit=${save}>
       <${Field} label="Name" htmlFor="p-name">
         <input id="p-name" value=${form.name} required autocomplete="off" onInput=${(e) => set({ name: e.target.value })} />
@@ -349,15 +350,15 @@ export function ContactForm({ id }) {
         <${Field} label="Position" htmlFor="p-position">
           <input id="p-position" value=${form.position} onInput=${(e) => set({ position: e.target.value })} />
         <//>
-        <${Field} label="Firma" htmlFor="p-org">
-          <${EntityPicker} kind="org" inputId="p-org" value=${form.org_id} onChange=${(v) => set({ org_id: v })} placeholder="Firma suchen oder neu anlegen" />
+        <${Field} label=${t('Firma')} htmlFor="p-org">
+          <${EntityPicker} kind="org" inputId="p-org" value=${form.org_id} onChange=${(v) => set({ org_id: v })} placeholder=${t('Firma suchen oder neu anlegen')} />
         <//>
       </div>
-      <${Field} label="E-Mail-Adressen" htmlFor="p-email">
-        <${ListInput} idPrefix="p-email" values=${form.emails} type="email" placeholder="name@firma.de" addLabel="Weitere E-Mail" onChange=${(emails) => set({ emails })} />
+      <${Field} label=${t('E-Mail-Adressen')} htmlFor="p-email">
+        <${ListInput} idPrefix="p-email" values=${form.emails} type="email" placeholder=${t('name@firma.de')} addLabel=${t('Weitere E-Mail')} onChange=${(emails) => set({ emails })} />
       <//>
-      <${Field} label="Telefonnummern" htmlFor="p-phone">
-        <${ListInput} idPrefix="p-phone" values=${form.phones} type="tel" placeholder="+49 …" addLabel="Weitere Nummer" onChange=${(phones) => set({ phones })} />
+      <${Field} label=${t('Telefonnummern')} htmlFor="p-phone">
+        <${ListInput} idPrefix="p-phone" values=${form.phones} type="tel" placeholder="+49 …" addLabel=${t('Weitere Nummer')} onChange=${(phones) => set({ phones })} />
       <//>
       <${Field} label="LinkedIn" htmlFor="p-linkedin">
         <input id="p-linkedin" type="url" value=${form.linkedin_url} placeholder="https://www.linkedin.com/in/…" onInput=${(e) => set({ linkedin_url: e.target.value })} />
@@ -367,20 +368,20 @@ export function ContactForm({ id }) {
       <//>
       ${!isGuest() &&
       html`<div class="field-grid">
-        <${Field} label="Betreut von" htmlFor="p-betreuer">
+        <${Field} label=${t('Betreut von')} htmlFor="p-betreuer">
           <select id="p-betreuer" value=${form.betreuer} onChange=${(e) => set({ betreuer: e.target.value })}>
-            <option value="">[niemand]</option>
-            ${form.betreuer && !activeMembers().some((t) => norm(t.email) === form.betreuer) && html`<option value=${form.betreuer}>${memberName(form.betreuer)} (nicht mehr im Team)</option>`}
-            ${activeMembers().map((t) => html`<option value=${norm(t.email)}>${t.name}</option>`)}
+            <option value="">${t('[niemand]')}</option>
+            ${form.betreuer && !activeMembers().some((m) => norm(m.email) === form.betreuer) && html`<option value=${form.betreuer}>${memberName(form.betreuer)} ${t('(nicht mehr im Team)')}</option>`}
+            ${activeMembers().map((m) => html`<option value=${norm(m.email)}>${m.name}</option>`)}
           </select>
         <//>
-        <${Field} label="Herkunft" htmlFor="p-herkunft">
-          <input id="p-herkunft" value=${form.herkunft} placeholder="zum Beispiel Messe, Empfehlung" onInput=${(e) => set({ herkunft: e.target.value })} />
+        <${Field} label=${t('Herkunft')} htmlFor="p-herkunft">
+          <input id="p-herkunft" value=${form.herkunft} placeholder=${t('zum Beispiel Messe, Empfehlung')} onInput=${(e) => set({ herkunft: e.target.value })} />
         <//>
       </div>`}
       <div class="form-actions">
-        <a class="btn" href=${back}>Abbrechen</a>
-        <button type="submit" class="btn btn-primary" disabled=${!form.name.trim() || saving}>${existing ? 'Speichern' : 'Kontakt anlegen'}</button>
+        <a class="btn" href=${back}>${t('Abbrechen')}</a>
+        <button type="submit" class="btn btn-primary" disabled=${!form.name.trim() || saving}>${existing ? t('Speichern') : t('Kontakt anlegen')}</button>
       </div>
     </form>
   </div>`

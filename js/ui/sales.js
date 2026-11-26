@@ -7,8 +7,10 @@ import { state, myEmail, memberName, activeProjects, getCard, getStage, getOrg, 
 import { Icon } from '../lib/icons.js'
 import { openCard } from '../router.js'
 import { PageHead, Tile, Empty, Field, useIsMobile } from './common.js'
+import { t, getLang } from '../i18n.js'
 
 const MONTHS = ['Jan.', 'Feb.', 'März', 'Apr.', 'Mai', 'Juni', 'Juli', 'Aug.', 'Sept.', 'Okt.', 'Nov.', 'Dez.']
+const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 const PERIODS = [
   { value: 'monat', label: 'Dieser Monat' },
@@ -73,7 +75,7 @@ function monthsBetween(from, to) {
 }
 const monthLabel = (key) => {
   const [y, m] = key.split('-').map(Number)
-  return `${MONTHS[m - 1]} ${y}`
+  return `${(getLang() === 'en' ? MONTHS_EN : MONTHS)[m - 1]} ${y}`
 }
 
 // Wahrscheinlichkeit eines offenen Deals: eigene Angabe, sonst die der Spalte, sonst keine
@@ -157,7 +159,7 @@ export function computeSales({ deals, items, from, to, owner, projectId }) {
   // Verlustgründe
   const reasons = new Map()
   lost.forEach((d) => {
-    const r = (d.lost_reason || '').trim() || '[ohne Grund]'
+    const r = (d.lost_reason || '').trim() || t('[ohne Grund]')
     reasons.set(r, (reasons.get(r) || 0) + 1)
   })
 
@@ -214,7 +216,7 @@ export function productSummary(dealItems) {
     .map((i) => {
       const qty = String(Number(i.quantity)).replace('.', ',')
       const disc = Number(i.discount_percent || 0)
-      return `${qty} × ${i.name}${disc ? ` (${String(disc).replace('.', ',')} % Rabatt)` : ''}`
+      return `${qty} × ${i.name}${disc ? ' ' + t('({p} % Rabatt)', { p: String(disc).replace('.', ',') }) : ''}`
     })
     .join(', ')
 }
@@ -228,7 +230,7 @@ function RevenueList({ won, items }) {
   // Am Handy drei Spalten, die Produkte stehen dann unter der Aufgabe
   const mobile = useIsMobile()
   const span = mobile ? 2 : 3
-  if (!won.length) return html`<${Empty}>Im Zeitraum wurde nichts gewonnen.<//>`
+  if (!won.length) return html`<${Empty}>${t('Im Zeitraum wurde nichts gewonnen.')}<//>`
   const groups = new Map()
   won.forEach((d) => {
     const key = norm(d.owner)
@@ -239,11 +241,11 @@ function RevenueList({ won, items }) {
   const sorted = [...groups.entries()].sort((a, b) => sum(b[1]) - sum(a[1]))
   return html`<table class="sales-table revenue-table">
     <thead>
-      <tr><th scope="col">Abschluss</th><th scope="col">Deal und Kunde</th>${!mobile && html`<th scope="col">Produkte</th>`}<th scope="col" class="num">Wert</th></tr>
+      <tr><th scope="col">${t('Abschluss')}</th><th scope="col">${t('Deal und Kunde')}</th>${!mobile && html`<th scope="col">${t('Produkte')}</th>`}<th scope="col" class="num">${t('Wert')}</th></tr>
     </thead>
     ${sorted.map(([email, list]) => html`<tbody key=${email}>
       <tr class="group-row">
-        <th scope="rowgroup" colspan=${span}>${memberName(email)} <span class="muted small">${list.length === 1 ? '1 Deal' : `${list.length} Deals`}</span></th>
+        <th scope="rowgroup" colspan=${span}>${memberName(email)} <span class="muted small">${list.length === 1 ? t('1 Deal') : t('{n} Deals', { n: list.length })}</span></th>
         <td class="num"><strong>${fmtEuro(sum(list))}</strong></td>
       </tr>
       ${list
@@ -256,18 +258,18 @@ function RevenueList({ won, items }) {
           return html`<tr key=${d.id}>
             <td class="nowrap">${fmtDate(d.closed_at)}</td>
             <td>
-              <button type="button" class="link-btn" onClick=${() => openCard(d.card_id)}>${card ? card.title : '[Deal gelöscht]'}</button>
+              <button type="button" class="link-btn" onClick=${() => openCard(d.card_id)}>${card ? card.title : t('[Deal gelöscht]')}</button>
               ${customerOf(card) && html`<span class="muted small block">${customerOf(card)}</span>`}
               ${mobile && dItems.length > 0 && html`<span class="small block">${productSummary(dItems)}</span>`}
             </td>
             ${!mobile &&
-            html`<td>${dItems.length ? productSummary(dItems) : html`<span class="muted">[ohne Produkte]</span>`}${places > 0 && html`<span class="muted small block">${places} Netzwerkplätze</span>`}</td>`}
+            html`<td>${dItems.length ? productSummary(dItems) : html`<span class="muted">${t('[ohne Produkte]')}</span>`}${places > 0 && html`<span class="muted small block">${t('{n} Netzwerkplätze', { n: places })}</span>`}</td>`}
             <td class="num">${fmtEuro(d.value_cents)}</td>
           </tr>`
         })}
     </tbody>`)}
     <tfoot>
-      <tr class="group-row"><th scope="row" colspan=${span}>Summe</th><td class="num"><strong>${fmtEuro(sum(won))}</strong></td></tr>
+      <tr class="group-row"><th scope="row" colspan=${span}>${t('Summe')}</th><td class="num"><strong>${fmtEuro(sum(won))}</strong></td></tr>
     </tfoot>
   </table>`
 }
@@ -275,11 +277,11 @@ function RevenueList({ won, items }) {
 // CSV für Excel: Semikolon, Dezimalkomma, UTF-8 mit BOM, damit Umlaute stimmen
 export function revenueCsv(won, items) {
   const esc = (v) => {
-    const t = String(v ?? '')
-    return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t
+    const s = String(v ?? '')
+    return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
   }
   const euro = (cents) => (Number(cents || 0) / 100).toFixed(2).replace('.', ',')
-  const rows = [['Mitarbeiter', 'Abschluss', 'Deal', 'Firma', 'Kontakt', 'Produkte', 'Netzwerkplätze', 'Wert netto EUR']]
+  const rows = [[t('Mitarbeiter'), t('Abschluss'), t('Deal'), t('Firma'), t('Kontakt'), t('Produkte'), t('Netzwerkplätze'), t('Wert netto EUR')]]
   won
     .slice()
     .sort((a, b) => memberName(a.owner).localeCompare(memberName(b.owner), 'de') || a.closed_at.localeCompare(b.closed_at))
@@ -297,7 +299,7 @@ function downloadCsv(won, items, from, to) {
   const blob = new Blob([revenueCsv(won, items)], { type: 'text/csv;charset=utf-8' })
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
-  a.download = `beQ-CRM-Umsatzliste-${from}-bis-${to}.csv`
+  a.download = `beQ-CRM-${t('Umsatzliste')}-${from}-${t('bis')}-${to}.csv`
   document.body.appendChild(a)
   a.click()
   a.remove()
@@ -310,7 +312,7 @@ export function SalesPage() {
   const [owner, setOwner] = useState('')
   const [projectId, setProjectId] = useState('')
   const people = salesPeople()
-  const me = state.db.team_members.find((t) => norm(t.email) === norm(myEmail()))
+  const me = state.db.team_members.find((m) => norm(m.email) === norm(myEmail()))
   const [from, to] = periodRange(period, todayStr(), custom)
   const deals = state.db.deals || []
   const items = state.db.deal_items || []
@@ -322,64 +324,64 @@ export function SalesPage() {
 
   const scope =
     me && me.role === 'admin'
-      ? 'Du siehst als Admin die Zahlen aller.'
+      ? t('Du siehst als Admin die Zahlen aller.')
       : me && me.team_lead && me.sales_team
-        ? `Du siehst als Teamlead die Zahlen von „${me.sales_team}“.`
-        : 'Du siehst deine eigenen Zahlen.'
+        ? t('Du siehst als Teamlead die Zahlen von „{team}“.', { team: me.sales_team })
+        : t('Du siehst deine eigenen Zahlen.')
   const maxMonth = Math.max(0, ...r.months.map((m) => m.value))
   const maxPerson = Math.max(0, ...r.people.map((p) => p.won))
 
   return html`<div class="page">
     <${PageHead} kicker="Sales" title="Sales" />
-    <p class="muted">${scope} Alle Werte in Euro, netto ohne MwSt.</p>
+    <p class="muted">${scope} ${t('Alle Werte in Euro, netto ohne MwSt.')}</p>
 
     <div class="sales-filters">
-      <${Field} label="Zeitraum" htmlFor="sales-period">
+      <${Field} label=${t('Zeitraum')} htmlFor="sales-period">
         <select id="sales-period" value=${period} onChange=${(e) => changePeriod(e.target.value)}>
-          ${PERIODS.map((p) => html`<option value=${p.value}>${p.label}</option>`)}
+          ${PERIODS.map((p) => html`<option value=${p.value}>${t(p.label)}</option>`)}
         </select>
       <//>
       ${period === 'eigen' &&
-      html`<${Field} label="Von" htmlFor="sales-from"><input id="sales-from" type="date" value=${custom.from || from} onChange=${(e) => setCustom({ ...custom, from: e.target.value })} /><//>
-        <${Field} label="Bis" htmlFor="sales-to"><input id="sales-to" type="date" value=${custom.to || to} onChange=${(e) => setCustom({ ...custom, to: e.target.value })} /><//>`}
+      html`<${Field} label=${t('Von')} htmlFor="sales-from"><input id="sales-from" type="date" value=${custom.from || from} onChange=${(e) => setCustom({ ...custom, from: e.target.value })} /><//>
+        <${Field} label=${t('Bis')} htmlFor="sales-to"><input id="sales-to" type="date" value=${custom.to || to} onChange=${(e) => setCustom({ ...custom, to: e.target.value })} /><//>`}
       ${people.length > 1 &&
-      html`<${Field} label="Mitarbeiter" htmlFor="sales-owner">
+      html`<${Field} label=${t('Mitarbeiter')} htmlFor="sales-owner">
         <select id="sales-owner" value=${owner} onChange=${(e) => setOwner(e.target.value)}>
-          <option value="">Alle</option>
+          <option value="">${t('Alle')}</option>
           ${people.map((p) => html`<option value=${p.email.toLowerCase()}>${p.name}</option>`)}
         </select>
       <//>`}
       <${Field} label="Board" htmlFor="sales-board">
         <select id="sales-board" value=${projectId} onChange=${(e) => setProjectId(e.target.value)}>
-          <option value="">Alle Boards</option>
+          <option value="">${t('Alle Boards')}</option>
           ${activeProjects().map((p) => html`<option value=${p.id}>${p.name}</option>`)}
         </select>
       <//>
     </div>
-    <p class="muted small sales-range">${fmtDate(from)} bis ${fmtDate(to)}</p>
+    <p class="muted small sales-range">${t('{from} bis {to}', { from: fmtDate(from), to: fmtDate(to) })}</p>
 
     ${deals.length === 0 &&
-    html`<${Empty}>Noch keine Deals mit Wert. Den Wert trägst du im Deal unter „Wert und Status“ ein.<//>`}
+    html`<${Empty}>${t('Noch keine Deals mit Wert. Den Wert trägst du im Deal unter „Wert und Status“ ein.')}<//>`}
 
     <div class="stats">
-      <${Stat} main=${true} label="Gewonnen" value=${fmtEuro(r.wonSum)} sub=${r.won.length === 1 ? '1 Deal' : `${r.won.length} Deals`} />
-      <${Stat} label="Abschlussquote" value=${r.rate == null ? '[keine Abschlüsse]' : `${r.rate} %`} sub=${`${r.won.length} gewonnen, ${r.lost.length} verloren`} />
-      <${Stat} label="Ø Dealgröße" value=${r.avg == null ? '[keine]' : fmtEuro(r.avg)} sub="gewonnene Deals" />
-      <${Stat} label="Netzwerkplätze" value=${String(r.places)} sub="verkauft, inklusive gratis" />
-      <${Stat} label="Offene Deals" value=${fmtEuro(r.openSum)} sub=${`${r.open.length} offen, unabhängig vom Zeitraum`} />
-      <${Stat} label="Gewichtet" value=${fmtEuro(r.weighted)} sub="Wert mal Wahrscheinlichkeit" />
+      <${Stat} main=${true} label=${t('Gewonnen')} value=${fmtEuro(r.wonSum)} sub=${r.won.length === 1 ? t('1 Deal') : t('{n} Deals', { n: r.won.length })} />
+      <${Stat} label=${t('Abschlussquote')} value=${r.rate == null ? t('[keine Abschlüsse]') : `${r.rate} %`} sub=${t('{won} gewonnen, {lost} verloren', { won: r.won.length, lost: r.lost.length })} />
+      <${Stat} label=${t('Ø Dealgröße')} value=${r.avg == null ? t('[keine]') : fmtEuro(r.avg)} sub=${t('gewonnene Deals')} />
+      <${Stat} label=${t('Netzwerkplätze')} value=${String(r.places)} sub=${t('verkauft, inklusive gratis')} />
+      <${Stat} label=${t('Offene Deals')} value=${fmtEuro(r.openSum)} sub=${t('{n} offen, unabhängig vom Zeitraum', { n: r.open.length })} />
+      <${Stat} label=${t('Gewichtet')} value=${fmtEuro(r.weighted)} sub=${t('Wert mal Wahrscheinlichkeit')} />
     </div>
 
     <div class="sales-grid">
-      <${Tile} title="Gewonnen je Monat">
+      <${Tile} title=${t('Gewonnen je Monat')}>
         <table class="sales-table">
-          <thead><tr><th scope="col">Monat</th><th scope="col" class="num">Gewonnen</th><th scope="col" class="bar-col"><span class="sr-only">Balken</span></th><th scope="col" class="num">Deals</th></tr></thead>
+          <thead><tr><th scope="col">${t('Monat')}</th><th scope="col" class="num">${t('Gewonnen')}</th><th scope="col" class="bar-col"><span class="sr-only">${t('Balken')}</span></th><th scope="col" class="num">Deals</th></tr></thead>
           <tbody>
             ${r.months.map(
               (m) => html`<tr key=${m.key}>
                 <td>${monthLabel(m.key)}</td>
                 <td class="num">${fmtEuro(m.value)}</td>
-                <td class="bar-col"><${Bar} value=${m.value} max=${maxMonth} label=${`${monthLabel(m.key)}: ${fmtEuro(m.value)}, ${m.count} Deals`} /></td>
+                <td class="bar-col"><${Bar} value=${m.value} max=${maxMonth} label=${t('{month}: {value}, {n} Deals', { month: monthLabel(m.key), value: fmtEuro(m.value), n: m.count })} /></td>
                 <td class="num">${m.count}</td>
               </tr>`
             )}
@@ -387,30 +389,30 @@ export function SalesPage() {
         </table>
       <//>
 
-      <${Tile} title="Je Mitarbeiter">
+      <${Tile} title=${t('Je Mitarbeiter')}>
         ${r.people.length
           ? html`<table class="sales-table">
-              <thead><tr><th scope="col">Name</th><th scope="col" class="num">Gewonnen</th><th scope="col" class="bar-col"><span class="sr-only">Balken</span></th><th scope="col" class="num">Quote</th><th scope="col" class="num">Offen</th></tr></thead>
+              <thead><tr><th scope="col">Name</th><th scope="col" class="num">${t('Gewonnen')}</th><th scope="col" class="bar-col"><span class="sr-only">${t('Balken')}</span></th><th scope="col" class="num">${t('Quote')}</th><th scope="col" class="num">${t('Offen')}</th></tr></thead>
               <tbody>
                 ${r.people.map((p) => {
                   const decided = p.wonCount + p.lostCount
                   return html`<tr key=${p.email}>
                     <td>${memberName(p.email)}</td>
                     <td class="num">${fmtEuro(p.won)}</td>
-                    <td class="bar-col"><${Bar} value=${p.won} max=${maxPerson} label=${`${memberName(p.email)}: ${fmtEuro(p.won)} gewonnen`} /></td>
-                    <td class="num">${decided ? Math.round((p.wonCount / decided) * 100) + ' %' : '[offen]'}</td>
+                    <td class="bar-col"><${Bar} value=${p.won} max=${maxPerson} label=${t('{name}: {value} gewonnen', { name: memberName(p.email), value: fmtEuro(p.won) })} /></td>
+                    <td class="num">${decided ? Math.round((p.wonCount / decided) * 100) + ' %' : t('[offen]')}</td>
                     <td class="num">${fmtEuro(p.open)}</td>
                   </tr>`
                 })}
               </tbody>
             </table>`
-          : html`<${Empty}>Im Zeitraum nichts entschieden und nichts offen.<//>`}
+          : html`<${Empty}>${t('Im Zeitraum nichts entschieden und nichts offen.')}<//>`}
       <//>
 
-      <${Tile} title="Produkte (gewonnen)">
+      <${Tile} title=${t('Produkte (gewonnen)')}>
         ${r.products.length
           ? html`<table class="sales-table">
-              <thead><tr><th scope="col">Produkt</th><th scope="col" class="num">Menge</th><th scope="col" class="num">Plätze</th><th scope="col" class="num">Umsatz</th></tr></thead>
+              <thead><tr><th scope="col">${t('Produkt')}</th><th scope="col" class="num">${t('Menge')}</th><th scope="col" class="num">${t('Plätze')}</th><th scope="col" class="num">${t('Umsatz')}</th></tr></thead>
               <tbody>
                 ${r.products.map(
                   (p) => html`<tr key=${p.name}>
@@ -422,17 +424,17 @@ export function SalesPage() {
                 )}
               </tbody>
             </table>`
-          : html`<${Empty}>Im Zeitraum keine gewonnenen Deals mit Produkten.<//>`}
+          : html`<${Empty}>${t('Im Zeitraum keine gewonnenen Deals mit Produkten.')}<//>`}
       <//>
 
-      <${Tile} title="Prognose (offene Deals)">
+      <${Tile} title=${t('Prognose (offene Deals)')}>
         ${r.forecast.length
           ? html`<table class="sales-table">
-              <thead><tr><th scope="col">Erwarteter Abschluss</th><th scope="col" class="num">Deals</th><th scope="col" class="num">Wert</th><th scope="col" class="num">Gewichtet</th></tr></thead>
+              <thead><tr><th scope="col">${t('Erwarteter Abschluss')}</th><th scope="col" class="num">Deals</th><th scope="col" class="num">${t('Wert')}</th><th scope="col" class="num">${t('Gewichtet')}</th></tr></thead>
               <tbody>
                 ${r.forecast.map(
                   (f) => html`<tr key=${f.key}>
-                    <td class=${f.key === 'vorbei' ? 'overdue-text' : ''}>${f.key === 'vorbei' ? 'Termin vorbei' : f.key === 'ohne' ? '[ohne Termin]' : monthLabel(f.key)}</td>
+                    <td class=${f.key === 'vorbei' ? 'overdue-text' : ''}>${f.key === 'vorbei' ? t('Termin vorbei') : f.key === 'ohne' ? t('[ohne Termin]') : monthLabel(f.key)}</td>
                     <td class="num">${f.count}</td>
                     <td class="num">${fmtEuro(f.value)}</td>
                     <td class="num">${fmtEuro(Math.round(f.weighted))}</td>
@@ -440,43 +442,43 @@ export function SalesPage() {
                 )}
               </tbody>
             </table>`
-          : html`<${Empty}>Keine offenen Deals.<//>`}
+          : html`<${Empty}>${t('Keine offenen Deals.')}<//>`}
       <//>
     </div>
 
     <${Tile}
-      title="Umsatzliste je Mitarbeiter"
+      title=${t('Umsatzliste je Mitarbeiter')}
       count=${r.won.length}
       actions=${r.won.length > 0 &&
       html`<button type="button" class="btn btn-small" onClick=${() => downloadCsv(r.won, items, from, to)}>
-        <${Icon} name="arrowOut" size=${16} /> Als CSV
+        <${Icon} name="arrowOut" size=${16} /> ${t('Als CSV')}
       </button>`}
     >
       <${RevenueList} won=${r.won} items=${items} />
     <//>
 
-    <${Tile} title="Verloren im Zeitraum" count=${r.lost.length}>
+    <${Tile} title=${t('Verloren im Zeitraum')} count=${r.lost.length}>
       ${r.lost.length
         ? html`<table class="sales-table deals-table">
-            <thead><tr><th scope="col">Deal</th><th scope="col">Besitzer</th><th scope="col">Verloren am</th><th scope="col">Grund</th><th scope="col" class="num">Wert</th></tr></thead>
+            <thead><tr><th scope="col">Deal</th><th scope="col">${t('Besitzer')}</th><th scope="col">${t('Verloren am')}</th><th scope="col">${t('Grund')}</th><th scope="col" class="num">${t('Wert')}</th></tr></thead>
             <tbody>
               ${[...r.lost]
                 .sort((a, b) => b.closed_at.localeCompare(a.closed_at))
                 .map((d) => {
                   const card = getCard(d.card_id)
                   return html`<tr key=${d.id}>
-                    <td><button type="button" class="link-btn" onClick=${() => openCard(d.card_id)}>${card ? card.title : '[Deal gelöscht]'}</button></td>
+                    <td><button type="button" class="link-btn" onClick=${() => openCard(d.card_id)}>${card ? card.title : t('[Deal gelöscht]')}</button></td>
                     <td>${memberName(d.owner)}</td>
                     <td>${fmtDate(d.closed_at)}</td>
-                    <td>${d.lost_reason || '[ohne Grund]'}</td>
+                    <td>${d.lost_reason || t('[ohne Grund]')}</td>
                     <td class="num muted">${fmtEuro(d.value_cents)}</td>
                   </tr>`
                 })}
             </tbody>
           </table>`
-        : html`<${Empty}>Im Zeitraum wurde nichts verloren.<//>`}
+        : html`<${Empty}>${t('Im Zeitraum wurde nichts verloren.')}<//>`}
       ${r.reasons.length > 0 &&
-      html`<p class="muted small">Verlustgründe: ${r.reasons.map(([reason, n]) => `${reason} (${n})`).join(', ')}</p>`}
+      html`<p class="muted small">${t('Verlustgründe: {list}', { list: r.reasons.map(([reason, n]) => `${reason} (${n})`).join(', ') })}</p>`}
     <//>
   </div>`
 }

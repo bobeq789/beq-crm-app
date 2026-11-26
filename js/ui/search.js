@@ -33,6 +33,7 @@ import {
 } from '../store.js'
 import { openCard, navigate } from '../router.js'
 import { Modal, PriorityPicker, ProjectSelect, AssigneeSelect, Field, dialogKinds } from './common.js'
+import { t, stageLabel } from '../i18n.js'
 
 const PER_GROUP = 5
 const STATUS = { offen: 'offen', gewonnen: 'gewonnen', verloren: 'verloren' }
@@ -40,10 +41,10 @@ const STATUS = { offen: 'offen', gewonnen: 'gewonnen', verloren: 'verloren' }
 // Wie gut passt ein Titel? Anfang des Titels vor Wortanfang vor irgendwo, sonst nur in anderen Feldern
 function score(query, title) {
   const q = norm(query)
-  const t = norm(title)
-  if (t.startsWith(q)) return 3
-  if (t.split(/[\s\-–,.„“"()/]+/).some((w) => w.startsWith(q))) return 2
-  if (t.includes(q)) return 1
+  const tn = norm(title)
+  if (tn.startsWith(q)) return 3
+  if (tn.split(/[\s\-–,.„“"()/]+/).some((w) => w.startsWith(q))) return 2
+  if (tn.includes(q)) return 1
   return 0
 }
 const rank = (query, list, titleOf, extra = () => 0) =>
@@ -77,7 +78,7 @@ export function searchAll(query) {
       id: 'karte-' + c.id,
       icon: 'board',
       title: c.title,
-      sub: joinParts(project && project.name, c.archived ? 'archiviert' : stage && stage.name, c.assignee && memberName(c.assignee)),
+      sub: joinParts(project && project.name, c.archived ? t('archiviert') : stage && stageLabel(stage.name), c.assignee && memberName(c.assignee)),
       done: !isOpen(c),
       run: () => openCard(c.id),
     }
@@ -118,7 +119,7 @@ export function searchAll(query) {
   )
 
   // Deals: nur die, deren Zahlen ich sehen darf (wie in Sales)
-  const allowed = new Set(salesPeople().map((t) => norm(t.email)))
+  const allowed = new Set(salesPeople().map((m) => norm(m.email)))
   const deals = (db.deals || []).filter((d) => {
     if (!allowed.has(norm(d.owner))) return false
     const card = getCard(d.card_id)
@@ -134,7 +135,7 @@ export function searchAll(query) {
       id: 'deal-' + d.id,
       icon: 'sales',
       title: card.title,
-      sub: joinParts(fmtEuro(d.value_cents), STATUS[d.status], org && org.name, memberName(d.owner)),
+      sub: joinParts(fmtEuro(d.value_cents), STATUS[d.status] && t(STATUS[d.status]), org && org.name, memberName(d.owner)),
       run: () => openCard(card.id),
     }
   })
@@ -168,10 +169,10 @@ function SearchBox({ sheet, onClose, inputRef }) {
   // Alle wählbaren Einträge in Reihenfolge: Treffer, dann die Aktionen
   const actions = q
     ? [
-        { id: 'neu', icon: 'plus', title: `„${q}“ als Deal anlegen`, run: () => openDialog({ kind: 'new-task', title: q }) },
-        { id: 'mails', icon: 'mail', title: 'In den Mails suchen', sub: 'nur in deinen Postfächern', run: () => navigate('/postfach', { q }) },
+        { id: 'neu', icon: 'plus', title: t('„{q}“ als Deal anlegen', { q }), run: () => openDialog({ kind: 'new-task', title: q }) },
+        { id: 'mails', icon: 'mail', title: t('In den Mails suchen'), sub: t('nur in deinen Postfächern'), run: () => navigate('/postfach', { q }) },
       ]
-    : [{ id: 'neu', icon: 'plus', title: 'Neuer Deal', run: () => openDialog({ kind: 'new-task', title: '' }) }]
+    : [{ id: 'neu', icon: 'plus', title: t('Neuer Deal'), run: () => openDialog({ kind: 'new-task', title: '' }) }]
   const flat = [...groups.flatMap((g) => g.items), ...actions]
   const current = Math.min(active, flat.length - 1)
 
@@ -248,12 +249,12 @@ function SearchBox({ sheet, onClose, inputRef }) {
   const panel =
     open &&
     html`<div class="search-panel" onPointerDown=${(e) => e.target.closest('.search-item') && e.preventDefault()}>
-      <ul class="search-list" role="listbox" id="such-liste" aria-label="Suchergebnisse">
-        ${!q && html`<li class="search-hint" role="presentation">Findet Deals, Kontakte, Firmen und Meetings.</li>`}
-        ${q && !groups.length && html`<li class="search-hint" role="presentation">Nichts gefunden für „${q}“.</li>`}
+      <ul class="search-list" role="listbox" id="such-liste" aria-label=${t('Suchergebnisse')}>
+        ${!q && html`<li class="search-hint" role="presentation">${t('Findet Deals, Kontakte, Firmen und Meetings.')}</li>`}
+        ${q && !groups.length && html`<li class="search-hint" role="presentation">${t('Nichts gefunden für „{q}“.', { q })}</li>`}
         ${groups.map(
           (g) => html`<li class="search-group" role="presentation" key=${g.key}>
-            <div class="search-group-title">${g.label}${g.total > g.items.length && html` <span class="count">${g.items.length} von ${g.total}</span>`}</div>
+            <div class="search-group-title">${t(g.label)}${g.total > g.items.length && html` <span class="count">${t('{n} von {total}', { n: g.items.length, total: g.total })}</span>`}</div>
             <ul role="presentation">${g.items.map(row)}</ul>
           </li>`
         )}
@@ -270,8 +271,8 @@ function SearchBox({ sheet, onClose, inputRef }) {
         ref=${inputRef}
         type="search"
         value=${query}
-        placeholder="Suchen"
-        aria-label="Suchen in Deals, Kontakten, Firmen und Meetings"
+        placeholder=${t('Suchen')}
+        aria-label=${t('Suchen in Deals, Kontakten, Firmen und Meetings')}
         role="combobox"
         aria-expanded=${open}
         aria-controls="such-liste"
@@ -286,8 +287,8 @@ function SearchBox({ sheet, onClose, inputRef }) {
         }}
         onKeyDown=${onKey}
       />
-      ${!sheet && !query && html`<kbd class="search-kbd" aria-hidden="true">${isMac ? '⌘K' : 'Strg K'}</kbd>`}
-      ${sheet && html`<button type="button" class="search-cancel" onClick=${close}>Abbrechen</button>`}
+      ${!sheet && !query && html`<kbd class="search-kbd" aria-hidden="true">${isMac ? '⌘K' : t('Strg K')}</kbd>`}
+      ${sheet && html`<button type="button" class="search-cancel" onClick=${close}>${t('Abbrechen')}</button>`}
     </div>
     ${panel}
   </div>`
@@ -325,7 +326,7 @@ export function TopSearch() {
   }, [compact])
 
   if (!compact) return html`<${SearchBox} sheet=${false} inputRef=${inputRef} />`
-  return html`<button type="button" class="header-icon search-button" aria-label="Suchen" title="Suchen" onClick=${() => setSheetOpen(true)}>
+  return html`<button type="button" class="header-icon search-button" aria-label=${t('Suchen')} title=${t('Suchen')} onClick=${() => setSheetOpen(true)}>
       <${Icon} name="search" size=${22} />
     </button>
     ${sheetOpen &&
@@ -356,40 +357,40 @@ function NewTaskDialog({ d }) {
 
   const submit = async (e) => {
     e.preventDefault()
-    const t = title.trim()
-    if (!t || busy) return
+    const text = title.trim()
+    if (!text || busy) return
     setBusy(true)
     local.set('beqcrm-last-quick-project', projectId)
-    const card = await createCard({ title: t, project_id: projectId, kind: 'todo', priority, due_date: due || null, assignee: assignee || null })
+    const card = await createCard({ title: text, project_id: projectId, kind: 'todo', priority, due_date: due || null, assignee: assignee || null })
     setBusy(false)
     if (!card) return
     closeDialog()
-    toast('Deal angelegt', { action: { label: 'Öffnen', run: () => openCard(card.id) } })
+    toast(t('Deal angelegt'), { action: { label: t('Öffnen'), run: () => openCard(card.id) } })
   }
 
-  return html`<${Modal} title="Neuer Deal" onClose=${closeDialog}>
+  return html`<${Modal} title=${t('Neuer Deal')} onClose=${closeDialog}>
     <form class="new-task" onSubmit=${submit} id="neue-aufgabe">
-      <${Field} label="Was steht an?" htmlFor="nt-title">
+      <${Field} label=${t('Was steht an?')} htmlFor="nt-title">
         <input id="nt-title" ref=${inputRef} value=${title} onInput=${(e) => setTitle(e.target.value)} autocomplete="off" />
       <//>
       <div class="quick-options">
         <${PriorityPicker} value=${priority} onChange=${setPriority} />
         <label class="quick-field">
-          <span class="sr-only">Fällig am</span>
-          <input type="date" value=${due} onInput=${(e) => setDue(e.target.value)} aria-label="Fällig am" />
+          <span class="sr-only">${t('Fällig am')}</span>
+          <input type="date" value=${due} onInput=${(e) => setDue(e.target.value)} aria-label=${t('Fällig am')} />
         </label>
         <label class="quick-field">
           <span class="sr-only">Pipeline</span>
           <${ProjectSelect} value=${projectId} onChange=${setProjectId} />
         </label>
         <label class="quick-field">
-          <span class="sr-only">Zuständig</span>
-          <${AssigneeSelect} value=${assignee} onChange=${setAssignee} emptyLabel="Niemand zuständig" />
+          <span class="sr-only">${t('Zuständig')}</span>
+          <${AssigneeSelect} value=${assignee} onChange=${setAssignee} emptyLabel=${t('Niemand zuständig')} />
         </label>
       </div>
       <div class="new-task-foot">
-        <button type="button" class="btn" onClick=${closeDialog}>Abbrechen</button>
-        <button type="submit" class="btn btn-primary" disabled=${!title.trim() || busy}><${Icon} name="plus" size=${18} /> Anlegen</button>
+        <button type="button" class="btn" onClick=${closeDialog}>${t('Abbrechen')}</button>
+        <button type="submit" class="btn btn-primary" disabled=${!title.trim() || busy}><${Icon} name="plus" size=${18} /> ${t('Anlegen')}</button>
       </div>
     </form>
   <//>`

@@ -47,6 +47,7 @@ import {
 import { navigate, openCard } from '../router.js'
 import { PageHead, Dot, Avatar, PrioBadge, DueBadge, NewBadge, Modal, Field, Empty, Labels, ActivityBadge, dialogKinds, useIsMobile, Segmented } from './common.js'
 import { CardTable } from './cardtable.js'
+import { t, stageLabel, locale } from '../i18n.js'
 
 const DONE_LIMIT = 15
 
@@ -78,14 +79,14 @@ export function BoardCard({ card, draggable, viewer = null, showProject = false,
       ${(person || org) && html`<span class="bc-sub">${[person && person.name, org && org.name].filter(Boolean).join(' · ')}</span>`}
       ${(card.labels || []).length > 0 && html`<span class="bc-labels"><${Labels} labels=${card.labels} /></span>`}
       <span class="bc-meta">
-        ${answerFor(card.id) && html`<span class="badge badge-new" title="Ein Kontakt hat geantwortet">Antwort da</span>`}
+        ${answerFor(card.id) && html`<span class="badge badge-new" title=${t('Ein Kontakt hat geantwortet')}>${t('Antwort da')}</span>`}
         <${NewBadge} cardId=${card.id} />
         ${others.slice(0, 3).map((e) => html`<${Avatar} email=${e} key=${e} />`)}
         <${PrioBadge} priority=${card.priority} />
         <${DueBadge} due=${card.due_date} done=${isDone} />
-        ${sharesOf(card.id).length > 0 && html`<span class="bc-notes" title="Mit einem Gast geteilt"><${Icon} name="share" size=${14} /></span>`}
-        ${noteCount > 0 && html`<span class="bc-notes" title=${noteCount + (noteCount === 1 ? ' Notiz' : ' Notizen')}><${Icon} name="note" size=${14} />${noteCount}</span>`}
-        ${card.archived && html`<span class="badge">Archiv</span>`}
+        ${sharesOf(card.id).length > 0 && html`<span class="bc-notes" title=${t('Mit einem Gast geteilt')}><${Icon} name="share" size=${14} /></span>`}
+        ${noteCount > 0 && html`<span class="bc-notes" title=${noteCount === 1 ? t('1 Notiz') : t('{n} Notizen', { n: noteCount })}><${Icon} name="note" size=${14} />${noteCount}</span>`}
+        ${card.archived && html`<span class="badge">${t('Archiv')}</span>`}
         ${!isDone && html`<${ActivityBadge} cardId=${card.id} />`}
         <${DealBadge} card=${card} />
       </span>
@@ -98,8 +99,8 @@ export function DealBadge({ card }) {
   const deal = dealOf(card.id)
   if (!deal) return null
   const cls = deal.status === 'gewonnen' ? ' deal-won' : deal.status === 'verloren' ? ' deal-lost' : ''
-  const label = deal.status === 'offen' ? '' : deal.status === 'gewonnen' ? ' gewonnen' : ' verloren'
-  return html`<span class=${'badge deal-badge' + cls} title=${'Wert' + label}>${fmtEuro(deal.value_cents)}${label}</span>`
+  const label = deal.status === 'offen' ? '' : deal.status === 'gewonnen' ? ' ' + t('gewonnen') : ' ' + t('verloren')
+  return html`<span class=${'badge deal-badge' + cls} title=${t('Wert') + label}>${fmtEuro(deal.value_cents)}${label}</span>`
 }
 
 // Summe der offenen und gewonnenen Deals einer Spalte
@@ -127,14 +128,14 @@ function InlineAdd({ onAdd, onCancel }) {
     <input
       ref=${ref}
       value=${title}
-      placeholder="Titel des Deals"
-      aria-label="Titel des neuen Deals"
+      placeholder=${t('Titel des Deals')}
+      aria-label=${t('Titel des neuen Deals')}
       onInput=${(e) => setTitle(e.target.value)}
       onKeyDown=${(e) => e.key === 'Escape' && onCancel()}
     />
     <div class="form-actions">
-      <button type="button" class="btn" onClick=${onCancel}>Abbrechen</button>
-      <button type="submit" class="btn btn-primary" disabled=${!title.trim()}>Anlegen</button>
+      <button type="button" class="btn" onClick=${onCancel}>${t('Abbrechen')}</button>
+      <button type="submit" class="btn btn-primary" disabled=${!title.trim()}>${t('Anlegen')}</button>
     </div>
   </form>`
 }
@@ -169,7 +170,7 @@ function StageNameInput({ stage, onDone }) {
     class="column-rename"
     value=${name}
     maxlength="60"
-    aria-label="Name der Spalte"
+    aria-label=${t('Name der Spalte')}
     onInput=${(e) => setName(e.target.value)}
     onKeyDown=${(e) => {
       if (e.key === 'Enter') {
@@ -228,26 +229,26 @@ function StageMenu({ stage, onRename, onAddAt, label = '' }) {
       class=${label ? 'btn btn-small' : 'icon-btn small'}
       aria-haspopup="menu"
       aria-expanded=${open}
-      aria-label=${'Spalte „' + stage.name + '“ bearbeiten'}
-      title="Spalte bearbeiten"
+      aria-label=${t('Spalte „{name}“ bearbeiten', { name: stageLabel(stage.name) })}
+      title=${t('Spalte bearbeiten')}
       onClick=${toggle}
     >
-      ${label ? html`<${Icon} name="edit" size=${16} /> ${label}` : html`<${Icon} name="more" size=${18} />`}
+      ${label ? html`<${Icon} name="edit" size=${16} /> ${t(label)}` : html`<${Icon} name="more" size=${18} />`}
     </button>
     ${open &&
     html`<div class="stage-menu" role="menu" style=${{ top: pos.top + 'px', left: pos.left + 'px', width: MENU_WIDTH + 'px' }}>
-      <button type="button" role="menuitem" onClick=${run(onRename)}><${Icon} name="edit" size=${16} /> Umbenennen</button>
+      <button type="button" role="menuitem" onClick=${run(onRename)}><${Icon} name="edit" size=${16} /> ${t('Umbenennen')}</button>
       ${isDone
-        ? html`<button type="button" role="menuitem" onClick=${run(() => onAddAt(index))}><${Icon} name="plus" size=${16} /> Neue Spalte davor</button>
-            <p class="stage-menu-note">Die Spalte für Erledigtes bleibt immer.</p>`
+        ? html`<button type="button" role="menuitem" onClick=${run(() => onAddAt(index))}><${Icon} name="plus" size=${16} /> ${t('Neue Spalte davor')}</button>
+            <p class="stage-menu-note">${t('Die Spalte für Erledigtes bleibt immer.')}</p>`
         : html`<button type="button" role="menuitem" disabled=${!canMoveStage(stage.id, -1)} onClick=${run(() => moveStage(stage.id, -1))}>
-              <${Icon} name="back" size=${16} /> Nach links
+              <${Icon} name="back" size=${16} /> ${t('Nach links')}
             </button>
             <button type="button" role="menuitem" disabled=${!canMoveStage(stage.id, 1)} onClick=${run(() => moveStage(stage.id, 1))}>
-              <${Icon} name="chevron" size=${16} /> Nach rechts
+              <${Icon} name="chevron" size=${16} /> ${t('Nach rechts')}
             </button>
-            <button type="button" role="menuitem" onClick=${run(() => onAddAt(index + 1))}><${Icon} name="plus" size=${16} /> Neue Spalte rechts daneben</button>
-            <button type="button" role="menuitem" class="danger" onClick=${run(() => askDeleteStage(stage))}><${Icon} name="trash" size=${16} /> Spalte löschen</button>`}
+            <button type="button" role="menuitem" onClick=${run(() => onAddAt(index + 1))}><${Icon} name="plus" size=${16} /> ${t('Neue Spalte rechts daneben')}</button>
+            <button type="button" role="menuitem" class="danger" onClick=${run(() => askDeleteStage(stage))}><${Icon} name="trash" size=${16} /> ${t('Spalte löschen')}</button>`}
     </div>`}
   </span>`
 }
@@ -322,8 +323,8 @@ export function ProjectPicker({ currentId }) {
     <button type="button" class=${p.id === currentId ? 'active' : ''} onClick=${() => go('/board/' + p.id)}>
       <${Dot} color=${p.color} />
       <span class="pp-name">${p.name}</span>
-      ${own(p) && html`<span class="pp-star" title="Deine Pipeline" aria-label="deine Pipeline"><${Icon} name="star" size=${14} /></span>`}
-      ${shared(p) && html`<span class="tab-shared" title="Mit Gästen geteilt" aria-label="mit Gästen geteilt"><${Icon} name="users" size=${15} /></span>`}
+      ${own(p) && html`<span class="pp-star" title=${t('Deine Pipeline')} aria-label=${t('deine Pipeline')}><${Icon} name="star" size=${14} /></span>`}
+      ${shared(p) && html`<span class="tab-shared" title=${t('Mit Gästen geteilt')} aria-label=${t('mit Gästen geteilt')}><${Icon} name="users" size=${15} /></span>`}
       <span class="count">${openCountOf(p.id)}</span>
       ${p.id === currentId && html`<${Icon} name="check" size=${16} />`}
     </button>
@@ -332,27 +333,27 @@ export function ProjectPicker({ currentId }) {
   const ownFirst = (list) => [...list.filter(own), ...list.filter((p) => !own(p))]
   const intern = ownFirst(filled.filter((p) => projectArea(p) === 'intern'))
   const sales = ownFirst(filled.filter((p) => projectArea(p) === 'sales'))
-  const label = current ? current.name : 'Pipeline wählen'
+  const label = current ? current.name : t('Pipeline wählen')
   return html`<span class="project-picker" ref=${ref} onKeyDown=${onKeyDown}>
-    <button type="button" ref=${btn} class="project-picker-btn" aria-haspopup="listbox" aria-expanded=${open} aria-label=${'Board wählen, aktuell ' + label} onClick=${toggle}>
+    <button type="button" ref=${btn} class="project-picker-btn" aria-haspopup="listbox" aria-expanded=${open} aria-label=${t('Board wählen, aktuell {name}', { name: label })} onClick=${toggle}>
       ${current && html`<${Dot} color=${current.color} />`}
       <span class="pp-name">${label}</span>
       ${current && html`<span class="count">${openCountOf(current.id)}</span>`}
       <span class=${'pp-chevron' + (open ? ' open' : '')}><${Icon} name="chevron" size=${16} /></span>
     </button>
     ${open &&
-    html`<ul class="stage-menu project-menu" role="listbox" aria-label="Boards" style=${{ top: pos.top + 'px', left: pos.left + 'px', width: pos.width + 'px', maxHeight: `calc(100vh - ${pos.top + 16}px)` }}>
-      <li class="pp-sep" role="presentation">Intern</li>
+    html`<ul class="stage-menu project-menu" role="listbox" aria-label=${t('Boards')} style=${{ top: pos.top + 'px', left: pos.left + 'px', width: pos.width + 'px', maxHeight: `calc(100vh - ${pos.top + 16}px)` }}>
+      <li class="pp-sep" role="presentation">${t('Intern')}</li>
       ${intern.map(projectItem)}
-      ${!intern.length && html`<li class="pp-empty muted small" role="presentation">Noch keine interne Pipeline.</li>`}
-      <li class="pp-sep" role="presentation">Extern / Sales</li>
+      ${!intern.length && html`<li class="pp-empty muted small" role="presentation">${t('Noch keine interne Pipeline.')}</li>`}
+      <li class="pp-sep" role="presentation">${t('Extern / Sales')}</li>
       ${sales.map(projectItem)}
-      ${!sales.length && html`<li class="pp-empty muted small" role="presentation">Noch keine Sales-Pipeline.</li>`}
+      ${!sales.length && html`<li class="pp-empty muted small" role="presentation">${t('Noch keine Sales-Pipeline.')}</li>`}
       ${empty.length > 0 &&
       (showEmpty
         ? empty.map(projectItem)
         : html`<li role="presentation">
-            <button type="button" class="pp-more" onClick=${() => setShowEmpty(true)}>Leere Pipelines anzeigen (${empty.length})</button>
+            <button type="button" class="pp-more" onClick=${() => setShowEmpty(true)}>${t('Leere Pipelines anzeigen ({n})', { n: empty.length })}</button>
           </li>`)}
     </ul>`}
   </span>`
@@ -372,19 +373,19 @@ function NewStageColumn({ onCreate, onCancel }) {
     setBusy(false)
   }
   return html`<form class="column column-new" onSubmit=${submit}>
-    <label class="column-new-label" for="new-stage-name">Neue Spalte</label>
+    <label class="column-new-label" for="new-stage-name">${t('Neue Spalte')}</label>
     <input
       id="new-stage-name"
       ref=${ref}
       value=${name}
       maxlength="60"
-      placeholder="Name der Spalte"
+      placeholder=${t('Name der Spalte')}
       onInput=${(e) => setName(e.target.value)}
       onKeyDown=${(e) => e.key === 'Escape' && onCancel()}
     />
     <div class="form-actions">
-      <button type="button" class="btn" onClick=${onCancel}>Abbrechen</button>
-      <button type="submit" class="btn btn-primary" disabled=${!name.trim() || busy}>Anlegen</button>
+      <button type="button" class="btn" onClick=${onCancel}>${t('Abbrechen')}</button>
+      <button type="submit" class="btn btn-primary" disabled=${!name.trim() || busy}>${t('Anlegen')}</button>
     </div>
   </form>`
 }
@@ -414,21 +415,21 @@ function Column({ stage, cards, onDropCard, onAdd, draggable, canEdit, renaming,
       ${renaming
         ? html`<${StageNameInput} stage=${stage} onDone=${onRenameDone} />`
         : html`<h2 class="column-title">
-              ${canEdit ? html`<button type="button" class="column-name" title="Klicken zum Umbenennen" onClick=${onRename}>${stage.name}</button>` : stage.name}
+              ${canEdit ? html`<button type="button" class="column-name" title=${t('Klicken zum Umbenennen')} onClick=${onRename}>${stageLabel(stage.name)}</button>` : stageLabel(stage.name)}
               <span class="count">${cards.length}</span>
-              ${columnValue(cards) > 0 && html`<span class="column-value" title="Summe der Deals in dieser Spalte (netto, ohne verlorene)">${fmtEuro(columnValue(cards))}</span>`}
+              ${columnValue(cards) > 0 && html`<span class="column-value" title=${t('Summe der Deals in dieser Spalte (netto, ohne verlorene)')}>${fmtEuro(columnValue(cards))}</span>`}
             </h2>
             <span class="column-actions">
               ${canEdit && html`<${StageMenu} stage=${stage} onRename=${onRename} onAddAt=${onAddAt} />`}
-              <button type="button" class="icon-btn small" aria-label=${'Neuer Deal in „' + stage.name + '“'} onClick=${() => setAdding(true)}>
+              <button type="button" class="icon-btn small" aria-label=${t('Neuer Deal in „{name}“', { name: stageLabel(stage.name) })} onClick=${() => setAdding(true)}>
                 <${Icon} name="plus" size=${18} />
               </button>
             </span>`}
     </div>
     ${adding &&
     html`<${InlineAdd}
-      onAdd=${(t) => {
-        onAdd(t, stage.id)
+      onAdd=${(title) => {
+        onAdd(title, stage.id)
         setAdding(false)
       }}
       onCancel=${() => setAdding(false)}
@@ -439,13 +440,13 @@ function Column({ stage, cards, onDropCard, onAdd, draggable, canEdit, renaming,
     ${isDone &&
     cards.length > DONE_LIMIT &&
     html`<button type="button" class="link-btn" onClick=${() => setShowAll(!showAll)}>
-      ${showAll ? 'Weniger anzeigen' : `Alle ${cards.length} anzeigen`}
+      ${showAll ? t('Weniger anzeigen') : t('Alle {n} anzeigen', { n: cards.length })}
     </button>`}
-    ${!cards.length && !adding && html`<p class="column-empty">Keine Deals</p>`}
+    ${!cards.length && !adding && html`<p class="column-empty">${t('Keine Deals')}</p>`}
     ${isDone &&
     archiveCount > 0 &&
     html`<a class="archive-link" href=${'#/board/' + stage.project_id + '/archiv'} onClick=${(e) => (e.preventDefault(), onArchive())}>
-      <${Icon} name="archive" size=${16} /> Archiv: ${archiveCount === 1 ? '1 älterer Deal' : archiveCount + ' ältere Deals'}
+      <${Icon} name="archive" size=${16} /> ${archiveCount === 1 ? t('Archiv: 1 älterer Deal') : t('Archiv: {n} ältere Deals', { n: archiveCount })}
     </a>`}
   </section>`
 }
@@ -478,7 +479,7 @@ function cardMatches(c, q) {
   return matches(q, c.title, c.description, c.labels, person && person.name, org && org.name)
 }
 const archivedOf = (projectId) => state.db.cards.filter((c) => c.project_id === projectId && c.archived)
-const monthLabel = (iso) => new Date(iso).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })
+const monthLabel = (iso) => new Date(iso).toLocaleDateString(locale(), { month: 'long', year: 'numeric' })
 
 function ArchiveWindow({ project, initialQuery }) {
   const [q, setQ] = useState(initialQuery || '')
@@ -500,21 +501,21 @@ function ArchiveWindow({ project, initialQuery }) {
     const stage = getStage(c.stage_id)
     const person = getPerson(c.person_id)
     const org = getOrg(c.org_id)
-    return [stage && stage.name, 'zuletzt geändert ' + fmtDate(c.updated_at), person && person.name, org && org.name, c.assignee && memberName(c.assignee)]
+    return [stage && stageLabel(stage.name), t('zuletzt geändert {date}', { date: fmtDate(c.updated_at) }), person && person.name, org && org.name, c.assignee && memberName(c.assignee)]
       .filter(Boolean)
       .join(' · ')
   }
-  return html`<${Modal} title=${'Archiv: ' + project.name} onClose=${() => closeArchive(project.id)} wide=${true} cls="archive-modal">
+  return html`<${Modal} title=${t('Archiv: {name}', { name: project.name })} onClose=${() => closeArchive(project.id)} wide=${true} cls="archive-modal">
     <label class="search archive-search">
       <${Icon} name="search" size=${18} />
-      <input ref=${inputRef} type="search" value=${q} placeholder="Im Archiv suchen: Titel, Kontakt, Firma" aria-label="Archiv durchsuchen" onInput=${(e) => setQ(e.target.value)} />
+      <input ref=${inputRef} type="search" value=${q} placeholder=${t('Im Archiv suchen: Titel, Kontakt, Firma')} aria-label=${t('Archiv durchsuchen')} onInput=${(e) => setQ(e.target.value)} />
     </label>
     <p class="muted small archive-info">
-      ${all.length === 1 ? '1 Deal' : all.length + ' Deals'} im Archiv. Erledigtes kommt nach 30 Tagen ohne Änderung von selbst hierher,
-      außer offene Deals und Deals mit offener Aktivität. Ein Klick öffnet den Deal, dort holt „Aus dem Archiv holen“ ihn zurück.
+      ${all.length === 1 ? t('1 Deal im Archiv.') : t('{n} Deals im Archiv.', { n: all.length })}
+      ${t('Erledigtes kommt nach 30 Tagen ohne Änderung von selbst hierher, außer offene Deals und Deals mit offener Aktivität. Ein Klick öffnet den Deal, dort holt „Aus dem Archiv holen“ ihn zurück.')}
     </p>
-    ${!all.length && html`<${Empty}>Im Archiv dieser Pipeline liegt nichts.<//>`}
-    ${all.length > 0 && !hits.length && html`<${Empty}>Nichts gefunden für „${q.trim()}“.<//>`}
+    ${!all.length && html`<${Empty}>${t('Im Archiv dieser Pipeline liegt nichts.')}<//>`}
+    ${all.length > 0 && !hits.length && html`<${Empty}>${t('Nichts gefunden für „{q}“.', { q: q.trim() })}<//>`}
     ${groups.map(
       (g) => html`<section class="archive-group" key=${g.label}>
         <h3 class="group-title">${g.label} <span class="count">${g.cards.length}</span></h3>
@@ -562,8 +563,8 @@ export function Board({ projectId, archiveOpen = false, archiveQuery = '' }) {
   }, [current && current.id])
 
   if (!current) {
-    return html`<div class="page"><${PageHead} kicker="Board" title="Noch keine Pipeline" />
-      <button type="button" class="btn btn-primary" onClick=${newProject}><${Icon} name="plus" size=${18} /> Pipeline anlegen</button></div>`
+    return html`<div class="page"><${PageHead} kicker="Board" title=${t('Noch keine Pipeline')} />
+      <button type="button" class="btn btn-primary" onClick=${newProject}><${Icon} name="plus" size=${18} /> ${t('Pipeline anlegen')}</button></div>`
   }
 
   const stages = stagesOf(current.id)
@@ -650,12 +651,12 @@ export function Board({ projectId, archiveOpen = false, archiveQuery = '' }) {
     <${PageHead} kicker="Board" title=${current.name} />
     <div class="project-tabs project-bar">
       <${ProjectPicker} currentId=${current.id} />
-      <button type="button" class="tab tab-icon" aria-label="Neue Pipeline" title="Neue Pipeline" onClick=${newProject}><${Icon} name="plus" size=${18} /></button>
+      <button type="button" class="tab tab-icon" aria-label=${t('Neue Pipeline')} title=${t('Neue Pipeline')} onClick=${newProject}><${Icon} name="plus" size=${18} /></button>
       <button
         type="button"
         class="tab tab-icon"
-        aria-label="Pipeline teilen"
-        title="Pipeline teilen"
+        aria-label=${t('Pipeline teilen')}
+        title=${t('Pipeline teilen')}
         onClick=${() => openDialog({ kind: 'project-share', projectId: current.id })}
       >
         <${Icon} name="share" size=${18} />
@@ -663,8 +664,8 @@ export function Board({ projectId, archiveOpen = false, archiveQuery = '' }) {
       <button
         type="button"
         class="tab tab-icon"
-        aria-label="Pipeline-Einstellungen"
-        title="Pipeline-Einstellungen"
+        aria-label=${t('Pipeline-Einstellungen')}
+        title=${t('Pipeline-Einstellungen')}
         onClick=${() => openDialog({ kind: 'project-settings', projectId: current.id })}
       >
         <${Icon} name="gear" size=${18} />
@@ -675,24 +676,24 @@ export function Board({ projectId, archiveOpen = false, archiveQuery = '' }) {
       <${Segmented} label="Ansicht" value=${view} onChange=${changeView} options=${[{ value: 'board', label: 'Board' }, { value: 'liste', label: 'Liste' }]} />
       <label class="search">
         <${Icon} name="search" size=${18} />
-        <input type="search" value=${query} placeholder="Suchen: Titel, Kontakt, Firma" aria-label="Board durchsuchen" onInput=${(e) => setQuery(e.target.value)} />
+        <input type="search" value=${query} placeholder=${t('Suchen: Titel, Kontakt, Firma')} aria-label=${t('Board durchsuchen')} onInput=${(e) => setQuery(e.target.value)} />
       </label>
-      <select value=${assignee} aria-label="Zuständig" onChange=${(e) => setAssignee(e.target.value)}>
-        <option value="">Alle Zuständigen</option>
-        <option value="__none">Niemand zuständig</option>
+      <select value=${assignee} aria-label=${t('Zuständig')} onChange=${(e) => setAssignee(e.target.value)}>
+        <option value="">${t('Alle Zuständigen')}</option>
+        <option value="__none">${t('Niemand zuständig')}</option>
         ${state.db.team_members
-          .filter((t) => t.active)
-          .map((t) => html`<option value=${t.email}>${t.name}</option>`)}
+          .filter((m) => m.active)
+          .map((m) => html`<option value=${m.email}>${m.name}</option>`)}
       </select>
-      <select value=${label} aria-label="Label" onChange=${(e) => setLabel(e.target.value)}>
-        <option value="">Alle Labels</option>
+      <select value=${label} aria-label=${t('Label')} onChange=${(e) => setLabel(e.target.value)}>
+        <option value="">${t('Alle Labels')}</option>
         ${allLabels().map((l) => html`<option value=${l}>${l}</option>`)}
       </select>
     </div>
     ${archiveHits > 0 &&
     html`<p class="archive-hits">
       <a href=${'#/board/' + current.id + '/archiv'} onClick=${(e) => (e.preventDefault(), openArchive(current.id, query.trim()))}>
-        <${Icon} name="archive" size=${16} /> ${archiveHits === 1 ? '1 weiterer Treffer im Archiv' : archiveHits + ' weitere Treffer im Archiv'}
+        <${Icon} name="archive" size=${16} /> ${archiveHits === 1 ? t('1 weiterer Treffer im Archiv') : t('{n} weitere Treffer im Archiv', { n: archiveHits })}
       </a>
     </p>`}
 
@@ -702,9 +703,9 @@ export function Board({ projectId, archiveOpen = false, archiveQuery = '' }) {
           html`<button
             type="button"
             class="fab"
-            aria-label="Neuer Deal"
+            aria-label=${t('Neuer Deal')}
             onClick=${async () => {
-              const title = await promptDialog({ title: 'Neuer Deal', label: 'Titel', confirmLabel: 'Anlegen' })
+              const title = await promptDialog({ title: t('Neuer Deal'), label: t('Titel'), confirmLabel: t('Anlegen') })
               const first = stages.find((s) => s.kind === 'todo') || stages[0]
               if (title && first) {
                 const card = await addCard(title, first.id)
@@ -715,14 +716,14 @@ export function Board({ projectId, archiveOpen = false, archiveQuery = '' }) {
             <${Icon} name="plus" size=${26} />
           </button>`}`
       : mobile
-      ? html`<div class="stage-tabs" role="tablist" aria-label="Spalten">
+      ? html`<div class="stage-tabs" role="tablist" aria-label=${t('Spalten')}>
             ${stages.map(
               (s) => html`<button
                 type="button"
                 role="tab"
                 aria-selected=${s.id === activeStage.id}
                 class=${'tab' + (s.id === activeStage.id ? ' active' : '')}
-                title=${canEdit && s.id === activeStage.id ? 'Noch einmal antippen zum Umbenennen' : undefined}
+                title=${canEdit && s.id === activeStage.id ? t('Noch einmal antippen zum Umbenennen') : undefined}
                 onClick=${() => {
                   setAddingAt(null)
                   // Den gewählten Reiter noch einmal antippen benennt die Spalte um
@@ -730,11 +731,11 @@ export function Board({ projectId, archiveOpen = false, archiveQuery = '' }) {
                   else setMobileStage(s.id)
                 }}
               >
-                ${s.name} <span class="count">${cardsOf(s).length}</span>
+                ${stageLabel(s.name)} <span class="count">${cardsOf(s).length}</span>
               </button>`
             )}
             ${!isGuest() &&
-            html`<button type="button" class="tab tab-icon" aria-label="Spalte hinzufügen" title="Spalte hinzufügen" onClick=${() => setAddingAt(beforeDone)}>
+            html`<button type="button" class="tab tab-icon" aria-label=${t('Spalte hinzufügen')} title=${t('Spalte hinzufügen')} onClick=${() => setAddingAt(beforeDone)}>
               <${Icon} name="plus" size=${18} />
             </button>`}
           </div>
@@ -753,9 +754,9 @@ export function Board({ projectId, archiveOpen = false, archiveQuery = '' }) {
           <button
             type="button"
             class="fab"
-            aria-label="Neuer Deal"
+            aria-label=${t('Neuer Deal')}
             onClick=${async () => {
-              const title = await promptDialog({ title: 'Neuer Deal', label: 'Titel', confirmLabel: 'Anlegen' })
+              const title = await promptDialog({ title: t('Neuer Deal'), label: t('Titel'), confirmLabel: t('Anlegen') })
               if (title) {
                 const card = await addCard(title, activeStage.id)
                 if (card) openCard(card.id)
@@ -769,7 +770,7 @@ export function Board({ projectId, archiveOpen = false, archiveQuery = '' }) {
           ${canEdit &&
           addingAt === null &&
           html`<div class="column-add">
-            <button type="button" class="btn" onClick=${() => setAddingAt(beforeDone)}><${Icon} name="plus" size=${16} /> Spalte</button>
+            <button type="button" class="btn" onClick=${() => setAddingAt(beforeDone)}><${Icon} name="plus" size=${16} /> ${t('Spalte')}</button>
           </div>`}
         </div>`}
     ${archiveOpen && html`<${ArchiveWindow} project=${current} initialQuery=${archiveQuery} />`}
@@ -777,7 +778,7 @@ export function Board({ projectId, archiveOpen = false, archiveQuery = '' }) {
 }
 
 async function newProject() {
-  const name = await promptDialog({ title: 'Neue Pipeline', label: 'Name der Pipeline', confirmLabel: 'Anlegen' })
+  const name = await promptDialog({ title: t('Neue Pipeline'), label: t('Name der Pipeline'), confirmLabel: t('Anlegen') })
   if (!name) return
   const p = await createProject(name)
   if (p) navigate('/board/' + p.id)
@@ -793,24 +794,24 @@ function StageRow({ stage }) {
   return html`<li class="stage-row">
     <input
       value=${name}
-      aria-label="Name der Spalte"
+      aria-label=${t('Name der Spalte')}
       onInput=${(e) => setName(e.target.value)}
       onBlur=${() => name.trim() && name.trim() !== stage.name && update('stages', stage.id, { name: name.trim() })}
       onKeyDown=${(e) => e.key === 'Enter' && e.target.blur()}
     />
     ${isDone
-      ? html`<span class="stage-kind-fixed" title="Jede Pipeline hat genau eine Spalte der Art „Erledigt“">Erledigt</span>`
-      : html`<select value=${stage.kind} aria-label="Art der Spalte" onChange=${(e) => update('stages', stage.id, { kind: e.target.value })}>
+      ? html`<span class="stage-kind-fixed" title=${t('Jede Pipeline hat genau eine Spalte der Art „Erledigt“')}>${t('Erledigt')}</span>`
+      : html`<select value=${stage.kind} aria-label=${t('Art der Spalte')} onChange=${(e) => update('stages', stage.id, { kind: e.target.value })}>
           ${SETTINGS.stageKinds.filter((k) => k.value !== 'done').map((k) => html`<option value=${k.value}>${k.label}</option>`)}
         </select>`}
-    <label class="stage-prob" title="Wahrscheinlichkeit für neue Deals in dieser Spalte (Sales)">
+    <label class="stage-prob" title=${t('Wahrscheinlichkeit für neue Deals in dieser Spalte (Sales)')}>
       <input
         type="number"
         min="0"
         max="100"
         step="5"
         inputmode="numeric"
-        aria-label=${'Wahrscheinlichkeit in Prozent für „' + stage.name + '“'}
+        aria-label=${t('Wahrscheinlichkeit in Prozent für „{name}“', { name: stageLabel(stage.name) })}
         placeholder="%"
         value=${stage.probability ?? ''}
         onChange=${(e) => {
@@ -821,13 +822,13 @@ function StageRow({ stage }) {
       <span>%</span>
     </label>
     <div class="stage-buttons">
-      <button type="button" class="icon-btn small" aria-label="Nach oben" disabled=${!canMoveStage(stage.id, -1)} onClick=${() => moveStage(stage.id, -1)}><${Icon} name="up" size=${16} /></button>
-      <button type="button" class="icon-btn small" aria-label="Nach unten" disabled=${!canMoveStage(stage.id, 1)} onClick=${() => moveStage(stage.id, 1)}><${Icon} name="down" size=${16} /></button>
+      <button type="button" class="icon-btn small" aria-label=${t('Nach oben')} disabled=${!canMoveStage(stage.id, -1)} onClick=${() => moveStage(stage.id, -1)}><${Icon} name="up" size=${16} /></button>
+      <button type="button" class="icon-btn small" aria-label=${t('Nach unten')} disabled=${!canMoveStage(stage.id, 1)} onClick=${() => moveStage(stage.id, 1)}><${Icon} name="down" size=${16} /></button>
       <button
         type="button"
         class="icon-btn small"
-        aria-label="Spalte löschen"
-        title=${isDone ? 'Die Spalte „Erledigt“ bleibt immer' : 'Spalte löschen'}
+        aria-label=${t('Spalte löschen')}
+        title=${isDone ? t('Die Spalte „Erledigt“ bleibt immer') : t('Spalte löschen')}
         disabled=${isDone}
         onClick=${() => askDeleteStage(stage)}
       >
@@ -847,18 +848,18 @@ function ProjectSettings({ d }) {
 
   const archiveProject = async () => {
     const ok = await confirmDialog({
-      title: `Pipeline „${project.name}“ archivieren?`,
-      text: 'Die Pipeline verschwindet aus der Klappliste. Deals und Spalten bleiben erhalten, du kannst sie hier jederzeit wiederherstellen.',
-      confirmLabel: 'Archivieren',
+      title: t('Pipeline „{name}“ archivieren?', { name: project.name }),
+      text: t('Die Pipeline verschwindet aus der Klappliste. Deals und Spalten bleiben erhalten, du kannst sie hier jederzeit wiederherstellen.'),
+      confirmLabel: t('Archivieren'),
     })
     if (!ok) return
     await update('projects', project.id, { archived: true })
-    toast(`„${project.name}“ archiviert`)
+    toast(t('„{name}“ archiviert', { name: project.name }))
     navigate('/board')
   }
 
-  return html`<${Modal} title="Pipeline-Einstellungen" onClose=${close} wide=${true}>
-    <${Field} label="Name" htmlFor="project-name">
+  return html`<${Modal} title=${t('Pipeline-Einstellungen')} onClose=${close} wide=${true}>
+    <${Field} label=${t('Name')} htmlFor="project-name">
       <input
         id="project-name"
         value=${name}
@@ -867,8 +868,8 @@ function ProjectSettings({ d }) {
         onKeyDown=${(e) => e.key === 'Enter' && e.target.blur()}
       />
     <//>
-    <${Field} label="Bereich" hint="Bestimmt, unter welcher Überschrift die Pipeline in der Klappliste oben steht.">
-      <div class="segmented" role="radiogroup" aria-label="Bereich">
+    <${Field} label=${t('Bereich')} hint=${t('Bestimmt, unter welcher Überschrift die Pipeline in der Klappliste oben steht.')}>
+      <div class="segmented" role="radiogroup" aria-label=${t('Bereich')}>
         ${[
           ['intern', 'Intern'],
           ['sales', 'Extern / Sales'],
@@ -880,13 +881,13 @@ function ProjectSettings({ d }) {
             class=${projectArea(project) === value ? 'active' : ''}
             onClick=${() => projectArea(project) !== value && update('projects', project.id, { bereich: value })}
           >
-            ${text}
+            ${t(text)}
           </button>`
         )}
       </div>
     <//>
-    <${Field} label="Farbe">
-      <div class="swatches" role="radiogroup" aria-label="Farbe">
+    <${Field} label=${t('Farbe')}>
+      <div class="swatches" role="radiogroup" aria-label=${t('Farbe')}>
         ${SETTINGS.projectColors.map(
           (c) => html`<button
             type="button"
@@ -902,19 +903,19 @@ function ProjectSettings({ d }) {
         )}
       </div>
     <//>
-    <h3 class="section-title">Spalten</h3>
-    <p class="muted small">Die Art bestimmt, wo Deals in der Übersicht erscheinen. Namen kannst du frei wählen. Die Prozentzahl ist die Wahrscheinlichkeit für Deals in dieser Spalte (für den gewichteten Wert in „Sales“), leer heißt ohne.</p>
+    <h3 class="section-title">${t('Spalten')}</h3>
+    <p class="muted small">${t('Die Art bestimmt, wo Deals in der Übersicht erscheinen. Namen kannst du frei wählen. Die Prozentzahl ist die Wahrscheinlichkeit für Deals in dieser Spalte (für den gewichteten Wert in „Sales“), leer heißt ohne.')}</p>
     <ul class="stage-list">
       ${stages.map((s) => html`<${StageRow} key=${s.id} stage=${s} />`)}
     </ul>
-    <button type="button" class="btn" onClick=${() => askAddStage(project.id)}><${Icon} name="plus" size=${16} /> Spalte hinzufügen</button>
+    <button type="button" class="btn" onClick=${() => askAddStage(project.id)}><${Icon} name="plus" size=${16} /> ${t('Spalte hinzufügen')}</button>
 
     <div class="settings-foot">
-      <button type="button" class="btn" onClick=${archiveProject}><${Icon} name="archive" size=${16} /> Pipeline archivieren</button>
+      <button type="button" class="btn" onClick=${archiveProject}><${Icon} name="archive" size=${16} /> ${t('Pipeline archivieren')}</button>
     </div>
     ${archived.length > 0 &&
     html`<div class="archived-projects">
-      <h3 class="section-title">Archivierte Pipelines</h3>
+      <h3 class="section-title">${t('Archivierte Pipelines')}</h3>
       <ul>
         ${archived.map(
           (p) => html`<li>
@@ -924,10 +925,10 @@ function ProjectSettings({ d }) {
               class="link-btn"
               onClick=${async () => {
                 await update('projects', p.id, { archived: false })
-                toast(`„${p.name}“ wiederhergestellt`)
+                toast(t('„{name}“ wiederhergestellt', { name: p.name }))
               }}
             >
-              Wiederherstellen
+              ${t('Wiederherstellen')}
             </button>
           </li>`
         )}
@@ -942,7 +943,7 @@ dialogKinds['project-settings'] = ProjectSettings
 // Spalten direkt im Board: anlegen, bearbeiten, löschen
 // ------------------------------------------------------------
 async function askAddStage(projectId, onCreated) {
-  const name = await promptDialog({ title: 'Neue Spalte', label: 'Name der Spalte', confirmLabel: 'Anlegen' })
+  const name = await promptDialog({ title: t('Neue Spalte'), label: t('Name der Spalte'), confirmLabel: t('Anlegen') })
   if (!name || !name.trim()) return
   const stage = await addStage(projectId, name)
   if (stage && onCreated) onCreated(stage.id)
@@ -957,9 +958,9 @@ async function askDeleteStage(stage) {
   if (!counted) return
   if (!counted.total) {
     const ok = await confirmDialog({
-      title: `Spalte „${stage.name}“ löschen?`,
-      text: lastOfKindHint(stage) || 'Die Spalte ist leer.',
-      confirmLabel: 'Löschen',
+      title: t('Spalte „{name}“ löschen?', { name: stageLabel(stage.name) }),
+      text: lastOfKindHint(stage) || t('Die Spalte ist leer.'),
+      confirmLabel: t('Löschen'),
       danger: true,
     })
     if (ok) await deleteStage(stage.id)
@@ -987,18 +988,18 @@ function StageDelete({ d }) {
     if (ok) close()
   }
   return html`<${Modal}
-    title=${`Spalte „${stage.name}“ löschen?`}
+    title=${t('Spalte „{name}“ löschen?', { name: stageLabel(stage.name) })}
     onClose=${close}
-    footer=${html`<button type="button" class="btn" onClick=${close}>Abbrechen</button>
-      <button type="button" class="btn btn-danger" disabled=${!target || busy} onClick=${run}>${busy ? 'Einen Moment …' : 'Verschieben und Spalte löschen'}</button>`}
+    footer=${html`<button type="button" class="btn" onClick=${close}>${t('Abbrechen')}</button>
+      <button type="button" class="btn btn-danger" disabled=${!target || busy} onClick=${run}>${busy ? t('Einen Moment …') : t('Verschieben und Spalte löschen')}</button>`}
   >
     <p>
-      In „${stage.name}“ ${total === 1 ? 'liegt noch 1 Deal' : `liegen noch ${total} Deals`}${archived ? `, davon ${archived} archiviert` : ''}. Wohin sollen sie?
+      ${total === 1 ? t('In „{name}“ liegt noch 1 Deal', { name: stageLabel(stage.name) }) : t('In „{name}“ liegen noch {n} Deals', { name: stageLabel(stage.name), n: total })}${archived ? t(', davon {n} archiviert', { n: archived }) : ''}. ${t('Wohin sollen sie?')}
     </p>
     ${hint && html`<p class="muted small">${hint}</p>`}
-    <${Field} label="Verschieben nach" htmlFor="stage-target">
+    <${Field} label=${t('Verschieben nach')} htmlFor="stage-target">
       <select id="stage-target" value=${target} onChange=${(e) => setTarget(e.target.value)}>
-        ${others.map((s) => html`<option value=${s.id}>${s.name}</option>`)}
+        ${others.map((s) => html`<option value=${s.id}>${stageLabel(s.name)}</option>`)}
       </select>
     <//>
   <//>`
@@ -1017,28 +1018,28 @@ function ProjectShare({ d }) {
     const existing = shares.find((s) => s.email.toLowerCase() === g.email.toLowerCase())
     if (existing) {
       const ok = await confirmDialog({
-        title: `Freigabe für ${g.name} aufheben?`,
-        text: `${g.name} sieht dann nur noch Deals aus „${project.name}“, die einzeln mit ${g.name.split(' ')[0]} geteilt sind.`,
-        confirmLabel: 'Aufheben',
+        title: t('Freigabe für {name} aufheben?', { name: g.name }),
+        text: t('{name} sieht dann nur noch Deals aus „{project}“, die einzeln mit {first} geteilt sind.', { name: g.name, project: project.name, first: g.name.split(' ')[0] }),
+        confirmLabel: t('Aufheben'),
       })
       if (ok) await remove('project_shares', existing.id)
     } else {
       const ok = await confirmDialog({
-        title: `Ganze Pipeline „${project.name}“ mit ${g.name} teilen?`,
-        text: `${g.name} sieht dann alle Deals darin, auch neue, und kann dort selbst Deals anlegen.`,
-        confirmLabel: 'Teilen',
+        title: t('Ganze Pipeline „{project}“ mit {name} teilen?', { project: project.name, name: g.name }),
+        text: t('{name} sieht dann alle Deals darin, auch neue, und kann dort selbst Deals anlegen.', { name: g.name }),
+        confirmLabel: t('Teilen'),
       })
       if (ok) {
         const saved = await insert('project_shares', { project_id: project.id, email: g.email.toLowerCase() })
-        if (saved) toast(`${g.name} sieht jetzt die ganze Pipeline „${project.name}“.`)
+        if (saved) toast(t('{name} sieht jetzt die ganze Pipeline „{project}“.', { name: g.name, project: project.name }))
       }
     }
     reopen()
   }
-  return html`<${Modal} title=${`„${project.name}“ teilen`} onClose=${closeDialog}>
+  return html`<${Modal} title=${t('„{name}“ teilen', { name: project.name })} onClose=${closeDialog}>
     ${guests.length === 0
-      ? html`<p class="muted">Es gibt noch keine Gäste. Ein Admin legt sie in den Einstellungen unter „Team“ mit der Rolle Gast an.</p>`
-      : html`<div class="chips" role="group" aria-label="Gäste">
+      ? html`<p class="muted">${t('Es gibt noch keine Gäste. Ein Admin legt sie in den Einstellungen unter „Team“ mit der Rolle Gast an.')}</p>`
+      : html`<div class="chips" role="group" aria-label=${t('Gäste')}>
           ${guests.map((g) => {
             const on = shares.some((s) => s.email.toLowerCase() === g.email.toLowerCase())
             return html`<button type="button" class=${'chip-btn' + (on ? ' active' : '')} aria-pressed=${on} onClick=${() => toggle(g)}>
@@ -1048,8 +1049,8 @@ function ProjectShare({ d }) {
         </div>`}
     <p class="muted small share-note">
       ${shares.length
-        ? 'Geteilt: Gäste sehen alle Deals dieser Pipeline mit Kontakt, Firma, Verlauf und Notizen und können hier selbst Deals anlegen. Notizen mit „Nur intern“, Mails, Meetings und Termine bleiben verborgen.'
-        : 'Einzelne Deals teilst du im Deal unter „Teilen mit“. Hier gibst du die ganze Pipeline frei, auch für künftige Deals.'}
+        ? t('Geteilt: Gäste sehen alle Deals dieser Pipeline mit Kontakt, Firma, Verlauf und Notizen und können hier selbst Deals anlegen. Notizen mit „Nur intern“, Mails, Meetings und Termine bleiben verborgen.')
+        : t('Einzelne Deals teilst du im Deal unter „Teilen mit“. Hier gibst du die ganze Pipeline frei, auch für künftige Deals.')}
     </p>
   <//>`
 }

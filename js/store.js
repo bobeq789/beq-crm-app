@@ -3,6 +3,7 @@
 // Geht das Speichern schief, kommt eine Meldung und die Daten werden neu geladen.
 import { useState, useEffect } from './lib/preact.js'
 import { SETTINGS } from './settings.js'
+import { setLang, t } from './i18n.js'
 import { uid, local, todayStr, addDays, fmtDate, firstName, initials, norm, safeFileName } from './lib/util.js'
 import { prepareInsert, prepareUpdate, afterInsert, afterUpdate, cascadeDelete, emptyDb, recalcDeal, isClosedDeal, activityAreaSuggestion, touchCard } from './data/rules.js'
 import { parseGeminiMail, sameTitle } from './lib/gemini.js'
@@ -88,6 +89,20 @@ export function useStore() {
 // ------------------------------------------------------------
 // Farbschema pro Gerät: auto, light, dark
 // ------------------------------------------------------------
+// Sprache (i18n.js, Wunsch vom 26.11.2026): je Person in nutzer_einstellungen.werte.sprache, auf allen
+// Geräten. Vor der Anmeldung und für Gäste (ohne persönliche Einstellungen) gilt die Wahl des Geräts.
+setLang(local.get('beqcrm-sprache', 'de'))
+export function applyLang() {
+  setLang(state.prefs.sprache || local.get('beqcrm-sprache', 'de'))
+}
+export async function setUiLang(value) {
+  const l = value === 'en' ? 'en' : 'de'
+  local.set('beqcrm-sprache', l)
+  setLang(l)
+  emit()
+  if (state.me && state.prefsLoaded && !isGuest()) await savePrefs({ sprache: l })
+}
+
 export const getTheme = () => local.get('beqcrm-theme', 'auto')
 export function applyTheme() {
   const t = getTheme()
@@ -122,34 +137,34 @@ export function dismissToast(id) {
 export function errorText(err) {
   const msg = String((err && err.message) || err || '')
   const code = err && err.code
-  if (/Failed to fetch|NetworkError|Load failed|network/i.test(msg)) return 'Keine Verbindung. Bitte gleich noch einmal versuchen.'
-  if (/Invalid login credentials/i.test(msg)) return 'E-Mail oder Passwort stimmt nicht.'
-  if (/beq\.com/i.test(msg)) return 'Konten gibt es nur für Adressen von beq.com. Gäste trägt ein Admin vorher im Team ein.'
-  if (/already registered|already been registered/i.test(msg)) return 'Für diese Adresse gibt es schon ein Konto. Melde dich an oder nutze „Passwort vergessen?“.'
-  if (/signups? not allowed|signup.*disabled/i.test(msg)) return 'Neue Konten sind in Supabase noch abgeschaltet. Bitte melde dich beim Admin.'
-  if (/provider is not enabled|unsupported provider/i.test(msg)) return 'Die Anmeldung mit Google ist in Supabase noch nicht eingeschaltet. Bitte melde dich beim Admin.'
-  if (/Email not confirmed/i.test(msg)) return 'Dein Konto ist noch nicht bestätigt. Bitte melde dich beim Admin.'
-  if (/rate limit|too many/i.test(msg)) return 'Zu viele Versuche. Bitte warte ein paar Minuten.'
-  if (/invalid.*(totp|code)|code.*invalid|otp/i.test(msg)) return 'Der Code stimmt nicht. Bitte nimm den aktuellen Code aus deiner App.'
-  if (/should be different|same password/i.test(msg)) return 'Das neue Passwort muss sich vom alten unterscheiden.'
-  if (/Password should be at least/i.test(msg)) return 'Das Passwort ist zu kurz.'
-  if (/AAL2 required|aal2/i.test(msg)) return 'Dafür brauchst du den zweiten Faktor. Bitte melde dich neu an.'
-  if (/JWT expired|session/i.test(msg)) return 'Deine Anmeldung ist abgelaufen. Bitte melde dich neu an.'
-  if (/guest_guard_assignee|Gäste können nur sich selbst/i.test(msg)) return 'Als Gast kannst du nur dich, ein Teammitglied oder niemanden zuständig machen.'
-  if (/guest_guard|Gäste dürfen/i.test(msg)) return 'Als Gast kannst du hier nur Spalte, Dringlichkeit, Fälligkeit und Zuständig ändern.'
+  if (/Failed to fetch|NetworkError|Load failed|network/i.test(msg)) return t('Keine Verbindung. Bitte gleich noch einmal versuchen.')
+  if (/Invalid login credentials/i.test(msg)) return t('E-Mail oder Passwort stimmt nicht.')
+  if (/beq\.com/i.test(msg)) return t('Konten gibt es nur für Adressen von beq.com. Gäste trägt ein Admin vorher im Team ein.')
+  if (/already registered|already been registered/i.test(msg)) return t('Für diese Adresse gibt es schon ein Konto. Melde dich an oder nutze „Passwort vergessen?“.')
+  if (/signups? not allowed|signup.*disabled/i.test(msg)) return t('Neue Konten sind in Supabase noch abgeschaltet. Bitte melde dich beim Admin.')
+  if (/provider is not enabled|unsupported provider/i.test(msg)) return t('Die Anmeldung mit Google ist in Supabase noch nicht eingeschaltet. Bitte melde dich beim Admin.')
+  if (/Email not confirmed/i.test(msg)) return t('Dein Konto ist noch nicht bestätigt. Bitte melde dich beim Admin.')
+  if (/rate limit|too many/i.test(msg)) return t('Zu viele Versuche. Bitte warte ein paar Minuten.')
+  if (/invalid.*(totp|code)|code.*invalid|otp/i.test(msg)) return t('Der Code stimmt nicht. Bitte nimm den aktuellen Code aus deiner App.')
+  if (/should be different|same password/i.test(msg)) return t('Das neue Passwort muss sich vom alten unterscheiden.')
+  if (/Password should be at least/i.test(msg)) return t('Das Passwort ist zu kurz.')
+  if (/AAL2 required|aal2/i.test(msg)) return t('Dafür brauchst du den zweiten Faktor. Bitte melde dich neu an.')
+  if (/JWT expired|session/i.test(msg)) return t('Deine Anmeldung ist abgelaufen. Bitte melde dich neu an.')
+  if (/guest_guard_assignee|Gäste können nur sich selbst/i.test(msg)) return t('Als Gast kannst du nur dich, ein Teammitglied oder niemanden zuständig machen.')
+  if (/guest_guard|Gäste dürfen/i.test(msg)) return t('Als Gast kannst du hier nur Spalte, Dringlichkeit, Fälligkeit und Zuständig ändern.')
   // Meldungen aus 25_claude_zugang.sql (Freigabe für Claude) sind schon für Menschen geschrieben
-  if (/Claude-Zugang|Claude kann|zuerst mit dem zweiten Faktor|Kennung des Claude/i.test(msg)) return msg
+  if (/Claude-Zugang|Claude kann|zuerst mit dem zweiten Faktor|Kennung des Claude/i.test(msg)) return t(msg)
   // Sperre aus 44_deals_nur_archivieren.sql
-  if (/nur archivieren/i.test(msg)) return msg
+  if (/nur archivieren/i.test(msg)) return t(msg)
   // Meldungen aus 39_kalender_abos.sql ebenso
-  if (/Kalender-Link|abonnierte Kalender|Kalender abonnieren|Diesen Kalender gibt es nicht|Namen mit höchstens|Bitte einen Namen/i.test(msg)) return msg
-  if (code === '42501' || /row-level security|permission denied/i.test(msg)) return 'Keine Berechtigung für diese Änderung.'
-  if (code === '23503') return 'Das geht nicht, weil noch Einträge daran hängen.'
-  if (code === '23505') return 'Diesen Eintrag gibt es schon.'
-  if (code === '23514') return 'Eine Angabe passt nicht. Bitte prüfen.'
+  if (/Kalender-Link|abonnierte Kalender|Kalender abonnieren|Diesen Kalender gibt es nicht|Namen mit höchstens|Bitte einen Namen/i.test(msg)) return t(msg)
+  if (code === '42501' || /row-level security|permission denied/i.test(msg)) return t('Keine Berechtigung für diese Änderung.')
+  if (code === '23503') return t('Das geht nicht, weil noch Einträge daran hängen.')
+  if (code === '23505') return t('Diesen Eintrag gibt es schon.')
+  if (code === '23514') return t('Eine Angabe passt nicht. Bitte prüfen.')
   // Meldungen, die schon für Menschen geschrieben sind (Demo, Dienst „google-verbinden“)
-  if (code === 'demo' || code === 'meldung') return msg
-  return 'Das hat nicht geklappt. Bitte gleich noch einmal versuchen.'
+  if (code === 'demo' || code === 'meldung') return t(msg)
+  return t('Das hat nicht geklappt. Bitte gleich noch einmal versuchen.')
 }
 
 // ------------------------------------------------------------
@@ -163,10 +178,10 @@ export function closeDialog() {
   state.dialog = null
   emit()
 }
-export function confirmDialog({ title, text, confirmLabel = 'OK', cancelLabel = 'Abbrechen', danger = false }) {
+export function confirmDialog({ title, text, confirmLabel = 'OK', cancelLabel = t('Abbrechen'), danger = false }) {
   return new Promise((resolve) => openDialog({ kind: 'confirm', title, text, confirmLabel, cancelLabel, danger, resolve }))
 }
-export function promptDialog({ title, label, value = '', confirmLabel = 'Speichern' }) {
+export function promptDialog({ title, label, value = '', confirmLabel = t('Speichern') }) {
   return new Promise((resolve) => openDialog({ kind: 'prompt', title, label, value, confirmLabel, resolve }))
 }
 
@@ -242,11 +257,11 @@ export async function boot() {
 // Verständliche Meldung, wenn Google oder ein Link aus einer Mail mit Fehler zurückkommt
 function linkErrorText(code, description) {
   const d = String(description || '').replace(/\+/g, ' ')
-  if (/beq\.com/i.test(d)) return 'Anmelden können sich nur Adressen von beq.com. Gäste trägt ein Admin vorher im Team ein.'
-  if (/signups? not allowed|signup.*disabled/i.test(d)) return 'Neue Konten sind in Supabase noch abgeschaltet. Bitte melde dich beim Admin.'
-  if (code === 'otp_expired' || /email link|expired/i.test(d)) return 'Der Link aus der Mail ist abgelaufen oder wurde schon benutzt. Bitte fordere einen neuen an oder melde dich beim Admin.'
-  if (code === 'access_denied') return 'Du hast die Anmeldung bei Google abgebrochen.'
-  return 'Die Anmeldung hat nicht geklappt. Bitte gleich noch einmal versuchen.'
+  if (/beq\.com/i.test(d)) return t('Anmelden können sich nur Adressen von beq.com. Gäste trägt ein Admin vorher im Team ein.')
+  if (/signups? not allowed|signup.*disabled/i.test(d)) return t('Neue Konten sind in Supabase noch abgeschaltet. Bitte melde dich beim Admin.')
+  if (code === 'otp_expired' || /email link|expired/i.test(d)) return t('Der Link aus der Mail ist abgelaufen oder wurde schon benutzt. Bitte fordere einen neuen an oder melde dich beim Admin.')
+  if (code === 'access_denied') return t('Du hast die Anmeldung bei Google abgebrochen.')
+  return t('Die Anmeldung hat nicht geklappt. Bitte gleich noch einmal versuchen.')
 }
 
 function fail(err) {
@@ -387,7 +402,7 @@ async function autoConnectMailbox() {
   local.set(key, new Date().toISOString())
   try {
     const url = await api.connectMailbox({ loginHint: email })
-    toast('Einen Moment, Google fragt gleich nach deinem Postfach und Kalender.')
+    toast(t('Einen Moment, Google fragt gleich nach deinem Postfach und Kalender.'))
     setTimeout(() => {
       location.href = url
     }, 900)
@@ -462,7 +477,7 @@ export async function loadNoReply() {
   const rows = await api.mailsOhneAntwort(60)
   state.followUp = { ...state.followUp, noReply: rows || [] }
   emit()
-  if (rows === null) toast('„Ohne Antwort“ ließ sich nicht laden. Bitte gleich noch einmal versuchen.', { error: true })
+  if (rows === null) toast(t('„Ohne Antwort“ ließ sich nicht laden. Bitte gleich noch einmal versuchen.'), { error: true })
 }
 // „Braucht keine Antwort“: sofort ausblenden, mit „Rückgängig“
 export async function dismissNoReply(item) {
@@ -474,9 +489,9 @@ export async function dismissNoReply(item) {
     toast(errorText(err), { error: true })
     return loadNoReply()
   }
-  toast('Ausgeblendet. Schreibst du in diesem Verlauf wieder, kommt er nach 3 Tagen erneut.', {
+  toast(t('Ausgeblendet. Schreibst du in diesem Verlauf wieder, kommt er nach 3 Tagen erneut.'), {
     action: {
-      label: 'Rückgängig',
+      label: t('Rückgängig'),
       run: async () => {
         await api.undismissThread(item.mailbox, item.verlauf)
         loadNoReply()
@@ -493,6 +508,7 @@ export async function loadPrefs() {
   if (isGuest()) return
   state.prefs = (await api.loadPrefs()) || {}
   state.prefsLoaded = true
+  applyLang()
   emit()
 }
 export async function savePrefs(patch) {
@@ -505,7 +521,7 @@ export async function savePrefs(patch) {
   } catch (err) {
     state.prefs = before
     emit()
-    toast('Die Einstellung ließ sich nicht speichern. ' + errorText(err), { error: true })
+    toast(t('Die Einstellung ließ sich nicht speichern. ') + errorText(err), { error: true })
     return false
   }
 }
@@ -609,7 +625,7 @@ export async function assignCard(card, email) {
   const saved = await update('cards', card.id, { assignee: email || null })
   if (saved && willShare) {
     await refreshCardShares(card.id)
-    toast(`${guest.name} sieht diese Karte jetzt auch.`)
+    toast(t('{name} sieht diese Karte jetzt auch.', { name: guest.name }))
   }
   return saved
 }
@@ -647,7 +663,7 @@ export async function saveNote(fields, noteId = null) {
   const saved = noteId ? await update('notes', noteId, fields) : await insert('notes', fields)
   if (saved && newGuests.length) {
     await refreshCardShares(card.id)
-    newGuests.forEach((g) => toast(`${g.name} sieht diese Karte jetzt auch.`))
+    newGuests.forEach((g) => toast(t('{name} sieht diese Karte jetzt auch.', { name: g.name })))
   }
   return saved
 }
@@ -668,14 +684,14 @@ export async function listCardFiles(cardId) {
 // Hochladen, danach Verlaufseintrag. Gibt true zurück, wenn es geklappt hat.
 export async function uploadCardFile(cardId, file) {
   if (file.size > MAX_FILE_BYTES) {
-    toast(`„${file.name}“ ist größer als 25 MB und wurde nicht hochgeladen. Bitte verkleinern oder als Link in eine Notiz schreiben.`, { error: true })
+    toast(t('„{name}“ ist größer als 25 MB und wurde nicht hochgeladen. Bitte verkleinern oder als Link in eine Notiz schreiben.', { name: file.name }), { error: true })
     return false
   }
   const path = `karten/${cardId}/${Date.now()}-${safeFileName(file.name)}`
   try {
     await api.uploadFile(path, file)
   } catch (err) {
-    toast(`„${file.name}“ ließ sich nicht hochladen. ${uploadErrorText(err)}`, { error: true })
+    toast(t('„{name}“ ließ sich nicht hochladen. {err}', { name: file.name, err: uploadErrorText(err) }), { error: true })
     return false
   }
   try {
@@ -690,9 +706,9 @@ export async function uploadCardFile(cardId, file) {
 
 function uploadErrorText(err) {
   const msg = String((err && err.message) || '')
-  if (/exceeded|too large|413/i.test(msg)) return 'Die Datei ist zu groß.'
-  if (/row-level security|403|Unauthorized/i.test(msg)) return 'Dafür fehlt dir die Berechtigung.'
-  if (/Bucket not found/i.test(msg)) return 'Der Speicher ist noch nicht eingerichtet (07_dateien.sql).'
+  if (/exceeded|too large|413/i.test(msg)) return t('Die Datei ist zu groß.')
+  if (/row-level security|403|Unauthorized/i.test(msg)) return t('Dafür fehlt dir die Berechtigung.')
+  if (/Bucket not found/i.test(msg)) return t('Der Speicher ist noch nicht eingerichtet (07_dateien.sql).')
   return errorText(err)
 }
 
@@ -700,7 +716,7 @@ function uploadErrorText(err) {
 // sonst stoppt der Popup-Blocker auf dem iPhone das Fenster
 export async function openCardFile(path) {
   if (isDemo) {
-    toast('Im Demo-Modus haben Dateien keinen Inhalt.')
+    toast(t('Im Demo-Modus haben Dateien keinen Inhalt.'))
     return
   }
   const win = window.open('', '_blank')
@@ -710,7 +726,7 @@ export async function openCardFile(path) {
     else window.location.href = url
   } catch (err) {
     if (win) win.close()
-    toast(`Die Datei ließ sich nicht öffnen. ${errorText(err)}`, { error: true })
+    toast(t('Die Datei ließ sich nicht öffnen. {err}', { err: errorText(err) }), { error: true })
   }
 }
 
@@ -719,7 +735,7 @@ export async function deleteCardFile(path) {
     await api.removeFile(path)
     return true
   } catch (err) {
-    toast(`Die Datei ließ sich nicht löschen. ${errorText(err)}`, { error: true })
+    toast(t('Die Datei ließ sich nicht löschen. {err}', { err: errorText(err) }), { error: true })
     return false
   }
 }
@@ -783,7 +799,7 @@ export async function connectMailbox() {
 export async function disconnectMailbox(box, deleteData = false) {
   try {
     await api.disconnectMailbox(box.id, deleteData)
-    toast(deleteData ? `${box.address} ist getrennt, Mails und Termine daraus sind gelöscht.` : `${box.address} ist getrennt.`)
+    toast(deleteData ? t('{address} ist getrennt, Mails und Termine daraus sind gelöscht.', { address: box.address }) : t('{address} ist getrennt.', { address: box.address }))
   } catch (err) {
     toast(errorText(err), { error: true })
   }
@@ -806,9 +822,9 @@ export async function sendMail(payload) {
   try {
     const result = await api.mailAction('senden', payload)
     const notes = []
-    if (result && result.ohne_signatur) notes.push('ohne Signatur, Google hat sie gerade nicht geliefert')
-    if (result && result.verfolgt === false) notes.push('die Verfolgung ließ sich diesmal nicht einrichten')
-    toast(notes.length ? `Mail gesendet, aber ${notes.join(', und ')}.` : payload.verfolgen ? 'Mail gesendet. Öffnen und Klicks siehst du an der Mail.' : 'Mail gesendet')
+    if (result && result.ohne_signatur) notes.push(t('ohne Signatur, Google hat sie gerade nicht geliefert'))
+    if (result && result.verfolgt === false) notes.push(t('die Verfolgung ließ sich diesmal nicht einrichten'))
+    toast(notes.length ? t('Mail gesendet, aber {notes}.', { notes: notes.join(t(', und ')) }) : payload.verfolgen ? t('Mail gesendet. Öffnen und Klicks siehst du an der Mail.') : t('Mail gesendet'))
     await reload()
     return true
   } catch (err) {
@@ -845,7 +861,7 @@ export async function deleteMail(mail) {
     await api.mailAction('loeschen', { email_id: mail.id })
     state.db = { ...state.db, emails: state.db.emails.filter((m) => m.id !== mail.id), email_persons: state.db.email_persons.filter((x) => x.email_id !== mail.id) }
     emit()
-    toast('Mail gelöscht. Sie liegt 30 Tage im Papierkorb von Gmail.')
+    toast(t('Mail gelöscht. Sie liegt 30 Tage im Papierkorb von Gmail.'))
     return true
   } catch (err) {
     toast(errorText(err), { error: true })
@@ -866,7 +882,7 @@ const INLINE_FILE = /\.(pdf|png|jpe?g|gif|webp|txt)$/i
 
 export async function openMailAttachment(mail, attachment) {
   if (isDemo) {
-    toast('Im Demo-Modus haben Anhänge keinen Inhalt.')
+    toast(t('Im Demo-Modus haben Anhänge keinen Inhalt.'))
     return
   }
   // Wie openCardFile: Fenster sofort öffnen und den Link danach hineinladen, sonst blockt es das iPhone
@@ -887,7 +903,7 @@ export async function openMailAttachment(mail, attachment) {
     }
   } catch (err) {
     if (win) win.close()
-    toast(`Der Anhang ließ sich nicht öffnen. ${errorText(err)}`, { error: true })
+    toast(t('Der Anhang ließ sich nicht öffnen. {err}', { err: errorText(err) }), { error: true })
   }
 }
 
@@ -909,14 +925,14 @@ export async function toggleMailboxCalendar(cal, on) {
   } catch (err) {
     state.mailboxCalendars = before
     emit()
-    toast('Der Kalender ließ sich nicht umschalten. ' + errorText(err), { error: true })
+    toast(t('Der Kalender ließ sich nicht umschalten. ') + errorText(err), { error: true })
     return false
   }
   if (on) {
-    toast(`„${cal.name}“ kommt jetzt ins CRM.`)
+    toast(t('„{name}“ kommt jetzt ins CRM.', { name: cal.name }))
     await syncNow()
   } else {
-    toast(`Termine aus „${cal.name}“ sind aus dem CRM genommen. In Google bleibt alles.`)
+    toast(t('Termine aus „{name}“ sind aus dem CRM genommen. In Google bleibt alles.', { name: cal.name }))
     await reload()
   }
   return true
@@ -941,17 +957,17 @@ export async function addCalendarSub(name, url) {
     res = null
   }
   await reload()
-  const label = `„${name.trim()}“`
-  if (res && res.fehler) toast(`${label} ist abonniert, ließ sich aber noch nicht abholen: ${res.fehler}`, { error: true })
-  else if (res) toast(`${label} ist abonniert, ${res.termine === 1 ? '1 Termin' : (res.termine || 0) + ' Termine'}.`)
-  else toast(`${label} ist abonniert. Die Termine kommen mit dem nächsten Abgleich.`)
+  const label = t('„{name}“', { name: name.trim() })
+  if (res && res.fehler) toast(t('{label} ist abonniert, ließ sich aber noch nicht abholen: {err}', { label, err: res.fehler }), { error: true })
+  else if (res) toast(res.termine === 1 ? t('{label} ist abonniert, 1 Termin.', { label }) : t('{label} ist abonniert, {n} Termine.', { label, n: res.termine || 0 }))
+  else toast(t('{label} ist abonniert. Die Termine kommen mit dem nächsten Abgleich.', { label }))
   return null
 }
 export async function changeCalendarSub(id, patch) {
   try {
     await api.calendarSubChange(id, patch)
   } catch (err) {
-    toast('Der Kalender ließ sich nicht ändern. ' + errorText(err), { error: true })
+    toast(t('Der Kalender ließ sich nicht ändern. ') + errorText(err), { error: true })
     return false
   }
   await reload()
@@ -962,7 +978,7 @@ export async function removeCalendarSub(id) {
   try {
     await api.calendarSubRemove(id)
   } catch (err) {
-    toast('Der Kalender ließ sich nicht entfernen. ' + errorText(err), { error: true })
+    toast(t('Der Kalender ließ sich nicht entfernen. ') + errorText(err), { error: true })
     return false
   }
   await reload()
@@ -991,11 +1007,11 @@ export function geminiEventFor(mail, title) {
 }
 
 export async function importGeminiMeeting(mail) {
-  if (!isOwnMailbox(mail.mailbox)) return { error: 'Übernehmen geht nur aus deinem eigenen Postfach.' }
+  if (!isOwnMailbox(mail.mailbox)) return { error: t('Übernehmen geht nur aus deinem eigenen Postfach.') }
   const existing = geminiMeetingOf(mail)
   if (existing) return { meeting: existing }
   const parsed = parseGeminiMail(mail)
-  if (!parsed) return { error: 'In dieser Mail steht keine Zusammenfassung von Gemini.' }
+  if (!parsed) return { error: t('In dieser Mail steht keine Zusammenfassung von Gemini.') }
   const ev = geminiEventFor(mail, parsed.title)
   const people = ev ? (ev.attendees || []).map(norm) : []
   const persons = [...new Set(people.map((a) => personByEmail(a)).filter(Boolean).map((p) => p.id))]
@@ -1012,7 +1028,7 @@ export async function importGeminiMeeting(mail) {
     source: 'gemini',
     external_id: geminiExternalId(mail),
   })
-  if (!meeting) return { error: 'Das Meeting ließ sich nicht anlegen. Bitte gleich noch einmal versuchen.' }
+  if (!meeting) return { error: t('Das Meeting ließ sich nicht anlegen. Bitte gleich noch einmal versuchen.') }
   for (const personId of persons) await insert('meeting_persons', { meeting_id: meeting.id, person_id: personId })
   return { meeting, event: ev }
 }
@@ -1027,11 +1043,12 @@ export async function syncNow() {
     const pending = list.some((r) => r.mails_fertig === false)
     const abos = result.abos || []
     const aboErrors = abos.filter((a) => a.fehler)
-    if (errors.length) toast(`Abgleich für ${errors.map((r) => r.adresse).join(', ')} hat nicht geklappt: ${errors[0].fehler}`, { error: true })
-    else if (aboErrors.length) toast(`Ein abonnierter Kalender ließ sich nicht abholen: ${aboErrors[0].fehler}`, { error: true })
-    else if (!list.length && abos.length) toast(`Abonnierte Kalender abgeglichen, ${abos.reduce((n, a) => n + (a.termine || 0), 0)} Termine.`)
-    else if (!list.length) toast('Du hast noch kein Postfach verbunden.')
-    else toast(`Abgeglichen. ${mails === 1 ? '1 neue Mail' : mails + ' neue Mails'}${pending ? ', weitere folgen mit den nächsten Durchgängen' : ''}.`)
+    if (errors.length) toast(t('Abgleich für {list} hat nicht geklappt: {err}', { list: errors.map((r) => r.adresse).join(', '), err: errors[0].fehler }), { error: true })
+    else if (aboErrors.length) toast(t('Ein abonnierter Kalender ließ sich nicht abholen: {err}', { err: aboErrors[0].fehler }), { error: true })
+    else if (!list.length && abos.length) toast(t('Abonnierte Kalender abgeglichen, {n} Termine.', { n: abos.reduce((n, a) => n + (a.termine || 0), 0) }))
+    else if (!list.length) toast(t('Du hast noch kein Postfach verbunden.'))
+    else if (pending) toast(mails === 1 ? t('Abgeglichen. 1 neue Mail, weitere folgen mit den nächsten Durchgängen.') : t('Abgeglichen. {n} neue Mails, weitere folgen mit den nächsten Durchgängen.', { n: mails }))
+    else toast(mails === 1 ? t('Abgeglichen. 1 neue Mail.') : t('Abgeglichen. {n} neue Mails.', { n: mails }))
     await reload()
     return true
   } catch (err) {
@@ -1454,8 +1471,8 @@ export async function completeCard(card) {
   if (!done || done.id === card.stage_id) return
   const before = card.stage_id
   await update('cards', card.id, { stage_id: done.id })
-  toast(`„${card.title}“ erledigt`, {
-    action: { label: 'Rückgängig', run: () => update('cards', card.id, { stage_id: before }) },
+  toast(t('„{title}“ erledigt', { title: card.title }), {
+    action: { label: t('Rückgängig'), run: () => update('cards', card.id, { stage_id: before }) },
   })
 }
 
@@ -1464,11 +1481,12 @@ export async function completeCard(card) {
 // Wiedervorlagen sind Aktivitäten. Die Fälligkeit einer Aufgabe bleibt ihre Frist.
 // ------------------------------------------------------------
 export const ACTIVITY_KINDS = [
-  { value: 'wiedervorlage', label: 'Wiedervorlage', icon: 'bell' },
-  { value: 'anruf', label: 'Anruf', icon: 'phone' },
-  { value: 'mail', label: 'Mail', icon: 'mail' },
-  { value: 'termin', label: 'Termin', icon: 'calendar' },
-  { value: 'aufgabe', label: 'To-do', icon: 'check' },
+  // label als Getter: liefert immer die aktuelle Sprache (i18n.js), auch in anderen Dateien
+  { value: 'wiedervorlage', get label() { return t('Wiedervorlage') }, icon: 'bell' },
+  { value: 'anruf', get label() { return t('Anruf') }, icon: 'phone' },
+  { value: 'mail', get label() { return t('Mail') }, icon: 'mail' },
+  { value: 'termin', get label() { return t('Termin') }, icon: 'calendar' },
+  { value: 'aufgabe', get label() { return t('To-do') }, icon: 'check' },
 ]
 export const activityKind = (art) => ACTIVITY_KINDS.find((k) => k.value === art) || ACTIVITY_KINDS[0]
 export const activityText = (a) => a.titel || activityKind(a.art).label
@@ -1510,12 +1528,12 @@ export const canDeleteActivity = (a) => !isGuest() && (isAdmin() || norm(a.owner
 export const createActivity = (fields) => insert('aktivitaeten', fields)
 export async function completeActivity(a) {
   const saved = await update('aktivitaeten', a.id, { erledigt_at: new Date().toISOString(), erledigt_von: myEmail() })
-  if (saved) toast(`${activityKind(a.art).label} erledigt`, { action: { label: 'Rückgängig', run: () => reopenActivity(a) } })
+  if (saved) toast(t('{kind} erledigt', { kind: activityKind(a.art).label }), { action: { label: t('Rückgängig'), run: () => reopenActivity(a) } })
   return saved
 }
 export const reopenActivity = (a) => update('aktivitaeten', a.id, { erledigt_at: null })
 export async function deleteActivity(a) {
-  const ok = await confirmDialog({ title: 'Aktivität löschen?', text: `„${activityText(a)}“ ist danach weg. Erledigtes besser abhaken.`, confirmLabel: 'Löschen', danger: true })
+  const ok = await confirmDialog({ title: t('Aktivität löschen?'), text: t('„{text}“ ist danach weg. Erledigtes besser abhaken.', { text: activityText(a) }), confirmLabel: t('Löschen'), danger: true })
   if (!ok) return false
   return remove('aktivitaeten', a.id)
 }
@@ -1524,7 +1542,7 @@ export async function followUpIn(card, days) {
   const date = addDays(todayStr(), days)
   const open = openActivitiesOfCard(card.id).find((a) => a.art === 'wiedervorlage')
   const saved = open ? await update('aktivitaeten', open.id, { faellig: date }) : await createActivity({ card_id: card.id, art: 'wiedervorlage', faellig: date })
-  if (saved) toast(`Wiedervorlage am ${fmtDate(date)}`)
+  if (saved) toast(t('Wiedervorlage am {date}', { date: fmtDate(date) }))
   return saved
 }
 // Aktivitäten einer Aufgabe neu laden (die Datenbank legt in der Wartespalte selbst eine an)
@@ -1587,7 +1605,7 @@ export async function addStage(projectId, name, at = null) {
   // Platz schaffen und dabei alle Spalten sauber durchnummerieren (null ist der freie Platz)
   await saveStageOrder([...ids.slice(0, pos), null, ...ids.slice(pos)])
   const stage = await insert('stages', { project_id: projectId, name: name.trim(), kind: 'todo', sort: pos + 1 })
-  if (stage) toast(`Spalte „${stage.name}“ angelegt`)
+  if (stage) toast(t('Spalte „{name}“ angelegt', { name: stage.name }))
   return stage
 }
 
@@ -1618,10 +1636,10 @@ export function lastOfKindHint(stage) {
   if (stagesOf(stage.project_id).filter((s) => s.kind === stage.kind).length > 1) return ''
   const label = (SETTINGS.stageKinds.find((k) => k.value === stage.kind) || {}).label || stage.kind
   const why = {
-    todo: 'Neue Deals aus der Schnellerfassung und aus „Aufs Board“ landen danach ohne Hinweis in der ersten Spalte.',
-    waiting: 'Die Übersicht zeigt danach unter „Warte auf Rückmeldung“ nichts mehr aus dieser Pipeline.',
-  }[stage.kind] || 'Deals, die aus anderen Pipelines mit dieser Art hierher wandern, landen danach in der ersten Spalte.'
-  return `„${stage.name}“ ist die letzte Spalte der Art „${label}“. ${why}`
+    todo: t('Neue Deals aus der Schnellerfassung und aus „Aufs Board“ landen danach ohne Hinweis in der ersten Spalte.'),
+    waiting: t('Die Übersicht zeigt danach unter „Warte auf Rückmeldung“ nichts mehr aus dieser Pipeline.'),
+  }[stage.kind] || t('Deals, die aus anderen Pipelines mit dieser Art hierher wandern, landen danach in der ersten Spalte.')
+  return t('„{name}“ ist die letzte Spalte der Art „{label}“. {why}', { name: stage.name, label, why })
 }
 
 // Alle Aufgaben einer Spalte, auch die im Archiv (aus den geladenen Daten, nur für Anzeigen)
@@ -1632,7 +1650,7 @@ export async function countStageCards(stageId) {
   try {
     return await api.countStageCards(stageId)
   } catch (err) {
-    toast(`Die Deals in der Spalte ließen sich nicht zählen. ${errorText(err)}`, { error: true })
+    toast(t('Die Deals in der Spalte ließen sich nicht zählen. {err}', { err: errorText(err) }), { error: true })
     return null
   }
 }
@@ -1649,14 +1667,14 @@ export async function deleteStage(stageId, targetId = null) {
   if (counted.total) {
     const target = getStage(targetId)
     if (!target || target.project_id !== stage.project_id || target.id === stage.id) {
-      toast('Bitte eine Spalte wählen, in die die Deals kommen.', { error: true })
+      toast(t('Bitte eine Spalte wählen, in die die Deals kommen.'), { error: true })
       return false
     }
     try {
       moved = await api.moveStageCards(stage.id, target.id)
     } catch (err) {
       await reload()
-      toast(`Die Deals ließen sich nicht verschieben, die Spalte „${stage.name}“ bleibt stehen. ${errorText(err)}`, { error: true })
+      toast(t('Die Deals ließen sich nicht verschieben, die Spalte „{name}“ bleibt stehen. {err}', { name: stage.name, err: errorText(err) }), { error: true })
       return false
     }
   }
@@ -1664,12 +1682,12 @@ export async function deleteStage(stageId, targetId = null) {
     await api.remove('stages', stage.id)
   } catch (err) {
     await reload()
-    const done = moved ? `${moved === 1 ? 'Der Deal ist' : `Die ${moved} Deals sind`} verschoben, aber die Spalte ließ sich nicht löschen.` : 'Die Spalte ließ sich nicht löschen.'
+    const done = moved ? (moved === 1 ? t('Der Deal ist verschoben, aber die Spalte ließ sich nicht löschen.') : t('Die {n} Deals sind verschoben, aber die Spalte ließ sich nicht löschen.', { n: moved })) : t('Die Spalte ließ sich nicht löschen.')
     toast(`${done} ${errorText(err)}`, { error: true })
     return false
   }
   await reload()
-  toast(moved ? `Spalte gelöscht, ${moved === 1 ? '1 Deal' : `${moved} Deals`} verschoben.` : `Spalte „${stage.name}“ gelöscht.`)
+  toast(moved ? (moved === 1 ? t('Spalte gelöscht, 1 Deal verschoben.') : t('Spalte gelöscht, {n} Deals verschoben.', { n: moved })) : t('Spalte „{name}“ gelöscht.', { name: stage.name }))
   return true
 }
 
@@ -1726,7 +1744,7 @@ export function moveCardToKind(card, kind) {
   if (cardKind(card) === kind) return null
   const stage = stageOfKind(card.project_id, kind)
   if (!stage || stage.kind !== kind) {
-    toast('Diese Pipeline hat keine passende Spalte.', { error: true })
+    toast(t('Diese Pipeline hat keine passende Spalte.'), { error: true })
     return null
   }
   return update('cards', card.id, { stage_id: stage.id })

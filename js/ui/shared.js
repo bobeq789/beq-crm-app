@@ -5,13 +5,14 @@ import { Icon } from '../lib/icons.js'
 import { norm } from '../lib/util.js'
 import { state, cardKind, isOpen, myEmail, member, mySharedProjectIds, createCard, toast, isMentioned } from '../store.js'
 import { PageHead, Tile, Empty, TaskRow, Dot } from './common.js'
+import { t, isEnglish } from '../i18n.js'
 
 const PRIO_ORDER = { hoch: 0, mittel: 1, niedrig: 2 }
 
 // „A“, „A und B“, „A, B und C“
 function joinNames(names) {
   if (names.length <= 1) return names[0] || ''
-  return names.slice(0, -1).join(', ') + ' und ' + names[names.length - 1]
+  return names.slice(0, -1).join(', ') + ' ' + t('und') + ' ' + names[names.length - 1]
 }
 
 // Offene zuerst, dann nach Fälligkeit und Dringlichkeit, Erledigte ans Ende
@@ -35,19 +36,18 @@ function Intro({ fullProjects }) {
     .filter((s) => norm(s.email) === me)
     .map((s) => member(s.created_by))
   const names = [...new Set(sharers.filter(Boolean).map((m) => m.name))].sort((a, b) => a.localeCompare(b, 'de'))
-  if (sharers.some((m) => !m) || !names.length) names.push(names.length ? 'das Team der beQ' : 'Das Team der beQ')
+  if (sharers.some((m) => !m) || !names.length) names.push(names.length ? t('das Team der beQ') : t('Das Team der beQ'))
   const who = joinNames(names)
-  const verb = names.length > 1 ? 'teilen' : 'teilt'
-  const projectNames = fullProjects.map((p) => `„${p.name}“`)
+  const projectNames = fullProjects.map((p) => (isEnglish() ? `“${p.name}”` : `„${p.name}“`))
   return html`<div class="shared-intro">
     <p>
-      ${who} ${verb} hier Deals mit dir.
-      ${fullProjects.length === 1 && ` Die Pipeline ${projectNames[0]} siehst du ganz, auch neue Deals.`}
-      ${fullProjects.length > 1 && ` Die Pipelines ${joinNames(projectNames)} siehst du ganz, auch neue Deals.`}
+      ${names.length > 1 ? t('{who} teilen hier Deals mit dir.', { who }) : t('{who} teilt hier Deals mit dir.', { who })}
+      ${fullProjects.length === 1 && ' ' + t('Die Pipeline {name} siehst du ganz, auch neue Deals.', { name: projectNames[0] })}
+      ${fullProjects.length > 1 && ' ' + t('Die Pipelines {names} siehst du ganz, auch neue Deals.', { names: joinNames(projectNames) })}
     </p>
     <p class="muted">
-      Du kannst Notizen schreiben und Spalte, Dringlichkeit, Fälligkeit und Zuständig ändern.
-      ${fullProjects.length > 0 && ' In ganz geteilten Pipelines legst du mit „+“ selbst Deals an.'}
+      ${t('Du kannst Notizen schreiben und Spalte, Dringlichkeit, Fälligkeit und Zuständig ändern.')}
+      ${fullProjects.length > 0 && ' ' + t('In ganz geteilten Pipelines legst du mit „+“ selbst Deals an.')}
     </p>
   </div>`
 }
@@ -56,10 +56,10 @@ function Intro({ fullProjects }) {
 function AddRow({ project, onDone }) {
   const [title, setTitle] = useState('')
   const save = async () => {
-    const t = title.trim()
-    if (!t) return onDone()
-    const saved = await createCard({ title: t, project_id: project.id, assignee: myEmail() })
-    if (saved) toast('Deal angelegt')
+    const text = title.trim()
+    if (!text) return onDone()
+    const saved = await createCard({ title: text, project_id: project.id, assignee: myEmail() })
+    if (saved) toast(t('Deal angelegt'))
     setTitle('')
     onDone()
   }
@@ -73,13 +73,13 @@ function AddRow({ project, onDone }) {
     <input
       type="text"
       value=${title}
-      placeholder=${`Neuer Deal in „${project.name}“`}
-      aria-label=${`Neuer Deal in „${project.name}“`}
+      placeholder=${t('Neuer Deal in „{name}“', { name: project.name })}
+      aria-label=${t('Neuer Deal in „{name}“', { name: project.name })}
       ref=${(el) => el && !el.dataset.focused && ((el.dataset.focused = '1'), el.focus())}
       onInput=${(e) => setTitle(e.target.value)}
       onKeyDown=${(e) => e.key === 'Escape' && onDone()}
     />
-    <button type="submit" class="btn btn-primary" disabled=${!title.trim()}>Anlegen</button>
+    <button type="submit" class="btn btn-primary" disabled=${!title.trim()}>${t('Anlegen')}</button>
   </form>`
 }
 
@@ -87,18 +87,18 @@ function ProjectGroup({ project, cards, full }) {
   const [adding, setAdding] = useState(false)
   const title = html`<span class="meta-item">
     <${Dot} color=${project.color} />${project.name}
-    ${full && html`<span class="tab-shared" title="Ganz mit dir geteilt"><${Icon} name="users" size=${15} /></span>`}
+    ${full && html`<span class="tab-shared" title=${t('Ganz mit dir geteilt')}><${Icon} name="users" size=${15} /></span>`}
   </span>`
   const actions =
     full &&
-    html`<button type="button" class="icon-btn" aria-label=${`Neuer Deal in „${project.name}“`} title="Neuer Deal" onClick=${() => setAdding(true)}>
+    html`<button type="button" class="icon-btn" aria-label=${t('Neuer Deal in „{name}“', { name: project.name })} title=${t('Neuer Deal')} onClick=${() => setAdding(true)}>
       <${Icon} name="plus" />
     </button>`
   return html`<${Tile} title=${title} count=${cards.length} actions=${actions}>
     ${adding && html`<${AddRow} project=${project} onDone=${() => setAdding(false)} />`}
     ${cards.length
       ? html`<ul class="task-list">${cards.map((c) => html`<${TaskRow} card=${c} key=${c.id} />`)}</ul>`
-      : !adding && html`<${Empty}>Noch keine Deals. Mit „+“ legst du den ersten an.<//>`}
+      : !adding && html`<${Empty}>${t('Noch keine Deals. Mit „+“ legst du den ersten an.')}<//>`}
   <//>`
 }
 
@@ -118,13 +118,13 @@ export function SharedPage() {
   const fullProjects = groups.filter((g) => g.full).map((g) => g.project)
 
   return html`<div class="page page-narrow">
-    <${PageHead} kicker="Geteilt" title=${name ? `Hallo ${name}` : 'Mit dir geteilt'} />
-    ${groups.length ? html`<${Intro} fullProjects=${fullProjects} />` : html`<${Empty}>Gerade ist nichts mit dir geteilt.<//>`}
+    <${PageHead} kicker=${t('Geteilt')} title=${name ? t('Hallo {name}', { name }) : t('Mit dir geteilt')} />
+    ${groups.length ? html`<${Intro} fullProjects=${fullProjects} />` : html`<${Empty}>${t('Gerade ist nichts mit dir geteilt.')}<//>`}
     ${groups.length > 0 &&
-    html`<${Tile} title="Für dich" count=${forMe.length}>
+    html`<${Tile} title=${t('Für dich')} count=${forMe.length}>
       ${forMe.length
         ? html`<ul class="task-list">${forMe.map((c) => html`<${TaskRow} card=${c} key=${c.id} />`)}</ul>`
-        : html`<${Empty}>Gerade bist du für keinen offenen Deal zuständig und niemand hat dich erwähnt.<//>`}
+        : html`<${Empty}>${t('Gerade bist du für keinen offenen Deal zuständig und niemand hat dich erwähnt.')}<//>`}
     <//>`}
     ${groups.map((g) => html`<${ProjectGroup} key=${g.project.id} project=${g.project} cards=${g.cards} full=${g.full} />`)}
   </div>`

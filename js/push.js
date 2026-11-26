@@ -15,6 +15,7 @@ export function pushSupported() {
 }
 // Gerät und Browser erkennen steht in install.js (dort auch „App installieren“)
 import { isIos, isStandalone, installHowTo } from './install.js'
+import { t } from './i18n.js'
 export { isIos, isStandalone }
 
 // Kurzer Gerätename für die Liste („iPhone“, „Android“, „Mac“ …), ohne genaue Kennung
@@ -78,19 +79,19 @@ async function saveSubscription(sub) {
 }
 
 export async function enablePush() {
-  if (isDemo) return toast('Im Demo-Modus gibt es keine Mitteilungen aufs Handy.')
-  if (!pushSupported()) return toast('Dieser Browser kann keine Mitteilungen empfangen.', { error: true })
+  if (isDemo) return toast(t('Im Demo-Modus gibt es keine Mitteilungen aufs Handy.'))
+  if (!pushSupported()) return toast(t('Dieser Browser kann keine Mitteilungen empfangen.'), { error: true })
   if (isIos() && !isStandalone()) {
-    return toast('Auf dem iPhone geht das nur aus der App auf dem Home-Bildschirm. ' + installHowTo() + ' Dann das CRM von dort öffnen und hier einschalten.', { error: true })
+    return toast(t('Auf dem iPhone geht das nur aus der App auf dem Home-Bildschirm. ') + installHowTo() + t(' Dann das CRM von dort öffnen und hier einschalten.'), { error: true })
   }
   const permission = await Notification.requestPermission()
   if (permission !== 'granted') {
     setPush({ permission })
-    return toast('Mitteilungen sind im Browser nicht erlaubt. Erlaube sie in den Einstellungen des Browsers für diese Seite.', { error: true })
+    return toast(t('Mitteilungen sind im Browser nicht erlaubt. Erlaube sie in den Einstellungen des Browsers für diese Seite.'), { error: true })
   }
   try {
     const key = await api().pushKey()
-    if (!key) return toast('Mitteilungen sind im CRM noch nicht eingerichtet. Bitte gleich noch einmal versuchen.', { error: true })
+    if (!key) return toast(t('Mitteilungen sind im CRM noch nicht eingerichtet. Bitte gleich noch einmal versuchen.'), { error: true })
     const reg = await registration()
     let sub = await reg.pushManager.getSubscription()
     // Anderer Schlüssel als beim letzten Mal: neu anmelden
@@ -105,9 +106,9 @@ export async function enablePush() {
     if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(key) })
     await saveSubscription(sub)
     await refreshPushState()
-    toast('Mitteilungen sind auf diesem Gerät an.')
+    toast(t('Mitteilungen sind auf diesem Gerät an.'))
   } catch (err) {
-    toast('Mitteilungen ließen sich nicht einschalten. ' + errorText(err), { error: true })
+    toast(t('Mitteilungen ließen sich nicht einschalten. ') + errorText(err), { error: true })
   }
 }
 
@@ -119,19 +120,19 @@ export async function disablePush() {
       await sub.unsubscribe().catch(() => {})
     }
     await refreshPushState()
-    toast('Mitteilungen sind auf diesem Gerät aus.')
+    toast(t('Mitteilungen sind auf diesem Gerät aus.'))
   } catch (err) {
-    toast('Mitteilungen ließen sich nicht ausschalten. ' + errorText(err), { error: true })
+    toast(t('Mitteilungen ließen sich nicht ausschalten. ') + errorText(err), { error: true })
   }
 }
 
 export async function sendTestPush() {
-  if (isDemo) return toast('Im Demo-Modus gibt es keine Mitteilungen aufs Handy.')
+  if (isDemo) return toast(t('Im Demo-Modus gibt es keine Mitteilungen aufs Handy.'))
   try {
     const n = await api().pushTest()
-    toast(n ? `Testmitteilung ist unterwegs (an ${n === 1 ? 'ein Gerät' : n + ' Geräte'}).` : 'Auf keinem Gerät sind Mitteilungen an. Bitte erst einschalten.')
+    toast(n ? (n === 1 ? t('Testmitteilung ist unterwegs (an ein Gerät).') : t('Testmitteilung ist unterwegs (an {n} Geräte).', { n })) : t('Auf keinem Gerät sind Mitteilungen an. Bitte erst einschalten.'))
   } catch (err) {
-    toast('Die Testmitteilung ließ sich nicht schicken. ' + errorText(err), { error: true })
+    toast(t('Die Testmitteilung ließ sich nicht schicken. ') + errorText(err), { error: true })
   }
 }
 
@@ -164,7 +165,7 @@ export function toggleRoomPush(room) {
   const on = roomPushOn(room)
   const without = (list) => (list || []).filter((id) => id !== room.id)
   if (room.art === 'kanal') {
-    return savePushPrefs({ kanaele: on ? without(p.kanaele) : [...without(p.kanaele), room.id] }).then((ok) => ok && toast(on ? 'Keine Mitteilungen mehr aus diesem Kanal.' : 'Mitteilungen aus diesem Kanal sind an.'))
+    return savePushPrefs({ kanaele: on ? without(p.kanaele) : [...without(p.kanaele), room.id] }).then((ok) => ok && toast(on ? t('Keine Mitteilungen mehr aus diesem Kanal.') : t('Mitteilungen aus diesem Kanal sind an.')))
   }
-  return savePushPrefs({ stumm: on ? [...without(p.stumm), room.id] : without(p.stumm) }).then((ok) => ok && toast(on ? 'Stumm geschaltet. Aus diesem Chat kommen keine Mitteilungen mehr.' : 'Mitteilungen sind wieder an.'))
+  return savePushPrefs({ stumm: on ? [...without(p.stumm), room.id] : without(p.stumm) }).then((ok) => ok && toast(on ? t('Stumm geschaltet. Aus diesem Chat kommen keine Mitteilungen mehr.') : t('Mitteilungen sind wieder an.')))
 }

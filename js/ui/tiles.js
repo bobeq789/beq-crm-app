@@ -13,6 +13,7 @@
 //   der Griff, damit ein Wisch über den Titel weiter die Seite scrollt.
 import { html, useState, useEffect, useRef } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
+import { t } from '../i18n.js'
 
 // Feste IDs, nicht die angezeigten Namen (sonst geht eine gespeicherte Anordnung verloren)
 export const TILE_DEFAULT = { reihe: ['aufgaben', 'team', 'termine', 'wiedervorlagen', 'meetings'], breit: ['aufgaben'] }
@@ -79,7 +80,7 @@ export function ArrangeView({ layout, names, oneColumn, custom, onChange, onRese
   const bar = (id, wide) => {
     const col = oneColumn ? layout.reihe : columnOf(layout, wide)
     const i = col.indexOf(id)
-    const name = names[id]
+    const name = t(names[id])
     const mark = over && over.id === id ? (over.before ? ' drop-before' : ' drop-after') : ''
     return html`<li
       key=${id}
@@ -107,12 +108,12 @@ export function ArrangeView({ layout, names, oneColumn, custom, onChange, onRese
       ${!oneColumn && html`<span class="arrange-grip" aria-hidden="true"><${Icon} name="grip" size=${18} /></span>`}
       <span class="arrange-name">${name}</span>
       <span class="arrange-arrows">
-        <button type="button" class="icon-btn small" disabled=${i === 0} aria-label=${`„${name}“ nach oben`} onClick=${() => onChange(arrowMove(layout, id, 'up', oneColumn))}><${Icon} name="up" size=${16} /></button>
-        <button type="button" class="icon-btn small" disabled=${i === col.length - 1} aria-label=${`„${name}“ nach unten`} onClick=${() => onChange(arrowMove(layout, id, 'down', oneColumn))}><${Icon} name="down" size=${16} /></button>
+        <button type="button" class="icon-btn small" disabled=${i === 0} aria-label=${t('„{name}“ nach oben', { name })} onClick=${() => onChange(arrowMove(layout, id, 'up', oneColumn))}><${Icon} name="up" size=${16} /></button>
+        <button type="button" class="icon-btn small" disabled=${i === col.length - 1} aria-label=${t('„{name}“ nach unten', { name })} onClick=${() => onChange(arrowMove(layout, id, 'down', oneColumn))}><${Icon} name="down" size=${16} /></button>
         ${!oneColumn &&
         (wide
-          ? html`<button type="button" class="icon-btn small" aria-label=${`„${name}“ in die rechte Spalte`} onClick=${() => onChange(arrowMove(layout, id, 'right'))}><${Icon} name="arrowRight" size=${16} /></button>`
-          : html`<button type="button" class="icon-btn small" aria-label=${`„${name}“ in die linke, breite Spalte`} onClick=${() => onChange(arrowMove(layout, id, 'left'))}><${Icon} name="back" size=${16} /></button>`)}
+          ? html`<button type="button" class="icon-btn small" aria-label=${t('„{name}“ in die rechte Spalte', { name })} onClick=${() => onChange(arrowMove(layout, id, 'right'))}><${Icon} name="arrowRight" size=${16} /></button>`
+          : html`<button type="button" class="icon-btn small" aria-label=${t('„{name}“ in die linke, breite Spalte', { name })} onClick=${() => onChange(arrowMove(layout, id, 'left'))}><${Icon} name="back" size=${16} /></button>`)}
       </span>
     </li>`
   }
@@ -121,7 +122,7 @@ export function ArrangeView({ layout, names, oneColumn, custom, onChange, onRese
     const colName = wide ? 'breit' : 'schmal'
     return html`<ul
       class=${'arrange-col' + (over && over.col === colName ? ' drop-end' : '')}
-      aria-label=${wide ? 'Linke, breite Spalte' : 'Rechte Spalte'}
+      aria-label=${wide ? t('Linke, breite Spalte') : t('Rechte Spalte')}
       onDragOver=${(e) => {
         e.preventDefault()
         if (!over || over.col !== colName) setOver({ col: colName })
@@ -132,19 +133,19 @@ export function ArrangeView({ layout, names, oneColumn, custom, onChange, onRese
       }}
     >
       ${ids.map((id) => bar(id, wide))}
-      ${!ids.length && html`<li class="arrange-empty">Leere Spalte, Kachel hierher ziehen</li>`}
+      ${!ids.length && html`<li class="arrange-empty">${t('Leere Spalte, Kachel hierher ziehen')}</li>`}
     </ul>`
   }
-  return html`<section class="arrange" aria-label="Kacheln anordnen">
+  return html`<section class="arrange" aria-label=${t('Kacheln anordnen')}>
     <div class="arrange-head">
-      <p class="muted small">${oneColumn ? 'Mit den Pfeilen ordnest du die Kacheln.' : 'Leisten ziehen oder die Pfeile nutzen.'} Du kannst Kacheln auch direkt am Griff im Kopf ziehen.</p>
+      <p class="muted small">${oneColumn ? t('Mit den Pfeilen ordnest du die Kacheln.') : t('Leisten ziehen oder die Pfeile nutzen.')} ${t('Du kannst Kacheln auch direkt am Griff im Kopf ziehen.')}</p>
       <div class="arrange-actions">
-        ${custom && html`<button type="button" class="btn btn-small" onClick=${onReset}>Standard</button>`}
-        <button type="button" class="btn btn-small btn-primary" onClick=${onDone}>Fertig</button>
+        ${custom && html`<button type="button" class="btn btn-small" onClick=${onReset}>${t('Standard')}</button>`}
+        <button type="button" class="btn btn-small btn-primary" onClick=${onDone}>${t('Fertig')}</button>
       </div>
     </div>
     ${oneColumn
-      ? html`<ul class="arrange-col" aria-label="Kacheln">${layout.reihe.map((id) => bar(id, inWide(layout, id)))}</ul>`
+      ? html`<ul class="arrange-col" aria-label=${t('Kacheln')}>${layout.reihe.map((id) => bar(id, inWide(layout, id)))}</ul>`
       : html`<div class="arrange-grid">${column(true)}${column(false)}</div>`}
   </section>`
 }

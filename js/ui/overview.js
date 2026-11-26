@@ -40,6 +40,10 @@ import { openEvent, openCard, navigate } from '../router.js'
 import { eventsTodayTomorrow } from './calendar.js'
 import { PageHead, Tile, Empty, TaskRow, Segmented, Dot, activityWhen, useIsMobile } from './common.js'
 import { isPhone, isStandalone, canPromptInstall, promptInstall, installHowTo } from '../install.js'
+import { t, isEnglish } from '../i18n.js'
+
+// Betreff und ähnliche Daten in Anführungszeichen der gewählten Sprache
+const quoted = (s) => (isEnglish() ? `“${s}”` : `„${s}“`)
 
 const PRIO_ORDER = { hoch: 0, mittel: 1, niedrig: 2 }
 
@@ -86,24 +90,24 @@ function TodoTile({ cards, drag }) {
   const section = (title, list, extra) =>
     list.length
       ? html`<div class="task-group">
-          <h3 class="group-title">${title} <span class="count">${list.length}</span></h3>
+          <h3 class="group-title">${t(title)} <span class="count">${list.length}</span></h3>
           <ul class="task-list">${list.map((c) => html`<${TaskRow} card=${c} key=${c.id} />`)}</ul>
           ${extra}
         </div>`
       : null
-  const addTask = html`<button type="button" class="link-btn" onClick=${() => openDialog({ kind: 'new-task', title: '' })}><${Icon} name="plus" size=${16} /> Deal</button>`
+  const addTask = html`<button type="button" class="link-btn" onClick=${() => openDialog({ kind: 'new-task', title: '' })}><${Icon} name="plus" size=${16} /> ${t('Deal')}</button>`
   return html`<${Tile} title="Zu erledigen (Deals)" count=${cards.length} cls="tile-todo" drag=${drag} actions=${addTask}>
-    ${cards.length === 0 && html`<${Empty}>Nichts offen. Schön.<//>`}
+    ${cards.length === 0 && html`<${Empty}>${t('Nichts offen. Schön.')}<//>`}
     ${section('Überfällig und heute', groups.today)}
     ${section('Dringend', groups.urgent)}
     ${section('Diese Woche', groups.week)}
     ${groups.rest.length
       ? html`<div class="task-group">
-          <h3 class="group-title">Weitere <span class="count">${groups.rest.length}</span></h3>
+          <h3 class="group-title">${t('Weitere')} <span class="count">${groups.rest.length}</span></h3>
           <ul class="task-list">${rest.map((c) => html`<${TaskRow} card=${c} key=${c.id} />`)}</ul>
           ${groups.rest.length > 8 &&
           html`<button type="button" class="link-btn" onClick=${() => setShowAll(!showAll)}>
-            ${showAll ? 'Weniger anzeigen' : `Alle ${groups.rest.length} anzeigen`}
+            ${showAll ? t('Weniger anzeigen') : t('Alle {n} anzeigen', { n: groups.rest.length })}
           </button>`}
         </div>`
       : null}
@@ -140,7 +144,9 @@ export function followUpItems(cards, scope) {
 // „hat gestern geschrieben“, „hat vor 3 Tagen geschrieben“, „hat am Mo., 3. Nov. geschrieben“
 export function wroteWhen(iso) {
   const rel = fmtRelative(iso)
-  return /^(vor|gestern|gerade)/.test(rel) ? `hat ${rel} geschrieben` : `hat am ${rel} geschrieben`
+  // Relativ („vor 3 Tagen“, „3 days ago“) oder ein Datum, je nach Sprache
+  const relative = /^(vor|gestern|gerade)/.test(rel) || /^(yesterday|just now)|ago$/.test(rel)
+  return relative ? t('hat {when} geschrieben', { when: rel }) : t('hat am {when} geschrieben', { when: rel })
 }
 
 // Antwort da: Absender, wann, Betreff, dazu „Wieder in 3 Tagen, 1 Woche, 2 Wochen“. Das
@@ -151,11 +157,11 @@ function AnswerRow({ card, answer }) {
     <span class="answer-icon" aria-hidden="true"><${Icon} name="mail" size=${16} /></span>
     <div class="task-main">
       <button type="button" class="task-title" onClick=${() => openCard(card.id)}>${card.title}</button>
-      <div class="answer-line"><strong>${who}</strong> ${wroteWhen(answer.sent_at)}${answer.subject ? html`: „${answer.subject}“` : ''}</div>
+      <div class="answer-line"><strong>${who}</strong> ${wroteWhen(answer.sent_at)}${answer.subject ? ': ' + quoted(answer.subject) : ''}</div>
       <div class="answer-actions">
-        <span class="muted small">Wieder in</span>
+        <span class="muted small">${t('Wieder in')}</span>
         ${[[3, '3 Tagen'], [7, '1 Woche'], [14, '2 Wochen']].map(
-          ([n, label]) => html`<button type="button" class="chip-btn small" onClick=${() => followUpIn(card, n)}>${label}</button>`
+          ([n, label]) => html`<button type="button" class="chip-btn small" onClick=${() => followUpIn(card, n)}>${t(label)}</button>`
         )}
       </div>
     </div>
@@ -194,13 +200,13 @@ function LooseActivityRow({ act }) {
   const when = activityWhen(act)
   const open = () => (person ? navigate('/kontakte/' + person.id) : org && navigate('/firmen/' + org.id))
   return html`<li class="task-row">
-    <button type="button" class="check" title="Abhaken" aria-label=${'Abhaken: ' + activityText(act)} onClick=${() => completeActivity(act)}>
+    <button type="button" class="check" title=${t('Abhaken')} aria-label=${t('Abhaken: {text}', { text: activityText(act) })} onClick=${() => completeActivity(act)}>
       <${Icon} name="check" size=${16} />
     </button>
     <div class="task-main">
       <button type="button" class="task-title act-loose" onClick=${open}><${Icon} name=${kind.icon} size=${16} /><span>${activityText(act)}</span></button>
       <div class="task-meta">
-        ${[person && person.name, org && org.name].filter(Boolean).map((t) => html`<span class="meta-item muted">${t}</span>`)}
+        ${[person && person.name, org && org.name].filter(Boolean).map((x) => html`<span class="meta-item muted">${x}</span>`)}
         <span class=${'badge due-' + when.tone}>${when.text}</span>
       </div>
     </div>
@@ -216,13 +222,13 @@ function FollowUpTile({ groups, drag }) {
   const section = (title, list, render) =>
     list.length
       ? html`<div class="task-group">
-          <h3 class="group-title">${title} <span class="count">${list.length}</span></h3>
+          <h3 class="group-title">${t(title)} <span class="count">${list.length}</span></h3>
           <ul class="task-list">${list.map(render)}</ul>
         </div>`
       : null
   const empty = !answers.length && !due.length && !soon.length && !waiting.length
   return html`<${Tile} title="Wiedervorlagen" count=${answers.length + due.length} cls="tile-followup" drag=${drag}>
-    ${empty && html`<${Empty}>Gerade steht nichts zum Nachhaken an.<//>`}
+    ${empty && html`<${Empty}>${t('Gerade steht nichts zum Nachhaken an.')}<//>`}
     ${section('Antwort da', answers, (x) => html`<${AnswerRow} key=${x.key} card=${x.card} answer=${x.answer} />`)}
     ${section('Fällig', due, row)}
     ${section('Nächste 7 Tage', soon, row)}
@@ -238,7 +244,7 @@ function MoreList({ items, render }) {
   return html`<ul class="task-list">${shown.map(render)}</ul>
     ${items.length > MORE_LIMIT &&
     html`<button type="button" class="link-btn more-toggle" aria-expanded=${all} onClick=${() => setAll(!all)}>
-      ${all ? 'Weniger anzeigen' : `Alle ${items.length} anzeigen`}
+      ${all ? t('Weniger anzeigen') : t('Alle {n} anzeigen', { n: items.length })}
     </button>`}`
 }
 
@@ -255,7 +261,10 @@ export function concernsMe(card, me = norm(myEmail())) {
   return isMentioned(card.id)
 }
 // Kurz am Deal: von wem und wann, „dazu“ heißt als weitere zuständige Person
-const givenText = (g) => `von ${firstName(memberName(g.actor) || g.actor)}${g.art === 'mitzustaendig' ? ', dazu' : ''}, ${fmtRelative(g.at)}`
+const givenText = (g) => {
+  const vars = { name: firstName(memberName(g.actor) || g.actor), when: fmtRelative(g.at) }
+  return g.art === 'mitzustaendig' ? t('von {name}, dazu, {when}', vars) : t('von {name}, {when}', vars)
+}
 function TeamTile({ drag }) {
   const me = norm(myEmail())
   const open = state.db.cards.filter(isOpen)
@@ -277,27 +286,27 @@ function TeamTile({ drag }) {
   // Die Zahl zählt immer alle, sichtbar sind zuerst 8, „Alle n anzeigen“ klappt den Rest auf
   // Kurze Erklärung je Gruppe (Wunsch vom 25.11.2026: sonst schwer nachvollziehbar)
   return html`<${Tile} title="Team" drag=${drag}>
-    <p class="tile-hint muted small">Was andere dir geschickt oder gegeben haben und was du anderen gegeben hast. Deine eigenen Deals stehen unter „Zu erledigen“.</p>
+    <p class="tile-hint muted small">${t('Was andere dir geschickt oder gegeben haben und was du anderen gegeben hast. Deine eigenen Deals stehen unter „Zu erledigen“.')}</p>
     <div class="task-group">
-      <h3 class="group-title">Du wurdest erwähnt ${mentioned.length > 0 && html`<span class="count">${mentioned.length}</span>`}</h3>
-      <p class="group-hint muted small">Jemand hat dich in einer Notiz mit @Name angesprochen. Verschwindet, sobald du den Deal öffnest.</p>
+      <h3 class="group-title">${t('Du wurdest erwähnt')} ${mentioned.length > 0 && html`<span class="count">${mentioned.length}</span>`}</h3>
+      <p class="group-hint muted small">${t('Jemand hat dich in einer Notiz mit @Name angesprochen. Verschwindet, sobald du den Deal öffnest.')}</p>
       ${mentioned.length
         ? html`<${MoreList} items=${mentioned} render=${(c) => html`<${TaskRow} card=${c} key=${c.id} />`} />`
-        : html`<${Empty}>Niemand hat dich neu erwähnt.<//>`}
+        : html`<${Empty}>${t('Niemand hat dich neu erwähnt.')}<//>`}
     </div>
     <div class="task-group">
-      <h3 class="group-title">Dir neu gegeben ${given.length > 0 && html`<span class="count">${given.length}</span>`}</h3>
-      <p class="group-hint muted small">Jemand hat dich zuständig gemacht, als weitere Zuständige eingetragen oder den Deal für dich angelegt. Verschwindet, sobald du den Deal öffnest.</p>
+      <h3 class="group-title">${t('Dir neu gegeben')} ${given.length > 0 && html`<span class="count">${given.length}</span>`}</h3>
+      <p class="group-hint muted small">${t('Jemand hat dich zuständig gemacht, als weitere Zuständige eingetragen oder den Deal für dich angelegt. Verschwindet, sobald du den Deal öffnest.')}</p>
       ${given.length
         ? html`<${MoreList} items=${given} render=${(x) => html`<${TaskRow} card=${x.card} key=${x.card.id} showSince=${true} sinceText=${givenText(x.g)} />`} />`
-        : html`<${Empty}>Dir hat niemand etwas Neues gegeben.<//>`}
+        : html`<${Empty}>${t('Dir hat niemand etwas Neues gegeben.')}<//>`}
     </div>
     <div class="task-group">
-      <h3 class="group-title">Von dir vergeben ${elsewhere.length > 0 && html`<span class="count">${elsewhere.length}</span>`}</h3>
-      <p class="group-hint muted small">Deals, die du jemand anderem gegeben hast und die noch offen sind, mit „seit“. So siehst du, was bei anderen liegt. Verschwindet, wenn der Deal erledigt ist.</p>
+      <h3 class="group-title">${t('Von dir vergeben')} ${elsewhere.length > 0 && html`<span class="count">${elsewhere.length}</span>`}</h3>
+      <p class="group-hint muted small">${t('Deals, die du jemand anderem gegeben hast und die noch offen sind, mit „seit“. So siehst du, was bei anderen liegt. Verschwindet, wenn der Deal erledigt ist.')}</p>
       ${elsewhere.length
         ? html`<${MoreList} items=${elsewhere} render=${(x) => html`<${TaskRow} card=${x.card} key=${x.card.id} showSince=${true} sinceText=${sinceLabel(x.since)} />`} />`
-        : html`<${Empty}>Gerade hast du nichts an andere vergeben.<//>`}
+        : html`<${Empty}>${t('Gerade hast du nichts an andere vergeben.')}<//>`}
     </div>
   <//>`
 }
@@ -311,17 +320,17 @@ function EventsTile({ scope, drag }) {
   ].filter((g) => g.items.length)
   return html`<${Tile} title="Termine heute und morgen" count=${list.length} drag=${drag}>
     ${!state.db.events.length
-      ? html`<${Empty}>Noch kein Kalender angebunden.<//>`
+      ? html`<${Empty}>${t('Noch kein Kalender angebunden.')}<//>`
       : !list.length
-        ? html`<${Empty}>Heute und morgen stehen keine Termine an.<//>`
+        ? html`<${Empty}>${t('Heute und morgen stehen keine Termine an.')}<//>`
         : groups.map(
             (g) => html`<div class="task-group" key=${g.label}>
-              <h3 class="group-title">${g.label}</h3>
+              <h3 class="group-title">${t(g.label)}</h3>
               <ul class="meeting-mini">
                 ${g.items.map(
                   (e) => html`<li key=${e.id}>
                     <button type="button" class="mini-event" onClick=${() => openEvent(e.id)}>
-                      <span class="mm-title">${e.title || '(ohne Titel)'}</span>
+                      <span class="mm-title">${e.title || t('(ohne Titel)')}</span>
                       <span class="mm-meta"><${Dot} color=${e.calendar_color} />${fmtTimeRange(e.start_at, e.end_at, e.all_day)}${e.location ? ' · ' + e.location : ''}</span>
                     </button>
                   </li>`
@@ -329,7 +338,7 @@ function EventsTile({ scope, drag }) {
               </ul>
             </div>`
           )}
-    <a class="tile-link" href="#/kalender">Zum Kalender <${Icon} name="arrowRight" size=${16} /></a>
+    <a class="tile-link" href="#/kalender">${t('Zum Kalender')} <${Icon} name="arrowRight" size=${16} /></a>
   <//>`
 }
 
@@ -352,8 +361,8 @@ function MeetingsTile({ drag }) {
             </li>`
           })}
         </ul>`
-      : html`<${Empty}>Noch keine Meetings.<//>`}
-    <a class="tile-link" href="#/meetings">Alle Meetings <${Icon} name="arrowRight" size=${16} /></a>
+      : html`<${Empty}>${t('Noch keine Meetings.')}<//>`}
+    <a class="tile-link" href="#/meetings">${t('Alle Meetings')} <${Icon} name="arrowRight" size=${16} /></a>
   <//>`
 }
 
@@ -367,10 +376,10 @@ function InstallHint() {
     setHidden(true)
   }
   return html`<div class="install-hint" role="note">
-    <p><strong>Als App nutzen:</strong> Vollbild ohne Adressleiste und Mitteilungen bei neuen Nachrichten. ${canPromptInstall() ? '' : installHowTo()}</p>
+    <p><strong>${t('Als App nutzen:')}</strong> ${t('Vollbild ohne Adressleiste und Mitteilungen bei neuen Nachrichten.')} ${canPromptInstall() ? '' : installHowTo()}</p>
     <div class="install-hint-actions">
-      ${canPromptInstall() && html`<button type="button" class="btn btn-primary btn-small" onClick=${promptInstall}>App installieren</button>`}
-      <button type="button" class="btn btn-small" onClick=${hide}>Nicht mehr zeigen</button>
+      ${canPromptInstall() && html`<button type="button" class="btn btn-primary btn-small" onClick=${promptInstall}>${t('App installieren')}</button>`}
+      <button type="button" class="btn btn-small" onClick=${hide}>${t('Nicht mehr zeigen')}</button>
     </div>
   </div>`
 }
@@ -423,16 +432,16 @@ export function Overview() {
     if (id === 'wiedervorlagen') return html`<${FollowUpTile} groups=${follow} drag=${d} />`
     return html`<${MeetingsTile} drag=${d} />`
   }
-  const t = drag.target
+  const dt = drag.target
   const slot = (id) => {
-    const mark = t && t.id === id ? (t.before ? ' drop-before' : ' drop-after') : ''
+    const mark = dt && dt.id === id ? (dt.before ? ' drop-before' : ' drop-after') : ''
     return html`<div class=${'tile-slot' + mark} data-tile=${id} key=${id}>${tileFor(id)}</div>`
   }
   // Eine Spalte. Während des Ziehens ist sie auch leer zu sehen, mit „Hierher ziehen“.
   const column = (col, ids, cls) =>
-    html`<div class=${'ov-col ' + cls + (t && t.col === col ? ' drop-end' : '')} data-col=${col}>
+    html`<div class=${'ov-col ' + cls + (dt && dt.col === col ? ' drop-end' : '')} data-col=${col}>
       ${ids.map(slot)}
-      ${drag.dragging && !ids.filter((x) => x !== drag.dragging).length && html`<div class="ov-drop-hint">Hierher ziehen</div>`}
+      ${drag.dragging && !ids.filter((x) => x !== drag.dragging).length && html`<div class="ov-drop-hint">${t('Hierher ziehen')}</div>`}
     </div>`
   const wide = layout.reihe.filter((id) => layout.breit.includes(id))
   const narrow = layout.reihe.filter((id) => !layout.breit.includes(id))
@@ -441,7 +450,7 @@ export function Overview() {
   return html`<div class="page">
     <${PageHead}
       kicker=${fmtDateLong()}
-      title=${name ? `Hallo ${name}` : 'Übersicht'}
+      title=${name ? t('Hallo {name}', { name }) : t('Übersicht')}
       actions=${html`<div class="ov-head-actions">
         <${Segmented}
           label="Welche Deals"
@@ -453,7 +462,7 @@ export function Overview() {
           ]}
         />
         <button type="button" class=${'btn btn-small' + (arranging ? ' active' : '')} aria-pressed=${arranging} onClick=${() => setArranging(!arranging)}>
-          <${Icon} name="grip" size=${16} /> Anordnen
+          <${Icon} name="grip" size=${16} /> ${t('Anordnen')}
         </button>
       </div>`}
     />

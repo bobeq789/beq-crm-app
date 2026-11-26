@@ -30,6 +30,7 @@ import {
 } from '../store.js'
 import { openCard } from '../router.js'
 import { Tile, activityWhen } from './common.js'
+import { t } from '../i18n.js'
 
 const QUICK = [
   ['Heute', 0],
@@ -77,49 +78,49 @@ export function ActivityForm({ initial, target = {}, onSave, onCancel, onDelete 
     }
   }
   return html`<form class="act-form" onSubmit=${submit} onKeyDown=${onKeyDown}>
-    <div class="act-kinds chips" role="group" aria-label="Art">
+    <div class="act-kinds chips" role="group" aria-label=${t('Art')}>
       ${ACTIVITY_KINDS.map(
         (k) => html`<button type="button" class=${'chip-btn small' + (k.value === art ? ' active' : '')} aria-pressed=${k.value === art} onClick=${() => setArt(k.value)}>
-          <${Icon} name=${k.icon} size=${14} /> ${k.label}
+          <${Icon} name=${k.icon} size=${14} /> ${t(k.label)}
         </button>`
       )}
     </div>
-    <div class="act-quick chips" role="group" aria-label="Wann">
+    <div class="act-quick chips" role="group" aria-label=${t('Wann')}>
       ${QUICK.map(([label, n]) => {
         const d = addDays(todayStr(), n)
-        return html`<button type="button" class=${'chip-btn small' + (d === faellig ? ' active' : '')} aria-pressed=${d === faellig} onClick=${() => setFaellig(d)}>${label}</button>`
+        return html`<button type="button" class=${'chip-btn small' + (d === faellig ? ' active' : '')} aria-pressed=${d === faellig} onClick=${() => setFaellig(d)}>${t(label)}</button>`
       })}
     </div>
     <div class="act-when">
-      <input type="date" value=${faellig} required aria-label="Datum" onInput=${(e) => setFaellig(e.target.value)} />
-      <input type="time" value=${uhrzeit} aria-label="Uhrzeit, freiwillig" onInput=${(e) => setUhrzeit(e.target.value)} />
+      <input type="date" value=${faellig} required aria-label=${t('Datum')} onInput=${(e) => setFaellig(e.target.value)} />
+      <input type="time" value=${uhrzeit} aria-label=${t('Uhrzeit, freiwillig')} onInput=${(e) => setUhrzeit(e.target.value)} />
     </div>
     <div class="act-who">
-      <div class="chips act-area" role="group" aria-label="Bereich">
+      <div class="chips act-area" role="group" aria-label=${t('Bereich')}>
         ${AREAS.map(
-          (x) => html`<button type="button" class=${'chip-btn small' + (x.value === bereich ? ' active' : '')} aria-pressed=${x.value === bereich} onClick=${() => setBereich(x.value)}>${x.label}</button>`
+          (x) => html`<button type="button" class=${'chip-btn small' + (x.value === bereich ? ' active' : '')} aria-pressed=${x.value === bereich} onClick=${() => setBereich(x.value)}>${t(x.label)}</button>`
         )}
       </div>
       ${!isGuest() &&
-      html`<select class="act-holder" value=${zustaendig} aria-label="Zuständig" onChange=${(e) => setZustaendig(e.target.value)}>
-        <option value="">${onCard ? 'Zuständig wie beim Deal' : 'Zuständig: wer sie anlegt'}</option>
-        ${activeMembers().map((t) => html`<option value=${norm(t.email)}>${norm(t.email) === norm(myEmail()) ? 'Ich' : t.name}</option>`)}
-        ${zustaendig && !activeMembers().some((t) => norm(t.email) === zustaendig) && html`<option value=${zustaendig}>${memberName(zustaendig)}</option>`}
+      html`<select class="act-holder" value=${zustaendig} aria-label=${t('Zuständig')} onChange=${(e) => setZustaendig(e.target.value)}>
+        <option value="">${onCard ? t('Zuständig wie beim Deal') : t('Zuständig: wer sie anlegt')}</option>
+        ${activeMembers().map((m) => html`<option value=${norm(m.email)}>${norm(m.email) === norm(myEmail()) ? t('Ich') : m.name}</option>`)}
+        ${zustaendig && !activeMembers().some((m) => norm(m.email) === zustaendig) && html`<option value=${zustaendig}>${memberName(zustaendig)}</option>`}
       </select>`}
     </div>
     <input
       ref=${textRef}
       class="act-text"
       value=${titel}
-      placeholder=${'Was genau? Leer heißt „' + activityKind(art).label + '“'}
-      aria-label="Text"
+      placeholder=${t('Was genau? Leer heißt „{kind}“', { kind: t(activityKind(art).label) })}
+      aria-label=${t('Text')}
       onInput=${(e) => setTitel(e.target.value)}
     />
     <div class="act-form-actions">
-      ${onDelete && html`<button type="button" class="btn btn-danger-text" onClick=${onDelete}><${Icon} name="trash" size=${16} /> Löschen</button>`}
+      ${onDelete && html`<button type="button" class="btn btn-danger-text" onClick=${onDelete}><${Icon} name="trash" size=${16} /> ${t('Löschen')}</button>`}
       <span class="act-spacer"></span>
-      <button type="button" class="btn" onClick=${onCancel}>Abbrechen</button>
-      <button type="submit" class="btn btn-primary">${initial.id ? 'Speichern' : 'Anlegen'}</button>
+      <button type="button" class="btn" onClick=${onCancel}>${t('Abbrechen')}</button>
+      <button type="submit" class="btn btn-primary">${initial.id ? t('Speichern') : t('Anlegen')}</button>
     </div>
   </form>`
 }
@@ -128,7 +129,7 @@ export function ActivityForm({ initial, target = {}, onSave, onCancel, onDelete 
 function ActivityContext({ a, here }) {
   const card = a.card_id ? getCard(a.card_id) : null
   if (card && here !== 'card') {
-    return html`<button type="button" class="act-context link-btn" onClick=${() => openCard(card.id)}>Deal „${card.title}“</button>`
+    return html`<button type="button" class="act-context link-btn" onClick=${() => openCard(card.id)}>${t('Deal „{title}“', { title: card.title })}</button>`
   }
   const person = !card && a.person_id ? getPerson(a.person_id) : null
   if (person && here === 'org') return html`<a class="act-context" href=${'#/kontakte/' + person.id}>${person.name}</a>`
@@ -140,17 +141,17 @@ function ActivityItem({ a, here, onEdit, onDone }) {
   const when = activityWhen(a)
   const other = a.zustaendig && norm(a.zustaendig) !== norm(myEmail())
   return html`<li class="act-item">
-    <button type="button" class="check" title="Abhaken" aria-label=${'Abhaken: ' + activityText(a)} onClick=${() => onDone(a)}>
+    <button type="button" class="check" title=${t('Abhaken')} aria-label=${t('Abhaken: {text}', { text: activityText(a) })} onClick=${() => onDone(a)}>
       <${Icon} name="check" size=${16} />
     </button>
     <div class="act-body">
-      <button type="button" class="act-main" title="Ändern" onClick=${() => onEdit(a)}>
+      <button type="button" class="act-main" title=${t('Ändern')} onClick=${() => onEdit(a)}>
         <${Icon} name=${kind.icon} size=${16} />
         <span class="act-title">${activityText(a)}</span>
       </button>
       <${ActivityContext} a=${a} here=${here} />
     </div>
-    ${other && html`<span class="muted small act-holder-name" title="Zuständig">${firstName(memberName(a.zustaendig))}</span>`}
+    ${other && html`<span class="muted small act-holder-name" title=${t('Zuständig')}>${firstName(memberName(a.zustaendig))}</span>`}
     <span class=${'badge due-' + when.tone}>${when.text}</span>
   </li>`
 }
@@ -164,7 +165,7 @@ function DoneItem({ a, here }) {
       <${ActivityContext} a=${a} here=${here} />
     </div>
     <span class="muted small">${fmtDate(String(a.erledigt_at).slice(0, 10))}</span>
-    <button type="button" class="link-btn small" onClick=${() => reopenActivity(a)}>Wieder öffnen</button>
+    <button type="button" class="link-btn small" onClick=${() => reopenActivity(a)}>${t('Wieder öffnen')}</button>
   </li>`
 }
 
@@ -200,13 +201,13 @@ export function ActivitySection({ list, here, target, card }) {
     setForm({ a: null, target: { card_id: a.card_id, person_id: a.card_id ? null : a.person_id, org_id: a.card_id || a.person_id ? null : a.org_id } })
   }
 
-  const add = html`<button type="button" class="link-btn" onClick=${() => { setNextFor(null); setForm({ a: null }) }}><${Icon} name="plus" size=${16} /> Aktivität</button>`
+  const add = html`<button type="button" class="link-btn" onClick=${() => { setNextFor(null); setForm({ a: null }) }}><${Icon} name="plus" size=${16} /> ${t('Aktivität')}</button>`
   const body = html`
     ${nextFor &&
     html`<div class="act-next" role="status">
-      <span>Erledigt. Nächsten Schritt planen?</span>
-      <button type="button" class="btn btn-small btn-primary" onClick=${planNext}>Planen</button>
-      <button type="button" class="btn btn-small" onClick=${() => setNextFor(null)}>Nein</button>
+      <span>${t('Erledigt. Nächsten Schritt planen?')}</span>
+      <button type="button" class="btn btn-small btn-primary" onClick=${planNext}>${t('Planen')}</button>
+      <button type="button" class="btn btn-small" onClick=${() => setNextFor(null)}>${t('Nein')}</button>
     </div>`}
     ${form &&
     html`<${ActivityForm}
@@ -219,18 +220,18 @@ export function ActivitySection({ list, here, target, card }) {
     />`}
     ${open.length
       ? html`<ul class="act-list">${open.map((a) => html`<${ActivityItem} key=${a.id} a=${a} here=${here} onEdit=${(x) => { setNextFor(null); setForm({ a: x }) }} onDone=${onDone} />`)}</ul>`
-      : !form && html`<p class="empty">Keine geplant.</p>`}
+      : !form && html`<p class="empty">${t('Keine geplant.')}</p>`}
     ${card &&
     html`<div class="act-followup">
-      <span class="muted small">Wieder vorlegen</span>
+      <span class="muted small">${t('Wieder vorlegen')}</span>
       ${[[3, 'In 3 Tagen'], [7, 'In 1 Woche'], [14, 'In 2 Wochen']].map(
-        ([n, label]) => html`<button type="button" class="chip-btn small" onClick=${() => followUpIn(card, n)}>${label}</button>`
+        ([n, label]) => html`<button type="button" class="chip-btn small" onClick=${() => followUpIn(card, n)}>${t(label)}</button>`
       )}
     </div>`}
     ${done.length > 0 &&
     html`<div class="act-done-wrap">
       <button type="button" class="history-toggle" aria-expanded=${showDone} onClick=${() => setShowDone(!showDone)}>
-        <${Icon} name="chevron" size=${16} /> Erledigt (${done.length})
+        <${Icon} name="chevron" size=${16} /> ${t('Erledigt ({n})', { n: done.length })}
       </button>
       ${showDone && html`<ul class="act-list">${done.map((a) => html`<${DoneItem} key=${a.id} a=${a} here=${here} />`)}</ul>`}
     </div>`}
@@ -239,10 +240,10 @@ export function ActivitySection({ list, here, target, card }) {
   if (here === 'card') {
     return html`<section class="activities">
       <div class="act-head">
-        <h3 class="section-title">Aktivitäten ${open.length > 0 && html`<span class="count">${open.length}</span>`}</h3>
+        <h3 class="section-title">${t('Aktivitäten')} ${open.length > 0 && html`<span class="count">${open.length}</span>`}</h3>
         ${add}
       </div>
-      <p class="muted small act-explain">Nächste Schritte mit Datum: Anruf, Mail, Termin, To-do oder Wiedervorlage. Sie stehen in der Übersicht und in der Pipeline der zuständigen Person.</p>
+      <p class="muted small act-explain">${t('Nächste Schritte mit Datum: Anruf, Mail, Termin, To-do oder Wiedervorlage. Sie stehen in der Übersicht und in der Pipeline der zuständigen Person.')}</p>
       ${body}
     </section>`
   }

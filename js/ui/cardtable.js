@@ -8,6 +8,7 @@ import { fmtEuro, fmtDate, firstName } from '../lib/util.js'
 import { getPerson, getOrg, getStage, memberName, dealOf } from '../store.js'
 import { openCard } from '../router.js'
 import { DueBadge, PrioBadge, Empty, useIsMobile, Avatar } from './common.js'
+import { t, stageLabel } from '../i18n.js'
 
 const PAGE = 100
 const PRIO_RANK = { hoch: 0, mittel: 1, niedrig: 2 }
@@ -49,7 +50,7 @@ const sub = (c) => {
 const dealText = (c) => {
   const d = dealOf(c.id)
   if (!d) return ''
-  return fmtEuro(d.value_cents) + (d.status === 'gewonnen' ? ' gewonnen' : d.status === 'verloren' ? ' verloren' : '')
+  return fmtEuro(d.value_cents) + (d.status === 'gewonnen' ? ' ' + t('gewonnen') : d.status === 'verloren' ? ' ' + t('verloren') : '')
 }
 const isDone = (c) => (getStage(c.stage_id) || {}).kind === 'done'
 
@@ -57,21 +58,21 @@ export function CardTable({ cards }) {
   const mobile = useIsMobile()
   const [sort, setSort] = useState({ key: 'spalte', dir: 'asc' })
   const [showAll, setShowAll] = useState(false)
-  if (!cards.length) return html`<${Empty}>Keine Deals für diese Auswahl.<//>`
+  if (!cards.length) return html`<${Empty}>${t('Keine Deals für diese Auswahl.')}<//>`
   const sorted = sortCards(cards, sort.key, sort.dir)
   const shown = showAll ? sorted : sorted.slice(0, PAGE)
   const toggle = (col) =>
     setSort((s) => (s.key === col.key ? { key: col.key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key: col.key, dir: col.desc ? 'desc' : 'asc' }))
   const more =
     sorted.length > PAGE &&
-    html`<button type="button" class="link-btn" onClick=${() => setShowAll(!showAll)}>${showAll ? 'Weniger anzeigen' : `Alle ${sorted.length} anzeigen`}</button>`
+    html`<button type="button" class="link-btn" onClick=${() => setShowAll(!showAll)}>${showAll ? t('Weniger anzeigen') : t('Alle {n} anzeigen', { n: sorted.length })}</button>`
 
   if (mobile) {
     return html`<div class="card-list-wrap">
       <div class="card-list-sort">
-        <label class="muted small" for="list-sort">Sortieren</label>
+        <label class="muted small" for="list-sort">${t('Sortieren')}</label>
         <select id="list-sort" value=${sort.key} onChange=${(e) => toggle(COLUMNS.find((c) => c.key === e.target.value))}>
-          ${COLUMNS.map((c) => html`<option value=${c.key}>${c.label}</option>`)}
+          ${COLUMNS.map((c) => html`<option value=${c.key}>${t(c.label)}</option>`)}
         </select>
       </div>
       <ul class="card-list">
@@ -81,7 +82,7 @@ export function CardTable({ cards }) {
               <span class="cl-title">${c.title}</span>
               ${sub(c) && html`<span class="cl-sub">${sub(c)}</span>`}
               <span class="cl-meta">
-                <span class="badge">${(getStage(c.stage_id) || {}).name || ''}</span>
+                <span class="badge">${stageLabel((getStage(c.stage_id) || {}).name || '')}</span>
                 ${c.assignee && html`<span class="muted small">${firstName(memberName(c.assignee))}</span>`}
                 <${DueBadge} due=${c.due_date} done=${isDone(c)} />
                 <${PrioBadge} priority=${c.priority} />
@@ -103,7 +104,7 @@ export function CardTable({ cards }) {
             const active = sort.key === col.key
             return html`<th aria-sort=${active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
               <button type="button" class=${'th-sort' + (active ? ' active' : '')} onClick=${() => toggle(col)}>
-                ${col.label}${active && html`<${Icon} name=${sort.dir === 'asc' ? 'up' : 'down'} size=${13} />`}
+                ${t(col.label)}${active && html`<${Icon} name=${sort.dir === 'asc' ? 'up' : 'down'} size=${13} />`}
               </button>
             </th>`
           })}
@@ -116,7 +117,7 @@ export function CardTable({ cards }) {
               <button type="button" class="ct-link" onClick=${(e) => (e.stopPropagation(), openCard(c.id))}>${c.title}</button>
               ${sub(c) && html`<span class="ct-sub">${sub(c)}</span>`}
             </td>
-            <td>${(getStage(c.stage_id) || {}).name || ''}</td>
+            <td>${stageLabel((getStage(c.stage_id) || {}).name || '')}</td>
             <td class="ct-who">${c.assignee && html`<${Avatar} email=${c.assignee} />`} ${who(c)}</td>
             <td><${DueBadge} due=${c.due_date} done=${isDone(c)} /></td>
             <td><${PrioBadge} priority=${c.priority} /></td>

@@ -39,6 +39,10 @@ import { CardDeal } from './deal.js'
 import { ActivitySection } from './activities.js'
 import { openReply, openNewMail } from './postfach.js'
 import { wroteWhen } from './overview.js'
+import { t, isEnglish, stageLabel } from '../i18n.js'
+
+// Betreff, Titel und ähnliche Daten in Anführungszeichen der gewählten Sprache
+const quoted = (s) => (isEnglish() ? `“${s}”` : `„${s}“`)
 
 // Teilen mit Gästen: antippen teilt, noch einmal antippen nimmt es zurück
 function ShareRow({ card }) {
@@ -51,7 +55,7 @@ function ShareRow({ card }) {
     else insert('card_shares', { card_id: card.id, email: g.email })
   }
   return html`<div class="share-row">
-    <div class="share-label"><${Icon} name="share" size=${16} /> Teilen mit</div>
+    <div class="share-label"><${Icon} name="share" size=${16} /> ${t('Teilen mit')}</div>
     <div class="chips">
       ${guests.map((g) => {
         const on = shares.some((s) => norm(s.email) === norm(g.email))
@@ -62,8 +66,8 @@ function ShareRow({ card }) {
     </div>
     <p class="muted small">
       ${shares.length
-        ? 'Geteilt: Der Gast sieht diesen Deal mit Kontakt, Firma und Notizen. Notizen mit „Nur intern“, Mails, Meetings und andere Deals bleiben verborgen.'
-        : 'Nur das Team sieht diesen Deal.'}
+        ? t('Geteilt: Der Gast sieht diesen Deal mit Kontakt, Firma und Notizen. Notizen mit „Nur intern“, Mails, Meetings und andere Deals bleiben verborgen.')
+        : t('Nur das Team sieht diesen Deal.')}
     </p>
   </div>`
 }
@@ -76,21 +80,21 @@ function AssigneePicker({ card, id = 'card-assignee' }) {
   const current = norm(card.assignee || '')
   const guestMode = isGuest()
   const byName = (a, b) => a.name.localeCompare(b.name, 'de')
-  const others = state.db.team_members.filter((t) => t.active && norm(t.email) !== me)
-  const team = others.filter((t) => t.role !== 'gast').sort(byName)
-  const guests = guestMode ? [] : others.filter((t) => t.role === 'gast').sort(byName)
+  const others = state.db.team_members.filter((m) => m.active && norm(m.email) !== me)
+  const team = others.filter((m) => m.role !== 'gast').sort(byName)
+  const guests = guestMode ? [] : others.filter((m) => m.role === 'gast').sort(byName)
   // Zuständig ist jemand, der nicht mehr aktiv ist: trotzdem anzeigen
-  const missing = current && current !== me && !others.some((t) => norm(t.email) === current)
+  const missing = current && current !== me && !others.some((m) => norm(m.email) === current)
   const value = !current ? '' : current === me ? me : current
   const onChange = (e) => {
     const v = e.target.value
     if (norm(v) !== current) assignCard(card, v || null)
   }
   return html`<select id=${id} class="assignee-select" value=${value} onChange=${onChange}>
-    <option value="">Niemand</option>
-    <option value=${me}>Ich</option>
-    ${team.map((t) => html`<option value=${norm(t.email)}>${t.name}</option>`)}
-    ${guests.length > 0 && html`<optgroup label="Gäste">${guests.map((t) => html`<option value=${norm(t.email)}>${t.name}</option>`)}</optgroup>`}
+    <option value="">${t('Niemand')}</option>
+    <option value=${me}>${t('Ich')}</option>
+    ${team.map((m) => html`<option value=${norm(m.email)}>${m.name}</option>`)}
+    ${guests.length > 0 && html`<optgroup label=${t('Gäste')}>${guests.map((m) => html`<option value=${norm(m.email)}>${m.name}</option>`)}</optgroup>`}
     ${missing && html`<option value=${current}>${memberName(card.assignee)}</option>`}
   </select>`
 }
@@ -102,12 +106,12 @@ function CoAssigneePicker({ card }) {
   const me = norm(myEmail())
   const main = norm(card.assignee || '')
   const list = (card.mitzustaendig || []).map(norm)
-  const options = activeMembers().filter((t) => norm(t.email) !== main)
+  const options = activeMembers().filter((m) => norm(m.email) !== main)
   // Wer nicht mehr aktiv ist, bleibt sichtbar, bis jemand ihn austrägt
-  list.filter((e) => !options.some((t) => norm(t.email) === e)).forEach((e) => options.push({ email: e, name: memberName(e) }))
+  list.filter((e) => !options.some((m) => norm(m.email) === e)).forEach((e) => options.push({ email: e, name: memberName(e) }))
   if (!options.length) return null
   const toggle = (e, on) => {
-    if (!on && list.length >= MAX_CO) return toast(`Höchstens ${MAX_CO} weitere Zuständige je Deal.`, { error: true })
+    if (!on && list.length >= MAX_CO) return toast(t('Höchstens {n} weitere Zuständige je Deal.', { n: MAX_CO }), { error: true })
     setCoAssignees(card, on ? list.filter((x) => x !== e) : [...list, e])
   }
   return html`<${Field} label="Weitere zuständig" htmlFor="card-co-assignees">
@@ -115,7 +119,7 @@ function CoAssigneePicker({ card }) {
       id="card-co-assignees"
       label="Weitere zuständig"
       empty="Niemand weiter"
-      options=${options.map((t) => ({ value: norm(t.email), label: norm(t.email) === me ? 'Ich' : t.name }))}
+      options=${options.map((m) => ({ value: norm(m.email), label: norm(m.email) === me ? t('Ich') : m.name }))}
       value=${list}
       onToggle=${(e, on) => toggle(e, on)}
     />
@@ -130,23 +134,23 @@ function ContactActions({ person }) {
   const canSend = !isGuest() && myActiveMailboxes().length > 0
   return html`<div class="contact-actions">
     ${phones.map(
-      (ph) => html`<a class="btn btn-small" href=${telHref(ph)} key=${ph} aria-label=${person.name + ' anrufen' + (phones.length > 1 ? ', ' + ph : '')}>
-        <${Icon} name="phone" size=${16} /> ${phones.length > 1 ? ph : 'Anrufen'}
+      (ph) => html`<a class="btn btn-small" href=${telHref(ph)} key=${ph} aria-label=${t('{name} anrufen', { name: person.name }) + (phones.length > 1 ? ', ' + ph : '')}>
+        <${Icon} name="phone" size=${16} /> ${phones.length > 1 ? ph : t('Anrufen')}
       </a>`
     )}
     ${email &&
     (canSend
-      ? html`<button type="button" class="btn btn-small" onClick=${() => openNewMail(email)}><${Icon} name="mail" size=${16} /> Mail schreiben</button>`
-      : html`<a class="btn btn-small" href=${'mailto:' + email}><${Icon} name="mail" size=${16} /> Mail schreiben</a>`)}
+      ? html`<button type="button" class="btn btn-small" onClick=${() => openNewMail(email)}><${Icon} name="mail" size=${16} /> ${t('Mail schreiben')}</button>`
+      : html`<a class="btn btn-small" href=${'mailto:' + email}><${Icon} name="mail" size=${16} /> ${t('Mail schreiben')}</a>`)}
   </div>`
 }
 
 function PanelFrame({ card, project, children }) {
   return html`<div class="backdrop" onClick=${closeCard}>
-    <aside class="panel" role="dialog" aria-modal="true" aria-label=${'Deal ' + (card ? card.title : '')} onClick=${(e) => e.stopPropagation()}>
+    <aside class="panel" role="dialog" aria-modal="true" aria-label=${t('Deal') + ' ' + (card ? card.title : '')} onClick=${(e) => e.stopPropagation()}>
       <div class="panel-head">
-        <div class="kicker">${project && html`<${Dot} color=${project.color} />`}Deal${project ? ' · ' : ''}${project ? brandSafe(project.name) : ''}</div>
-        <button type="button" class="icon-btn" aria-label="Schließen" onClick=${closeCard}><${Icon} name="x" /></button>
+        <div class="kicker">${project && html`<${Dot} color=${project.color} />`}${t('Deal')}${project ? ' · ' : ''}${project ? brandSafe(project.name) : ''}</div>
+        <button type="button" class="icon-btn" aria-label=${t('Schließen')} onClick=${closeCard}><${Icon} name="x" /></button>
       </div>
       <div class="panel-body">${children}</div>
     </aside>
@@ -163,8 +167,8 @@ function AnswerNotice({ card }) {
   const who = a.from_name || (getPerson(card.person_id) || {}).name || a.from_email
   return html`<div class="answer-notice" role="status">
     <${Icon} name="mail" size=${18} />
-    <div class="answer-notice-text"><strong>Antwort da:</strong> ${who} ${wroteWhen(a.sent_at)}${a.subject ? html`: „${a.subject}“` : ''}</div>
-    ${mail && html`<button type="button" class="btn btn-small btn-primary" onClick=${() => openReply(mail)}><${Icon} name="reply" size=${16} /> Antworten</button>`}
+    <div class="answer-notice-text"><strong>${t('Antwort da:')}</strong> ${who} ${wroteWhen(a.sent_at)}${a.subject ? ': ' + quoted(a.subject) : ''}</div>
+    ${mail && html`<button type="button" class="btn btn-small btn-primary" onClick=${() => openReply(mail)}><${Icon} name="reply" size=${16} /> ${t('Antworten')}</button>`}
   </div>`
 }
 
@@ -176,11 +180,17 @@ function TrackedMailNotice({ card }) {
   const mail = emailsOfPersons(ids).find((m) => spurFor(m))
   if (!mail) return null
   const s = spurFor(mail)
-  const opened = s.geoeffnet > 0 ? `geöffnet ${s.geoeffnet === 1 ? 'einmal' : s.geoeffnet + '×'}, zuletzt ${fmtDateTime(s.zuletzt_geoeffnet)}` : 'noch nicht geöffnet'
-  const clicked = s.geklickt > 0 ? `, Link angeklickt ${fmtDateTime(s.zuletzt_geklickt)}` : ''
+  const last = fmtDateTime(s.zuletzt_geoeffnet)
+  const opened =
+    s.geoeffnet > 0
+      ? s.geoeffnet === 1
+        ? t('geöffnet einmal, zuletzt {date}', { date: last })
+        : t('geöffnet {n}×, zuletzt {date}', { n: s.geoeffnet, date: last })
+      : t('noch nicht geöffnet')
+  const clicked = s.geklickt > 0 ? t(', Link angeklickt {date}', { date: fmtDateTime(s.zuletzt_geklickt) }) : ''
   return html`<div class="spur-notice" role="status">
     <${Icon} name="eye" size=${18} />
-    <div class="spur-notice-text">Deine Mail „${mail.subject || 'ohne Betreff'}“ vom ${fmtDate(mail.sent_at)}: ${opened}${clicked}.</div>
+    <div class="spur-notice-text">${t('Deine Mail {subject} vom {date}: {status}.', { subject: quoted(mail.subject || t('ohne Betreff')), date: fmtDate(mail.sent_at), status: opened + clicked })}</div>
   </div>`
 }
 
@@ -189,7 +199,7 @@ function StagePicker({ card }) {
   const stages = stagesOf(card.project_id)
   return html`<${Field} label="Spalte" htmlFor="card-stage">
     <select id="card-stage" value=${card.stage_id} onChange=${(e) => e.target.value !== card.stage_id && update('cards', card.id, { stage_id: e.target.value })}>
-      ${stages.map((s) => html`<option value=${s.id}>${s.name}</option>`)}
+      ${stages.map((s) => html`<option value=${s.id}>${stageLabel(s.name)}</option>`)}
     </select>
   <//>`
 }
@@ -199,7 +209,7 @@ function DueField({ card }) {
     <div class="with-clear">
       <input id="card-due" type="date" value=${card.due_date || ''} onChange=${(e) => update('cards', card.id, { due_date: e.target.value || null })} />
       ${card.due_date &&
-      html`<button type="button" class="icon-btn small" aria-label="Fälligkeit entfernen" onClick=${() => update('cards', card.id, { due_date: null })}>
+      html`<button type="button" class="icon-btn small" aria-label=${t('Fälligkeit entfernen')} onClick=${() => update('cards', card.id, { due_date: null })}>
         <${Icon} name="x" size=${16} />
       </button>`}
     </div>
@@ -215,9 +225,9 @@ function GuestCard({ card }) {
     <h2 class="panel-title">${card.title}</h2>
     ${card.description && html`<div class="prose"><${LinkText} text=${card.description} /></div>`}
     <dl class="card-facts">
-      ${person && html`<dt>Kontakt</dt><dd>${person.name}<${ContactActions} person=${person} /></dd>`}
-      ${org && html`<dt>Firma</dt><dd>${org.name}</dd>`}
-      ${(card.labels || []).length > 0 && html`<dt>Labels</dt><dd><${Labels} labels=${card.labels} /></dd>`}
+      ${person && html`<dt>${t('Kontakt')}</dt><dd>${person.name}<${ContactActions} person=${person} /></dd>`}
+      ${org && html`<dt>${t('Firma')}</dt><dd>${org.name}</dd>`}
+      ${(card.labels || []).length > 0 && html`<dt>${t('Labels')}</dt><dd><${Labels} labels=${card.labels} /></dd>`}
     </dl>
     <${StagePicker} card=${card} />
     <${Field} label="Zuständig" htmlFor="card-assignee"><${AssigneePicker} card=${card} /><//>
@@ -228,7 +238,7 @@ function GuestCard({ card }) {
     <${ActivitySection} list=${activitiesOfCard(card.id)} here="card" target=${{ card_id: card.id }} card=${card} />
     <${CardFiles} card=${card} />
     <${History} card=${card} />
-    <h3 class="section-title">Notizen</h3>
+    <h3 class="section-title">${t('Notizen')}</h3>
     <${Notes} field="card_id" id=${card.id} />
   <//>`
 }
@@ -251,7 +261,7 @@ export function CardPanel({ id }) {
   useOverlay(closeCard)
 
   if (!card) {
-    return html`<${PanelFrame} card=${null} project=${null}><p class="empty">Diesen Deal gibt es nicht mehr.</p><//>`
+    return html`<${PanelFrame} card=${null} project=${null}><p class="empty">${t('Diesen Deal gibt es nicht mehr.')}</p><//>`
   }
   if (isGuest()) return html`<${GuestCard} card=${card} />`
 
@@ -261,9 +271,9 @@ export function CardPanel({ id }) {
   const set = (patch) => update('cards', card.id, patch)
 
   const saveTitle = () => {
-    const t = title.trim()
-    if (!t) setTitle(card.title)
-    else if (t !== card.title) set({ title: t })
+    const text = title.trim()
+    if (!text) setTitle(card.title)
+    else if (text !== card.title) set({ title: text })
   }
   const saveDescription = () => {
     const d = description.trim()
@@ -291,7 +301,7 @@ export function CardPanel({ id }) {
       class="title-input"
       rows="2"
       value=${title}
-      aria-label="Titel"
+      aria-label=${t('Titel')}
       onInput=${(e) => setTitle(e.target.value)}
       onBlur=${saveTitle}
       onKeyDown=${(e) => {
@@ -305,14 +315,13 @@ export function CardPanel({ id }) {
     <${TrackedMailNotice} card=${card} />
     ${card.archived &&
     html`<p class="notice">
-      Dieser Deal liegt im Archiv. Du findest ihn auf dem Board unter „Erledigt“ über den Link „Archiv“.
-      „Aus dem Archiv holen“ unten holt sie zurück.
+      ${t('Dieser Deal liegt im Archiv. Du findest ihn auf dem Board unter „Erledigt“ über den Link „Archiv“. „Aus dem Archiv holen“ unten holt sie zurück.')}
     </p>`}
 
     ${/* Abschnitte (Wunsch vom 24.11.2026): Überblick, Wert und Status, Aktivitäten, dann Beschreibung,
       Notizen, Dateien und Verlauf. Jeder Abschnitt als Fläche mit Überschrift. */ ''}
     <section class="deal-section" aria-labelledby="deal-sec-overview">
-      <h3 class="deal-section-title" id="deal-sec-overview">Überblick</h3>
+      <h3 class="deal-section-title" id="deal-sec-overview">${t('Überblick')}</h3>
       <div class="field-grid">
         <${StagePicker} card=${card} />
         <${Field} label="Pipeline" htmlFor="card-project">
@@ -326,7 +335,7 @@ export function CardPanel({ id }) {
         <//>
       </div>
       ${card.vergeben_von && norm(card.vergeben_von) !== norm(card.assignee || '') &&
-      html`<p class="muted small handed-by">Vergeben von ${norm(card.vergeben_von) === norm(myEmail()) ? 'dir' : memberName(card.vergeben_von)}</p>`}
+      html`<p class="muted small handed-by">${norm(card.vergeben_von) === norm(myEmail()) ? t('Vergeben von dir') : t('Vergeben von {name}', { name: memberName(card.vergeben_von) })}</p>`}
       <div class="field-grid">
         <${Field} label="Kontakt" htmlFor="card-person">
           <${EntityPicker} kind="person" inputId="card-person" value=${card.person_id} onChange=${changePerson} placeholder="Kontakt suchen oder neu anlegen" />
@@ -351,24 +360,24 @@ export function CardPanel({ id }) {
     </section>
 
     <section class="deal-section" aria-labelledby="deal-sec-desc">
-      <h3 class="deal-section-title" id="deal-sec-desc">Beschreibung</h3>
+      <h3 class="deal-section-title" id="deal-sec-desc">${t('Beschreibung')}</h3>
       <textarea
         id="card-desc"
         rows="4"
         aria-labelledby="deal-sec-desc"
         value=${description}
-        placeholder="Details, Links, nächste Schritte"
+        placeholder=${t('Details, Links, nächste Schritte')}
         onInput=${(e) => setDescription(e.target.value)}
         onBlur=${saveDescription}
       ></textarea>
       ${meeting &&
       html`<p class="meeting-origin">
-        <${Icon} name="meetings" size=${16} /> Aus dem Meeting <a href=${'#/meetings/' + meeting.id}>„${meeting.title}“</a> vom ${fmtDate(meeting.held_at)}
+        <${Icon} name="meetings" size=${16} /> ${t('Aus dem Meeting')} <a href=${'#/meetings/' + meeting.id}>${quoted(meeting.title)}</a> ${t('vom {date}', { date: fmtDate(meeting.held_at) })}
       </p>`}
     </section>
 
     <section class="deal-section" aria-labelledby="deal-sec-notes">
-      <h3 class="deal-section-title" id="deal-sec-notes">Notizen</h3>
+      <h3 class="deal-section-title" id="deal-sec-notes">${t('Notizen')}</h3>
       <${Notes} field="card_id" id=${card.id} />
     </section>
 
@@ -381,11 +390,11 @@ export function CardPanel({ id }) {
     </section>
 
     <div class="panel-foot">
-      <span class="muted small">Angelegt von ${memberName(card.created_by) || 'unbekannt'} ${fmtRelative(card.created_at)}</span>
+      <span class="muted small">${t('Angelegt von {name} {when}', { name: memberName(card.created_by) || t('unbekannt'), when: fmtRelative(card.created_at) })}</span>
       <div class="panel-actions">
         ${/* Deals nur archivieren, nie löschen (44_deals_nur_archivieren.sql, Wunsch vom 25.11.2026) */ ''}
         <button type="button" class="btn" onClick=${() => set({ archived: !card.archived })}>
-          <${Icon} name="archive" size=${16} /> ${card.archived ? 'Aus dem Archiv holen' : 'Archivieren'}
+          <${Icon} name="archive" size=${16} /> ${card.archived ? t('Aus dem Archiv holen') : t('Archivieren')}
         </button>
       </div>
     </div>

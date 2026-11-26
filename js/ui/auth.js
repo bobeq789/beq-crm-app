@@ -21,6 +21,8 @@ import {
   mfaRemoveOthers,
 } from '../store.js'
 import { Modal, Field, dialogKinds } from './common.js'
+import { setUiLang } from '../store.js'
+import { t, getLang } from '../i18n.js'
 
 // Grüne Signal-Bögen aus einer Ecke, nach außen immer transparenter
 function SignalArcs() {
@@ -40,6 +42,16 @@ export function AuthShell({ children }) {
       </div>
       ${children}
     </div>
+    <${LangSwitch} />
+  </div>`
+}
+
+// Sprache vor der Anmeldung wählen (je Gerät, i18n.js). Nach der Anmeldung gilt die Wahl aus den Einstellungen.
+function LangSwitch() {
+  const lang = getLang()
+  return html`<div class="auth-lang" role="group" aria-label=${t('Sprache')}>
+    <button type="button" class=${lang === 'de' ? 'active' : ''} aria-pressed=${lang === 'de'} onClick=${() => setUiLang('de')}>Deutsch</button>
+    <button type="button" class=${lang === 'en' ? 'active' : ''} aria-pressed=${lang === 'en'} onClick=${() => setUiLang('en')}>English</button>
   </div>`
 }
 
@@ -82,37 +94,37 @@ export function Login() {
   const forgot = async () => {
     setError(null)
     if (!email.trim()) {
-      setError('Trag zuerst deine E-Mail-Adresse ein.')
+      setError(t('Trag zuerst deine E-Mail-Adresse ein.'))
       return
     }
     try {
       await resetPassword(email.trim())
-      setInfo('Wenn es ein Konto mit dieser Adresse gibt, kommt gleich eine Mail mit einem Link.')
+      setInfo(t('Wenn es ein Konto mit dieser Adresse gibt, kommt gleich eine Mail mit einem Link.'))
     } catch (err) {
       setError(errorText(err))
     }
   }
 
   return html`<${AuthShell}>
-    <h1 class="auth-title">Anmelden</h1>
-    ${state.claudeRequest && html`<p class="auth-info claude-login-hint">Claude möchte sich mit dem CRM verbinden. Melde dich zuerst an, danach entscheidest du.</p>`}
-    <button type="button" class="btn btn-primary btn-block" disabled=${busy} onClick=${google}>Mit Google anmelden</button>
-    <p class="auth-hint auth-hint-top">Mit deinem beQ-Konto bei Google. Beim ersten Mal richtest du danach einmal den Code aus der Authenticator-App ein.</p>
-    <p class="auth-or">oder mit E-Mail und Passwort</p>
+    <h1 class="auth-title">${t('Anmelden')}</h1>
+    ${state.claudeRequest && html`<p class="auth-info claude-login-hint">${t('Claude möchte sich mit dem CRM verbinden. Melde dich zuerst an, danach entscheidest du.')}</p>`}
+    <button type="button" class="btn btn-primary btn-block" disabled=${busy} onClick=${google}>${t('Mit Google anmelden')}</button>
+    <p class="auth-hint auth-hint-top">${t('Mit deinem beQ-Konto bei Google. Beim ersten Mal richtest du danach einmal den Code aus der Authenticator-App ein.')}</p>
+    <p class="auth-or">${t('oder mit E-Mail und Passwort')}</p>
     <form onSubmit=${submit}>
-      <${Field} label="E-Mail" htmlFor="login-email">
+      <${Field} label=${t('E-Mail')} htmlFor="login-email">
         <input id="login-email" type="email" autocomplete="username" required value=${email} onInput=${(e) => setEmail(e.target.value)} />
       <//>
-      <${Field} label="Passwort" htmlFor="login-password">
+      <${Field} label=${t('Passwort')} htmlFor="login-password">
         <input id="login-password" type="password" autocomplete="current-password" required value=${password} onInput=${(e) => setPassword(e.target.value)} />
       <//>
       ${error && html`<p class="auth-error" role="alert">${error}</p>`}
       ${info && html`<p class="auth-info" role="status">${info}</p>`}
-      <button type="submit" class="btn btn-block" disabled=${busy}>${busy ? 'Einen Moment …' : 'Anmelden'}</button>
+      <button type="submit" class="btn btn-block" disabled=${busy}>${busy ? t('Einen Moment …') : t('Anmelden')}</button>
     </form>
-    <button type="button" class="auth-link" onClick=${forgot}>Passwort vergessen?</button>
-    ${passwordSignup && html`<button type="button" class="auth-link auth-link-tight" onClick=${() => setMode('signup')}>Neu hier? Konto mit Passwort anlegen</button>`}
-    <p class="auth-hint">Mails zum Passwort kommen nur an, wenn in Supabase ein eigener Mailversand eingerichtet ist. Sonst hilft dir der Admin weiter.</p>
+    <button type="button" class="auth-link" onClick=${forgot}>${t('Passwort vergessen?')}</button>
+    ${passwordSignup && html`<button type="button" class="auth-link auth-link-tight" onClick=${() => setMode('signup')}>${t('Neu hier? Konto mit Passwort anlegen')}</button>`}
+    <p class="auth-hint">${t('Mails zum Passwort kommen nur an, wenn in Supabase ein eigener Mailversand eingerichtet ist. Sonst hilft dir der Admin weiter.')}</p>
   <//>`
 }
 
@@ -128,9 +140,9 @@ function SignUp({ initialEmail, onBack }) {
   const submit = async (e) => {
     e.preventDefault()
     const address = email.trim().toLowerCase()
-    if (!/^[^@\s]+@beq\.com$/.test(address)) return setError('Bitte deine Adresse von beq.com eintragen.')
-    if (pw.length < 10) return setError('Bitte mindestens 10 Zeichen.')
-    if (pw !== pw2) return setError('Die beiden Passwörter sind nicht gleich.')
+    if (!/^[^@\s]+@beq\.com$/.test(address)) return setError(t('Bitte deine Adresse von beq.com eintragen.'))
+    if (pw.length < 10) return setError(t('Bitte mindestens 10 Zeichen.'))
+    if (pw !== pw2) return setError(t('Die beiden Passwörter sind nicht gleich.'))
     setBusy(true)
     setError(null)
     try {
@@ -144,28 +156,28 @@ function SignUp({ initialEmail, onBack }) {
   }
   if (sentTo) {
     return html`<${AuthShell}>
-      <h1 class="auth-title">Fast geschafft</h1>
-      <p class="auth-text">Wir haben dir eine Mail an ${sentTo} geschickt. Tipp auf den Link darin. Danach bist du angemeldet und richtest einmal den Code aus der Authenticator-App ein.</p>
-      <p class="auth-hint">Keine Mail da? Schau im Spam-Ordner nach oder melde dich beim Admin.</p>
-      <button type="button" class="auth-link" onClick=${onBack}>Zurück zur Anmeldung</button>
+      <h1 class="auth-title">${t('Fast geschafft')}</h1>
+      <p class="auth-text">${t('Wir haben dir eine Mail an {email} geschickt. Tipp auf den Link darin. Danach bist du angemeldet und richtest einmal den Code aus der Authenticator-App ein.', { email: sentTo })}</p>
+      <p class="auth-hint">${t('Keine Mail da? Schau im Spam-Ordner nach oder melde dich beim Admin.')}</p>
+      <button type="button" class="auth-link" onClick=${onBack}>${t('Zurück zur Anmeldung')}</button>
     <//>`
   }
   return html`<${AuthShell}>
-    <h1 class="auth-title">Konto anlegen</h1>
+    <h1 class="auth-title">${t('Konto anlegen')}</h1>
     <form onSubmit=${submit}>
-      <${Field} label="E-Mail (beq.com)" htmlFor="signup-email">
-        <input id="signup-email" type="email" autocomplete="username" required placeholder="vorname.nachname@beq.com" value=${email} onInput=${(e) => setEmail(e.target.value)} />
+      <${Field} label=${t('E-Mail (beq.com)')} htmlFor="signup-email">
+        <input id="signup-email" type="email" autocomplete="username" required placeholder=${t('vorname.nachname@beq.com')} value=${email} onInput=${(e) => setEmail(e.target.value)} />
       <//>
-      <${Field} label="Passwort" htmlFor="signup-pw" hint="Mindestens 10 Zeichen">
+      <${Field} label=${t('Passwort')} htmlFor="signup-pw" hint=${t('Mindestens 10 Zeichen')}>
         <input id="signup-pw" type="password" autocomplete="new-password" required value=${pw} onInput=${(e) => setPw(e.target.value)} />
       <//>
-      <${Field} label="Noch einmal" htmlFor="signup-pw2">
+      <${Field} label=${t('Noch einmal')} htmlFor="signup-pw2">
         <input id="signup-pw2" type="password" autocomplete="new-password" required value=${pw2} onInput=${(e) => setPw2(e.target.value)} />
       <//>
       ${error && html`<p class="auth-error" role="alert">${error}</p>`}
-      <button type="submit" class="btn btn-primary btn-block" disabled=${busy}>${busy ? 'Einen Moment …' : 'Konto anlegen'}</button>
+      <button type="submit" class="btn btn-primary btn-block" disabled=${busy}>${busy ? t('Einen Moment …') : t('Konto anlegen')}</button>
     </form>
-    <button type="button" class="auth-link" onClick=${onBack}>Zurück zur Anmeldung</button>
+    <button type="button" class="auth-link" onClick=${onBack}>${t('Zurück zur Anmeldung')}</button>
   <//>`
 }
 
@@ -226,8 +238,8 @@ export function MfaSetup({ onDone, onCancel, dark = false }) {
 
   if (!factor) {
     return html`<div class=${'mfa-setup' + (dark ? ' dark' : '')}>
-      ${error ? html`<p class="auth-error" role="alert">${error}</p>` : html`<p>Einen Moment, der Schlüssel wird erzeugt …</p>`}
-      ${onCancel && html`<button type="button" class="btn btn-block" onClick=${onCancel}>Abbrechen</button>`}
+      ${error ? html`<p class="auth-error" role="alert">${error}</p>` : html`<p>${t('Einen Moment, der Schlüssel wird erzeugt …')}</p>`}
+      ${onCancel && html`<button type="button" class="btn btn-block" onClick=${onCancel}>${t('Abbrechen')}</button>`}
     </div>`
   }
 
@@ -236,35 +248,35 @@ export function MfaSetup({ onDone, onCancel, dark = false }) {
   return html`<form class=${'mfa-setup' + (dark ? ' dark' : '')} onSubmit=${submit}>
     <ol class="mfa-steps">
       <li>
-        <strong>Schlüssel in eine Authenticator-App übernehmen.</strong>
-        Das geht mit dem Passwort-Manager, Google Authenticator, Microsoft Authenticator oder 1Password.
+        <strong>${t('Schlüssel in eine Authenticator-App übernehmen.')}</strong>
+        ${t('Das geht mit dem Passwort-Manager, Google Authenticator, Microsoft Authenticator oder 1Password.')}
         <div class="mfa-secret">
           <code>${grouped}</code>
-          <button type="button" class="btn btn-small" onClick=${copy}>${copied ? 'Kopiert' : 'Kopieren'}</button>
+          <button type="button" class="btn btn-small" onClick=${copy}>${copied ? t('Kopiert') : t('Kopieren')}</button>
         </div>
-        <a class="mfa-iphone" href=${factor.uri}><${Icon} name="lock" size=${16} /> Auf dem iPhone hier tippen</a>
+        <a class="mfa-iphone" href=${factor.uri}><${Icon} name="lock" size=${16} /> ${t('Auf dem iPhone hier tippen')}</a>
         <details class="mfa-qr">
-          <summary>QR-Code anzeigen</summary>
-          <img src=${factor.qr} alt="QR-Code für die Authenticator-App" width="180" height="180" />
+          <summary>${t('QR-Code anzeigen')}</summary>
+          <img src=${factor.qr} alt=${t('QR-Code für die Authenticator-App')} width="180" height="180" />
         </details>
       </li>
       <li>
-        <strong>Den 6-stelligen Code aus der App eingeben.</strong>
+        <strong>${t('Den 6-stelligen Code aus der App eingeben.')}</strong>
         <${CodeInput} value=${code} onInput=${setCode} />
       </li>
     </ol>
     ${error && html`<p class="auth-error" role="alert">${error}</p>`}
     <div class="form-actions">
-      ${onCancel && html`<button type="button" class="btn" onClick=${onCancel}>Abbrechen</button>`}
-      <button type="submit" class="btn btn-primary" disabled=${busy || code.length !== 6}>${busy ? 'Einen Moment …' : 'Bestätigen'}</button>
+      ${onCancel && html`<button type="button" class="btn" onClick=${onCancel}>${t('Abbrechen')}</button>`}
+      <button type="submit" class="btn btn-primary" disabled=${busy || code.length !== 6}>${busy ? t('Einen Moment …') : t('Bestätigen')}</button>
     </div>
   </form>`
 }
 
 export function MfaEnroll() {
   return html`<${AuthShell}>
-    <h1 class="auth-title">Zweiten Faktor einrichten</h1>
-    <p class="auth-text">Zum Schutz der Daten braucht das beQ CRM bei jeder Anmeldung zusätzlich einen Code vom Handy. Das richtest du einmal ein.</p>
+    <h1 class="auth-title">${t('Zweiten Faktor einrichten')}</h1>
+    <p class="auth-text">${t('Zum Schutz der Daten braucht das beQ CRM bei jeder Anmeldung zusätzlich einen Code vom Handy. Das richtest du einmal ein.')}</p>
     <${MfaSetup} dark=${true} onDone=${() => mfaFinishLogin()} onCancel=${signOut} />
   <//>`
 }
@@ -288,15 +300,15 @@ export function MfaVerify() {
     }
   }
   return html`<${AuthShell}>
-    <h1 class="auth-title">Code eingeben</h1>
-    <p class="auth-text">Gib den aktuellen 6-stelligen Code aus deiner Authenticator-App ein.</p>
+    <h1 class="auth-title">${t('Code eingeben')}</h1>
+    <p class="auth-text">${t('Gib den aktuellen 6-stelligen Code aus deiner Authenticator-App ein.')}</p>
     <form onSubmit=${submit}>
-      <${Field} label="Code" htmlFor="mfa-code"><${CodeInput} value=${code} onInput=${setCode} /><//>
+      <${Field} label=${t('Code')} htmlFor="mfa-code"><${CodeInput} value=${code} onInput=${setCode} /><//>
       ${error && html`<p class="auth-error" role="alert">${error}</p>`}
-      <button type="submit" class="btn btn-primary btn-block" disabled=${busy || code.length !== 6}>${busy ? 'Einen Moment …' : 'Anmelden'}</button>
+      <button type="submit" class="btn btn-primary btn-block" disabled=${busy || code.length !== 6}>${busy ? t('Einen Moment …') : t('Anmelden')}</button>
     </form>
-    <button type="button" class="auth-link" onClick=${signOut}>Mit einem anderen Konto anmelden</button>
-    <p class="auth-hint">Handy verloren? Der Admin setzt den zweiten Faktor in Supabase unter „Authentication“, „Users“ zurück.</p>
+    <button type="button" class="auth-link" onClick=${signOut}>${t('Mit einem anderen Konto anmelden')}</button>
+    <p class="auth-hint">${t('Handy verloren? Der Admin setzt den zweiten Faktor in Supabase unter „Authentication“, „Users“ zurück.')}</p>
   <//>`
 }
 
@@ -307,13 +319,13 @@ export function SetPassword() {
   const [error, setError] = useState(null)
   const submit = async (e) => {
     e.preventDefault()
-    if (pw.length < 10) return setError('Bitte mindestens 10 Zeichen.')
-    if (pw !== pw2) return setError('Die beiden Passwörter sind nicht gleich.')
+    if (pw.length < 10) return setError(t('Bitte mindestens 10 Zeichen.'))
+    if (pw !== pw2) return setError(t('Die beiden Passwörter sind nicht gleich.'))
     setBusy(true)
     setError(null)
     try {
       await updatePassword(pw)
-      toast('Neues Passwort gespeichert')
+      toast(t('Neues Passwort gespeichert'))
       await afterLogin(state.sessionEmail)
     } catch (err) {
       setError(errorText(err))
@@ -321,34 +333,34 @@ export function SetPassword() {
     }
   }
   return html`<${AuthShell}>
-    <h1 class="auth-title">Neues Passwort festlegen</h1>
+    <h1 class="auth-title">${t('Neues Passwort festlegen')}</h1>
     <form onSubmit=${submit}>
-      <${Field} label="Neues Passwort" htmlFor="new-pw" hint="Mindestens 10 Zeichen">
+      <${Field} label=${t('Neues Passwort')} htmlFor="new-pw" hint=${t('Mindestens 10 Zeichen')}>
         <input id="new-pw" type="password" autocomplete="new-password" required value=${pw} onInput=${(e) => setPw(e.target.value)} />
       <//>
-      <${Field} label="Noch einmal" htmlFor="new-pw2">
+      <${Field} label=${t('Noch einmal')} htmlFor="new-pw2">
         <input id="new-pw2" type="password" autocomplete="new-password" required value=${pw2} onInput=${(e) => setPw2(e.target.value)} />
       <//>
       ${error && html`<p class="auth-error" role="alert">${error}</p>`}
-      <button type="submit" class="btn btn-primary btn-block" disabled=${busy}>Passwort speichern</button>
+      <button type="submit" class="btn btn-primary btn-block" disabled=${busy}>${t('Passwort speichern')}</button>
     </form>
   <//>`
 }
 
 export function NotMember() {
   return html`<${AuthShell}>
-    <h1 class="auth-title">Noch nicht freigeschaltet</h1>
-    <p class="auth-text">Dein Konto ist noch nicht für das beQ CRM freigeschaltet. Melde dich bei ${state.adminName || 'beim Admin'}.</p>
-    <p class="auth-hint">Angemeldet als ${state.sessionEmail}</p>
-    <button type="button" class="btn btn-block" onClick=${signOut}>Abmelden</button>
+    <h1 class="auth-title">${t('Noch nicht freigeschaltet')}</h1>
+    <p class="auth-text">${state.adminName ? t('Dein Konto ist noch nicht für das beQ CRM freigeschaltet. Melde dich bei {name}.', { name: state.adminName }) : t('Dein Konto ist noch nicht für das beQ CRM freigeschaltet. Melde dich beim Admin.')}</p>
+    <p class="auth-hint">${t('Angemeldet als {email}', { email: state.sessionEmail })}</p>
+    <button type="button" class="btn btn-block" onClick=${signOut}>${t('Abmelden')}</button>
   <//>`
 }
 
 export function AuthError() {
   return html`<${AuthShell}>
-    <h1 class="auth-title">Das hat nicht geklappt</h1>
-    <p class="auth-text">${state.authMessage || 'Die Daten ließen sich nicht laden.'}</p>
-    <button type="button" class="btn btn-primary btn-block" onClick=${() => location.reload()}>Noch einmal versuchen</button>
+    <h1 class="auth-title">${t('Das hat nicht geklappt')}</h1>
+    <p class="auth-text">${state.authMessage || t('Die Daten ließen sich nicht laden.')}</p>
+    <button type="button" class="btn btn-primary btn-block" onClick=${() => location.reload()}>${t('Noch einmal versuchen')}</button>
   <//>`
 }
 
@@ -365,9 +377,9 @@ export function AuthOffline() {
     }
   }, [])
   return html`<${AuthShell}>
-    <h1 class="auth-title">Keine Verbindung</h1>
-    <p class="auth-text">Du bist weiter angemeldet. Sobald dein Gerät wieder Netz hat, geht es von selbst weiter.</p>
-    <button type="button" class="btn btn-primary btn-block" onClick=${() => location.reload()}>Noch einmal versuchen</button>
+    <h1 class="auth-title">${t('Keine Verbindung')}</h1>
+    <p class="auth-text">${t('Du bist weiter angemeldet. Sobald dein Gerät wieder Netz hat, geht es von selbst weiter.')}</p>
+    <button type="button" class="btn btn-primary btn-block" onClick=${() => location.reload()}>${t('Noch einmal versuchen')}</button>
   <//>`
 }
 
@@ -385,32 +397,32 @@ function ChangePassword() {
   const [busy, setBusy] = useState(false)
   const submit = async (e) => {
     e.preventDefault()
-    if (pw.length < 10) return setError('Bitte mindestens 10 Zeichen.')
-    if (pw !== pw2) return setError('Die beiden Passwörter sind nicht gleich.')
+    if (pw.length < 10) return setError(t('Bitte mindestens 10 Zeichen.'))
+    if (pw !== pw2) return setError(t('Die beiden Passwörter sind nicht gleich.'))
     setBusy(true)
     try {
       await updatePassword(pw)
       closeDialog()
-      toast('Neues Passwort gespeichert')
+      toast(t('Neues Passwort gespeichert'))
     } catch (err) {
       setError(errorText(err))
       setBusy(false)
     }
   }
-  return html`<${Modal} title="Passwort ändern" onClose=${closeDialog}>
+  return html`<${Modal} title=${t('Passwort ändern')} onClose=${closeDialog}>
     ${isDemo
-      ? html`<p>Im Demo-Modus gibt es keine Konten und keine Passwörter.</p>`
+      ? html`<p>${t('Im Demo-Modus gibt es keine Konten und keine Passwörter.')}</p>`
       : html`<form onSubmit=${submit}>
-          <${Field} label="Neues Passwort" htmlFor="cp-1" hint="Mindestens 10 Zeichen">
+          <${Field} label=${t('Neues Passwort')} htmlFor="cp-1" hint=${t('Mindestens 10 Zeichen')}>
             <input id="cp-1" type="password" autocomplete="new-password" value=${pw} onInput=${(e) => setPw(e.target.value)} />
           <//>
-          <${Field} label="Noch einmal" htmlFor="cp-2">
+          <${Field} label=${t('Noch einmal')} htmlFor="cp-2">
             <input id="cp-2" type="password" autocomplete="new-password" value=${pw2} onInput=${(e) => setPw2(e.target.value)} />
           <//>
           ${error && html`<p class="form-error" role="alert">${error}</p>`}
           <div class="form-actions">
-            <button type="button" class="btn" onClick=${closeDialog}>Abbrechen</button>
-            <button type="submit" class="btn btn-primary" disabled=${busy || !pw}>Speichern</button>
+            <button type="button" class="btn" onClick=${closeDialog}>${t('Abbrechen')}</button>
+            <button type="submit" class="btn btn-primary" disabled=${busy || !pw}>${t('Speichern')}</button>
           </div>
         </form>`}
   <//>`
@@ -419,16 +431,16 @@ dialogKinds['change-password'] = ChangePassword
 
 // Zweiten Faktor neu einrichten: Der alte gilt, bis der neue bestätigt ist, danach wird er entfernt
 function MfaReset() {
-  return html`<${Modal} title="Zweiten Faktor neu einrichten" onClose=${closeDialog} wide=${true}>
+  return html`<${Modal} title=${t('Zweiten Faktor neu einrichten')} onClose=${closeDialog} wide=${true}>
     ${isDemo
-      ? html`<p>Im Demo-Modus gibt es keinen zweiten Faktor.</p>`
-      : html`<p class="muted">Zum Beispiel für ein neues Handy oder einen anderen Passwort-Manager. Dein bisheriger Faktor gilt, bis du den neuen bestätigt hast.</p>
+      ? html`<p>${t('Im Demo-Modus gibt es keinen zweiten Faktor.')}</p>`
+      : html`<p class="muted">${t('Zum Beispiel für ein neues Handy oder einen anderen Passwort-Manager. Dein bisheriger Faktor gilt, bis du den neuen bestätigt hast.')}</p>
           <${MfaSetup}
             onCancel=${closeDialog}
             onDone=${async (factorId) => {
               await mfaRemoveOthers(factorId)
               closeDialog()
-              toast('Neuer zweiter Faktor eingerichtet, der alte gilt nicht mehr')
+              toast(t('Neuer zweiter Faktor eingerichtet, der alte gilt nicht mehr'))
             }}
           />`}
   <//>`
