@@ -39,6 +39,7 @@ import { TILE_DEFAULT, tileLayout, moveTile, ArrangeView, useTileDrag } from './
 import { openEvent, openCard, navigate } from '../router.js'
 import { eventsTodayTomorrow } from './calendar.js'
 import { PageHead, Tile, Empty, TaskRow, Segmented, Dot, activityWhen, useIsMobile } from './common.js'
+import { isPhone, isStandalone, canPromptInstall, promptInstall, installHowTo } from '../install.js'
 
 const PRIO_ORDER = { hoch: 0, mittel: 1, niedrig: 2 }
 
@@ -356,6 +357,24 @@ function MeetingsTile({ drag }) {
   <//>`
 }
 
+// Hinweis am Handy im Browser (Wunsch vom 26.11.2026): Als App gibt es Vollbild und, auf dem iPhone,
+// Mitteilungen. „Nicht mehr zeigen“ merkt sich das Gerät. In der App selbst nie sichtbar.
+function InstallHint() {
+  const [hidden, setHidden] = useState(() => local.get('beqcrm-app-hinweis', '') === 'aus')
+  if (hidden || !isPhone() || isStandalone()) return null
+  const hide = () => {
+    local.set('beqcrm-app-hinweis', 'aus')
+    setHidden(true)
+  }
+  return html`<div class="install-hint" role="note">
+    <p><strong>Als App nutzen:</strong> Vollbild ohne Adressleiste und Mitteilungen bei neuen Nachrichten. ${canPromptInstall() ? '' : installHowTo()}</p>
+    <div class="install-hint-actions">
+      ${canPromptInstall() && html`<button type="button" class="btn btn-primary btn-small" onClick=${promptInstall}>App installieren</button>`}
+      <button type="button" class="btn btn-small" onClick=${hide}>Nicht mehr zeigen</button>
+    </div>
+  </div>`
+}
+
 export function Overview() {
   const [scope, setScope] = useState(local.get('beqcrm-scope', 'mine'))
   const changeScope = (v) => {
@@ -438,6 +457,7 @@ export function Overview() {
         </button>
       </div>`}
     />
+    <${InstallHint} />
     ${arranging
       ? html`<${ArrangeView}
           layout=${isMobile ? { reihe: mobileOrder, breit: layout.breit } : layout}

@@ -4,7 +4,7 @@
 // Anfragen an Supabase (andere Adresse) laufen nie über den Cache.
 // Zeigt Mitteilungen aus dem Chat an (34_chat_push.sql, Edge Function „chat-push“) und öffnet beim
 // Antippen die App an der richtigen Stelle.
-const VERSION = 'beqcrm-v52'
+const VERSION = 'beqcrm-v53'
 const FILES = [
   './',
   'index.html',
@@ -53,6 +53,7 @@ const FILES = [
   'js/ui/search.js',
   'js/ui/claude.js',
   'js/push.js',
+  'js/install.js',
   'vendor/htm/preact/standalone.module.js',
   'vendor/@supabase/supabase-js/supabase.js',
   'vendor/dompurify/purify.es.mjs',
@@ -67,6 +68,7 @@ const FILES = [
   'icons/icon-maskable-512.png',
   'icons/apple-touch-icon.png',
   'icons/favicon-32.png',
+  'icons/badge-96.png',
 ]
 
 self.addEventListener('install', (event) => {
@@ -120,7 +122,8 @@ self.addEventListener('push', (event) => {
     tag: String(data.tag || 'beq-crm'),
     renotify: true,
     icon: 'icons/icon-192.png',
-    badge: 'icons/icon-192.png',
+    // Statusleiste von Android: einfarbig weiß auf durchsichtig, sonst nur ein weißes Quadrat
+    badge: 'icons/badge-96.png',
     data: { url: typeof data.url === 'string' && data.url.startsWith('#/') ? data.url : '#/chat' },
   }
   event.waitUntil(

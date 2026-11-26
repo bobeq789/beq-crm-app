@@ -1,6 +1,8 @@
 // Einstieg der App: Rahmen (Kopfleiste, Navigation), Seitenwahl, Fenster über der Seite, Service Worker
 import { html, render, useEffect } from './lib/preact.js'
 import { Icon } from './lib/icons.js'
+// install.js früh laden, damit „beforeinstallprompt“ von Chrome nicht verloren geht
+import './install.js'
 import { useStore, boot, isDemo, isGuest, isSuperAdmin, state, getCard, internProjectOf, myEmail } from './store.js'
 import { useRoute } from './router.js'
 import { local } from './lib/util.js'

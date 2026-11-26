@@ -149,6 +149,11 @@ ul { margin: 0; padding: 0; list-style: none; }
 .icon { flex: none; display: block; }
 .empty { color: var(--muted); margin: 8px 0; }
 .notice { background: var(--surface); border-radius: var(--radius-sm); padding: 8px 12px; color: var(--muted); }
+/* App installieren (install.js, Wunsch vom 26.11.2026) */
+.install-hint { background: var(--surface); border-radius: var(--radius); padding: 12px 14px; margin: 0 0 16px; }
+.install-hint p { margin: 0 0 10px; line-height: 1.45; }
+.install-hint-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.install-howto { margin: 6px 0 0; line-height: 1.45; }
 
 /* ------------------------------------------------------------
    Rahmen: Kopfleiste, Navigation

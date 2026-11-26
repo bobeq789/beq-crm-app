@@ -33,6 +33,7 @@ import { PageHead, Tile, Segmented, Field, Avatar } from './common.js'
 import { squareJpeg } from '../lib/image.js'
 import { MailboxTile, CalendarSubTile } from './mailboxes.js'
 import { ClaudeTile } from './claude.js'
+import { canPromptInstall, promptInstall, installHowTo, justInstalled } from '../install.js'
 import {
   pushSupported,
   isIos,
@@ -284,6 +285,28 @@ function TerminlinkTile() {
   <//>`
 }
 
+// Das CRM als App (install.js, Wunsch vom 26.11.2026): Vollbild ohne Adressleiste, auf dem iPhone
+// Voraussetzung für Mitteilungen. Läuft es schon als App, steht nur ein Satz da.
+function InstallTile() {
+  const [busy, setBusy] = useState(false)
+  if (isStandalone() || justInstalled()) {
+    return html`<${Tile} title="App auf diesem Gerät">
+      <p class="push-status on" role="status">${justInstalled() ? 'Installiert. Öffne das CRM ab jetzt über das Symbol auf dem Startbildschirm.' : 'Du nutzt das CRM als App, im Vollbild ohne Adressleiste.'}</p>
+    <//>`
+  }
+  const install = async () => {
+    setBusy(true)
+    await promptInstall()
+    setBusy(false)
+  }
+  return html`<${Tile} title="App auf diesem Gerät">
+    <p class="muted small">Als App öffnet sich das CRM im Vollbild ohne Adressleiste, mit eigenem Symbol auf dem Startbildschirm.${isIos() ? ' Auf dem iPhone kommen Mitteilungen nur in der App an.' : ''}</p>
+    ${canPromptInstall()
+      ? html`<div class="settings-actions"><button type="button" class="btn btn-primary" disabled=${busy} onClick=${install}><${Icon} name="plus" size=${18} /> App installieren</button></div>`
+      : html`<p class="install-howto">${installHowTo()}</p>`}
+  <//>`
+}
+
 // Mitteilungen aufs Handy (34_chat_push.sql): je Gerät einschalten, Einstellungen für alle Geräte
 function PushTile() {
   const p = state.push
@@ -304,7 +327,7 @@ function PushTile() {
   let status
   if (isDemo) status = 'Im Demo-Modus gibt es keine Mitteilungen aufs Handy. Die Einstellungen kannst du trotzdem ansehen.'
   else if (!pushSupported()) status = 'Dieser Browser kann keine Mitteilungen empfangen.'
-  else if (isIos() && !isStandalone()) status = 'Auf dem iPhone geht das nur aus der App auf dem Home-Bildschirm: im Browser „Teilen“, „Zum Home-Bildschirm“, dann das CRM von dort öffnen und hier einschalten.'
+  else if (isIos() && !isStandalone()) status = 'Auf dem iPhone geht das nur aus der App auf dem Home-Bildschirm. ' + installHowTo() + ' Dann das CRM von dort öffnen und hier einschalten.'
   else if (p.permission === 'denied') status = 'Mitteilungen sind im Browser blockiert. Erlaube sie in den Einstellungen des Browsers für diese Seite, dann hier einschalten.'
   else status = p.here ? 'Auf diesem Gerät sind Mitteilungen an.' : 'Auf diesem Gerät sind Mitteilungen aus.'
   const canSwitch = !isDemo && pushSupported() && !(isIos() && !isStandalone()) && p.permission !== 'denied'
@@ -441,6 +464,7 @@ export function SettingsPage() {
     <//>
 
     ${!isGuest() && html`<${ProfilePhotoTile} />`}
+    <${InstallTile} />
     ${state.chat.available && html`<${PushTile} key=${state.prefsLoaded ? 'geladen' : 'leer'} />`}
     ${!isGuest() && html`<${MailboxTile} />`}
     ${!isGuest() && html`<${CalendarSubTile} />`}

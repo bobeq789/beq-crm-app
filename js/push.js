@@ -13,8 +13,9 @@ const api = () => getApi()
 export function pushSupported() {
   return typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && window.isSecureContext
 }
-export const isIos = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-export const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true
+// Gerät und Browser erkennen steht in install.js (dort auch „App installieren“)
+import { isIos, isStandalone, installHowTo } from './install.js'
+export { isIos, isStandalone }
 
 // Kurzer Gerätename für die Liste („iPhone“, „Android“, „Mac“ …), ohne genaue Kennung
 export function deviceName() {
@@ -80,7 +81,7 @@ export async function enablePush() {
   if (isDemo) return toast('Im Demo-Modus gibt es keine Mitteilungen aufs Handy.')
   if (!pushSupported()) return toast('Dieser Browser kann keine Mitteilungen empfangen.', { error: true })
   if (isIos() && !isStandalone()) {
-    return toast('Auf dem iPhone geht das nur aus der App auf dem Home-Bildschirm: Teilen, „Zum Home-Bildschirm“, dann dort einschalten.', { error: true })
+    return toast('Auf dem iPhone geht das nur aus der App auf dem Home-Bildschirm. ' + installHowTo() + ' Dann das CRM von dort öffnen und hier einschalten.', { error: true })
   }
   const permission = await Notification.requestPermission()
   if (permission !== 'granted') {
