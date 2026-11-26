@@ -327,8 +327,11 @@ function PushTile() {
   const flag = (key) => prefs[key] !== false
   let status
   if (isDemo) status = t('Im Demo-Modus gibt es keine Mitteilungen aufs Handy. Die Einstellungen kannst du trotzdem ansehen.')
-  else if (!pushSupported()) status = t('Dieser Browser kann keine Mitteilungen empfangen.')
+  // iPhone zuerst: Im Browser-Tab (Safari wie Chrome) fehlt dort die Push-Schnittstelle ganz,
+  // der Weg führt immer über die App vom Home-Bildschirm
   else if (isIos() && !isStandalone()) status = t('Auf dem iPhone geht das nur aus der App auf dem Home-Bildschirm.') + ' ' + t(installHowTo()) + ' ' + t('Dann das CRM von dort öffnen und hier einschalten.')
+  else if (!pushSupported() && isIos()) status = t('Dieses iPhone kann noch keine Mitteilungen empfangen. Bitte iOS auf Version 16.4 oder neuer aktualisieren.')
+  else if (!pushSupported()) status = t('Dieser Browser kann keine Mitteilungen empfangen. Bitte das CRM in Chrome, Edge, Firefox oder Safari öffnen.')
   else if (p.permission === 'denied') status = t('Mitteilungen sind im Browser blockiert. Erlaube sie in den Einstellungen des Browsers für diese Seite, dann hier einschalten.')
   else status = p.here ? t('Auf diesem Gerät sind Mitteilungen an.') : t('Auf diesem Gerät sind Mitteilungen aus.')
   const canSwitch = !isDemo && pushSupported() && !(isIos() && !isStandalone()) && p.permission !== 'denied'

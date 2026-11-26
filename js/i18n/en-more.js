@@ -85,6 +85,8 @@ export const EN_MORE = {
   "Code": "Code",
   "Code eingeben": "Enter code",
   "Dann das CRM von dort öffnen und hier einschalten.": "Then open the CRM from there and turn it on here.",
+  "Dieses iPhone kann noch keine Mitteilungen empfangen. Bitte iOS auf Version 16.4 oder neuer aktualisieren.": "This iPhone cannot receive notifications yet. Please update iOS to version 16.4 or later.",
+  "Dieser Browser kann keine Mitteilungen empfangen. Bitte das CRM in Chrome, Edge, Firefox oder Safari öffnen.": "This browser cannot receive notifications. Please open the CRM in Chrome, Edge, Firefox or Safari.",
   "Darstellung": "Appearance",
   "Das Bild ließ sich nicht lesen. Bitte ein anderes Foto nehmen (JPG oder PNG).": "The image couldn't be read. Please choose another photo (JPG or PNG).",
   "Das Farbschema gilt nur auf diesem Gerät.": "The color scheme applies only on this device.",

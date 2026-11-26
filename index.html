@@ -4,6 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="robots" content="noindex, nofollow" />
+    <!-- iOS soll Adressen, Telefonnummern und Daten nicht selbst zu Links machen: Das ändert die Seite
+         an Preact vorbei, danach stand Text doppelt da (Postfach in Chrome auf dem iPhone, 26.11.2026).
+         Telefonnummern macht die App selbst wählbar (parsePhone). -->
+    <meta name="format-detection" content="telephone=no, email=no, address=no, date=no" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://odsdaynsczicfaxoqlms.supabase.co; font-src 'self'; connect-src 'self' https://odsdaynsczicfaxoqlms.supabase.co wss://odsdaynsczicfaxoqlms.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'" />
     <meta name="referrer" content="no-referrer" />
     <meta name="description" content="Internes CRM der beQ" />
