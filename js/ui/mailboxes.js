@@ -273,7 +273,7 @@ function CalendarSubForm({ onDone }) {
     </button>
     ${help &&
     html`<ul id="calsub-help" class="calsub-help muted small">
-      <li><strong>${t('Google Kalender:')}</strong> ${t('am Computer beim Kalender auf die drei Punkte, „Einstellungen und Freigabe“, ganz unten „Geheime Adresse im iCal-Format“ kopieren.')}</li>
+      <li><strong>${t('Google Kalender:')}</strong> ${t('am Computer oben rechts auf das Zahnrad, „Einstellungen“, links unter „Einstellungen für meine Kalender“ den Kalender wählen, dann „Kalender integrieren“ und die „Privatadresse im iCal-Format“ kopieren.')}</li>
       <li><strong>Outlook:</strong> ${t('„Einstellungen“, „Kalender“, „Freigegebene Kalender“, „Kalender veröffentlichen“, den ICS-Link kopieren.')}</li>
       <li><strong>iCloud:</strong> ${t('beim Kalender „Kalender teilen“, „Öffentlicher Kalender“ einschalten, Link kopieren.')}</li>
       <li>${t('Feiertage, Messen, Ferien: viele Seiten bieten einen Link zum Abonnieren („iCal“, „ICS“ oder „webcal“).')}</li>

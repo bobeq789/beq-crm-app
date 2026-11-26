@@ -326,7 +326,7 @@ export const EN_COMM = {
   'Zusammenfassung und nächste Schritte von Gemini werden ein Meeting im CRM. Das Meeting sieht danach das ganze Team, Gäste nicht. Die Mail selbst bleibt privat.': 'The summary and next steps from Gemini become a meeting in the CRM. The whole team can then see the meeting, guests cannot. The email itself stays private.',
   '[ohne Namen]': '[no name]',
   'abgeglichen {when}': 'synced {when}',
-  'am Computer beim Kalender auf die drei Punkte, „Einstellungen und Freigabe“, ganz unten „Geheime Adresse im iCal-Format“ kopieren.': 'on a computer, click the three dots next to the calendar, “Settings and sharing”, then copy “Secret address in iCal format” at the bottom.',
+  'am Computer oben rechts auf das Zahnrad, „Einstellungen“, links unter „Einstellungen für meine Kalender“ den Kalender wählen, dann „Kalender integrieren“ und die „Privatadresse im iCal-Format“ kopieren.': 'on a computer, click the gear at the top right, “Settings”, choose the calendar on the left under “Settings for my calendars”, then “Integrate calendar” and copy the “Secret address in iCal format”.',
   'an': 'to',
   'archiviert': 'archived',
   'aus Fireflies': 'from Fireflies',
