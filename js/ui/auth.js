@@ -1,15 +1,11 @@
 // Anmeldung, zweiter Faktor (TOTP), neues Passwort, „nicht freigeschaltet“, Passwort ändern
 import { html, useState, useEffect, useRef } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
-import { local } from '../lib/util.js'
 import {
   state,
   isDemo,
-  signIn,
   signOut,
-  resetPassword,
   signInWithGoogle,
-  signUp,
   updatePassword,
   afterLogin,
   errorText,
@@ -55,16 +51,11 @@ function LangSwitch() {
   </div>`
 }
 
-// Konto mit Passwort selbst anlegen ist erst an, wenn Supabase Mails verschicken kann (config.js)
-const passwordSignup = !!(window.CRM_CONFIG && window.CRM_CONFIG.passwordSignup)
-
+// Anmelden nur mit Google und einer Adresse von beq.com (Entscheidung vom 26.11.2026,
+// 46_nur_beq.sql). Passwort, „Passwort vergessen“ und Konto anlegen gibt es nicht mehr.
 export function Login() {
-  const [mode, setMode] = useState('login')
-  const [email, setEmail] = useState(local.get('beqcrm-last-email', ''))
-  const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(state.authMessage)
-  const [info, setInfo] = useState(null)
 
   const google = async () => {
     setError(null)
@@ -77,107 +68,13 @@ export function Login() {
       setBusy(false)
     }
   }
-  if (mode === 'signup') return html`<${SignUp} initialEmail=${email} onBack=${() => setMode('login')} />`
-
-  const submit = async (e) => {
-    e.preventDefault()
-    setBusy(true)
-    setError(null)
-    setInfo(null)
-    try {
-      await signIn(email.trim(), password)
-    } catch (err) {
-      setError(errorText(err))
-      setBusy(false)
-    }
-  }
-  const forgot = async () => {
-    setError(null)
-    if (!email.trim()) {
-      setError(t('Trag zuerst deine E-Mail-Adresse ein.'))
-      return
-    }
-    try {
-      await resetPassword(email.trim())
-      setInfo(t('Wenn es ein Konto mit dieser Adresse gibt, kommt gleich eine Mail mit einem Link.'))
-    } catch (err) {
-      setError(errorText(err))
-    }
-  }
 
   return html`<${AuthShell}>
     <h1 class="auth-title">${t('Anmelden')}</h1>
     ${state.claudeRequest && html`<p class="auth-info claude-login-hint">${t('Claude möchte sich mit dem CRM verbinden. Melde dich zuerst an, danach entscheidest du.')}</p>`}
-    <button type="button" class="btn btn-primary btn-block" disabled=${busy} onClick=${google}>${t('Mit Google anmelden')}</button>
-    <p class="auth-hint auth-hint-top">${t('Mit deinem beQ-Konto bei Google. Beim ersten Mal richtest du danach einmal den Code aus der Authenticator-App ein.')}</p>
-    <p class="auth-or">${t('oder mit E-Mail und Passwort')}</p>
-    <form onSubmit=${submit}>
-      <${Field} label=${t('E-Mail')} htmlFor="login-email">
-        <input id="login-email" type="email" autocomplete="username" required value=${email} onInput=${(e) => setEmail(e.target.value)} />
-      <//>
-      <${Field} label=${t('Passwort')} htmlFor="login-password">
-        <input id="login-password" type="password" autocomplete="current-password" required value=${password} onInput=${(e) => setPassword(e.target.value)} />
-      <//>
-      ${error && html`<p class="auth-error" role="alert">${error}</p>`}
-      ${info && html`<p class="auth-info" role="status">${info}</p>`}
-      <button type="submit" class="btn btn-block" disabled=${busy}>${busy ? t('Einen Moment …') : t('Anmelden')}</button>
-    </form>
-    <button type="button" class="auth-link" onClick=${forgot}>${t('Passwort vergessen?')}</button>
-    ${passwordSignup && html`<button type="button" class="auth-link auth-link-tight" onClick=${() => setMode('signup')}>${t('Neu hier? Konto mit Passwort anlegen')}</button>`}
-    <p class="auth-hint">${t('Mails zum Passwort kommen nur an, wenn in Supabase ein eigener Mailversand eingerichtet ist. Sonst hilft dir der Admin weiter.')}</p>
-  <//>`
-}
-
-// Konto mit Passwort anlegen (nur beq.com). Supabase schickt eine Mail, erst der Link darin
-// bestätigt, dass die Adresse dir gehört. Danach bist du sofort Mitglied.
-function SignUp({ initialEmail, onBack }) {
-  const [email, setEmail] = useState(/@beq\.com$/i.test(initialEmail || '') ? initialEmail : '')
-  const [pw, setPw] = useState('')
-  const [pw2, setPw2] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState(null)
-  const [sentTo, setSentTo] = useState(null)
-  const submit = async (e) => {
-    e.preventDefault()
-    const address = email.trim().toLowerCase()
-    if (!/^[^@\s]+@beq\.com$/.test(address)) return setError(t('Bitte deine Adresse von beq.com eintragen.'))
-    if (pw.length < 10) return setError(t('Bitte mindestens 10 Zeichen.'))
-    if (pw !== pw2) return setError(t('Die beiden Passwörter sind nicht gleich.'))
-    setBusy(true)
-    setError(null)
-    try {
-      await signUp(address, pw)
-      local.set('beqcrm-last-email', address)
-      setSentTo(address)
-    } catch (err) {
-      setError(errorText(err))
-    }
-    setBusy(false)
-  }
-  if (sentTo) {
-    return html`<${AuthShell}>
-      <h1 class="auth-title">${t('Fast geschafft')}</h1>
-      <p class="auth-text">${t('Wir haben dir eine Mail an {email} geschickt. Tipp auf den Link darin. Danach bist du angemeldet und richtest einmal den Code aus der Authenticator-App ein.', { email: sentTo })}</p>
-      <p class="auth-hint">${t('Keine Mail da? Schau im Spam-Ordner nach oder melde dich beim Admin.')}</p>
-      <button type="button" class="auth-link" onClick=${onBack}>${t('Zurück zur Anmeldung')}</button>
-    <//>`
-  }
-  return html`<${AuthShell}>
-    <h1 class="auth-title">${t('Konto anlegen')}</h1>
-    <form onSubmit=${submit}>
-      <${Field} label=${t('E-Mail (beq.com)')} htmlFor="signup-email">
-        <input id="signup-email" type="email" autocomplete="username" required placeholder=${t('vorname.nachname@beq.com')} value=${email} onInput=${(e) => setEmail(e.target.value)} />
-      <//>
-      <${Field} label=${t('Passwort')} htmlFor="signup-pw" hint=${t('Mindestens 10 Zeichen')}>
-        <input id="signup-pw" type="password" autocomplete="new-password" required value=${pw} onInput=${(e) => setPw(e.target.value)} />
-      <//>
-      <${Field} label=${t('Noch einmal')} htmlFor="signup-pw2">
-        <input id="signup-pw2" type="password" autocomplete="new-password" required value=${pw2} onInput=${(e) => setPw2(e.target.value)} />
-      <//>
-      ${error && html`<p class="auth-error" role="alert">${error}</p>`}
-      <button type="submit" class="btn btn-primary btn-block" disabled=${busy}>${busy ? t('Einen Moment …') : t('Konto anlegen')}</button>
-    </form>
-    <button type="button" class="auth-link" onClick=${onBack}>${t('Zurück zur Anmeldung')}</button>
+    ${error && html`<p class="auth-error" role="alert">${error}</p>`}
+    <button type="button" class="btn btn-primary btn-block" disabled=${busy} onClick=${google}>${busy ? t('Einen Moment …') : t('Mit Google anmelden')}</button>
+    <p class="auth-hint auth-hint-top">${t('Mit deinem beQ-Konto bei Google (Adresse auf beq.com). Ein Passwort für das CRM gibt es nicht. Beim ersten Mal richtest du danach einmal den Code aus der Authenticator-App ein.')}</p>
   <//>`
 }
 
@@ -387,47 +284,6 @@ export function Splash() {
   return html`<div class="splash" aria-busy="true"><img src="img/logo-dunkel.svg" alt="beQ CRM" width="152" height="38" /></div>`
 }
 
-// ------------------------------------------------------------
-// Dialoge aus den Einstellungen
-// ------------------------------------------------------------
-function ChangePassword() {
-  const [pw, setPw] = useState('')
-  const [pw2, setPw2] = useState('')
-  const [error, setError] = useState(null)
-  const [busy, setBusy] = useState(false)
-  const submit = async (e) => {
-    e.preventDefault()
-    if (pw.length < 10) return setError(t('Bitte mindestens 10 Zeichen.'))
-    if (pw !== pw2) return setError(t('Die beiden Passwörter sind nicht gleich.'))
-    setBusy(true)
-    try {
-      await updatePassword(pw)
-      closeDialog()
-      toast(t('Neues Passwort gespeichert'))
-    } catch (err) {
-      setError(errorText(err))
-      setBusy(false)
-    }
-  }
-  return html`<${Modal} title=${t('Passwort ändern')} onClose=${closeDialog}>
-    ${isDemo
-      ? html`<p>${t('Im Demo-Modus gibt es keine Konten und keine Passwörter.')}</p>`
-      : html`<form onSubmit=${submit}>
-          <${Field} label=${t('Neues Passwort')} htmlFor="cp-1" hint=${t('Mindestens 10 Zeichen')}>
-            <input id="cp-1" type="password" autocomplete="new-password" value=${pw} onInput=${(e) => setPw(e.target.value)} />
-          <//>
-          <${Field} label=${t('Noch einmal')} htmlFor="cp-2">
-            <input id="cp-2" type="password" autocomplete="new-password" value=${pw2} onInput=${(e) => setPw2(e.target.value)} />
-          <//>
-          ${error && html`<p class="form-error" role="alert">${error}</p>`}
-          <div class="form-actions">
-            <button type="button" class="btn" onClick=${closeDialog}>${t('Abbrechen')}</button>
-            <button type="submit" class="btn btn-primary" disabled=${busy || !pw}>${t('Speichern')}</button>
-          </div>
-        </form>`}
-  <//>`
-}
-dialogKinds['change-password'] = ChangePassword
 
 // Zweiten Faktor neu einrichten: Der alte gilt, bis der neue bestätigt ist, danach wird er entfernt
 function MfaReset() {

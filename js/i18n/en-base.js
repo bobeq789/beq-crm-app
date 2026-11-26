@@ -3,7 +3,7 @@
 export const EN_BASE = {
   "Keine Verbindung. Bitte gleich noch einmal versuchen.": "No connection. Please try again in a moment.",
   "E-Mail oder Passwort stimmt nicht.": "Email or password is incorrect.",
-  "Konten gibt es nur für Adressen von beq.com. Gäste trägt ein Admin vorher im Team ein.": "Accounts are only available for beq.com addresses. An admin adds guests to the team beforehand.",
+  "Anmelden können sich nur Adressen von beq.com, mit „Mit Google anmelden“.": "Only beq.com addresses can sign in, using “Sign in with Google”.",
   "Für diese Adresse gibt es schon ein Konto. Melde dich an oder nutze „Passwort vergessen?“.": "An account already exists for this address. Sign in or use “Forgot password?”.",
   "Neue Konten sind in Supabase noch abgeschaltet. Bitte melde dich beim Admin.": "New accounts are still turned off in Supabase. Please contact your admin.",
   "Die Anmeldung mit Google ist in Supabase noch nicht eingeschaltet. Bitte melde dich beim Admin.": "Sign-in with Google is not yet turned on in Supabase. Please contact your admin.",
@@ -21,7 +21,6 @@ export const EN_BASE = {
   "Diesen Eintrag gibt es schon.": "This entry already exists.",
   "Eine Angabe passt nicht. Bitte prüfen.": "One of the entries is not valid. Please check.",
   "Das hat nicht geklappt. Bitte gleich noch einmal versuchen.": "That did not work. Please try again in a moment.",
-  "Anmelden können sich nur Adressen von beq.com. Gäste trägt ein Admin vorher im Team ein.": "Only beq.com addresses can sign in. An admin adds guests to the team beforehand.",
   "Der Link aus der Mail ist abgelaufen oder wurde schon benutzt. Bitte fordere einen neuen an oder melde dich beim Admin.": "The link from the email has expired or was already used. Please request a new one or contact your admin.",
   "Du hast die Anmeldung bei Google abgebrochen.": "You canceled the sign-in with Google.",
   "Die Anmeldung hat nicht geklappt. Bitte gleich noch einmal versuchen.": "Sign-in did not work. Please try again in a moment.",

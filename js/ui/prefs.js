@@ -63,13 +63,19 @@ function TeamAdmin() {
     e.preventDefault()
     const email = form.email.trim().toLowerCase()
     if (!form.name.trim() || !/@/.test(email)) return
+    // Nur Adressen von beq.com (46_nur_beq.sql), andere könnten sich ohnehin nicht anmelden.
+    // Im Demo-Modus nicht, dort sind alle Adressen erfunden (example.com).
+    if (!isDemo && !/^[^@\s]+@beq\.com$/.test(email)) {
+      toast(t('Ins Team kommen nur Adressen von beq.com.'), { error: true })
+      return
+    }
     if (state.db.team_members.some((t) => norm(t.email) === email)) {
       toast(t('Diese Adresse steht schon im Team.'), { error: true })
       return
     }
     const row = await insert('team_members', { name: form.name.trim(), email, role: form.role, active: true })
     if (row) {
-      toast(t('{name} eingetragen. Jetzt noch das Anmeldekonto in Supabase anlegen.', { name: row.name }))
+      toast(t('{name} eingetragen. Freigeschaltet, sobald die Person sich mit Google anmeldet.', { name: row.name }))
       setForm({ name: '', email: '', role: 'mitglied' })
     }
   }
@@ -462,8 +468,6 @@ export function SettingsPage() {
         <dt>${t('Rolle')}</dt><dd>${roleLabel(state.role)}</dd>
       </dl>
       <div class="settings-actions">
-        ${!state.sessionGoogle &&
-        html`<button type="button" class="btn" onClick=${() => openDialog({ kind: 'change-password' })}><${Icon} name="lock" size=${18} /> ${t('Passwort ändern')}</button>`}
         <button type="button" class="btn" onClick=${() => openDialog({ kind: 'mfa-reset' })}><${Icon} name="reset" size=${18} /> ${t('Zweiten Faktor neu einrichten')}</button>
         ${!isDemo && html`<button type="button" class="btn" onClick=${signOut}><${Icon} name="logout" size=${18} /> ${t('Abmelden')}</button>`}
       </div>

@@ -139,7 +139,7 @@ export function errorText(err) {
   const code = err && err.code
   if (/Failed to fetch|NetworkError|Load failed|network/i.test(msg)) return t('Keine Verbindung. Bitte gleich noch einmal versuchen.')
   if (/Invalid login credentials/i.test(msg)) return t('E-Mail oder Passwort stimmt nicht.')
-  if (/beq\.com/i.test(msg)) return t('Konten gibt es nur für Adressen von beq.com. Gäste trägt ein Admin vorher im Team ein.')
+  if (/beq\.com/i.test(msg)) return t('Anmelden können sich nur Adressen von beq.com, mit „Mit Google anmelden“.')
   if (/already registered|already been registered/i.test(msg)) return t('Für diese Adresse gibt es schon ein Konto. Melde dich an oder nutze „Passwort vergessen?“.')
   if (/signups? not allowed|signup.*disabled/i.test(msg)) return t('Neue Konten sind in Supabase noch abgeschaltet. Bitte melde dich beim Admin.')
   if (/provider is not enabled|unsupported provider/i.test(msg)) return t('Die Anmeldung mit Google ist in Supabase noch nicht eingeschaltet. Bitte melde dich beim Admin.')
@@ -257,7 +257,7 @@ export async function boot() {
 // Verständliche Meldung, wenn Google oder ein Link aus einer Mail mit Fehler zurückkommt
 function linkErrorText(code, description) {
   const d = String(description || '').replace(/\+/g, ' ')
-  if (/beq\.com/i.test(d)) return t('Anmelden können sich nur Adressen von beq.com. Gäste trägt ein Admin vorher im Team ein.')
+  if (/beq\.com/i.test(d)) return t('Anmelden können sich nur Adressen von beq.com, mit „Mit Google anmelden“.')
   if (/signups? not allowed|signup.*disabled/i.test(d)) return t('Neue Konten sind in Supabase noch abgeschaltet. Bitte melde dich beim Admin.')
   if (code === 'otp_expired' || /email link|expired/i.test(d)) return t('Der Link aus der Mail ist abgelaufen oder wurde schon benutzt. Bitte fordere einen neuen an oder melde dich beim Admin.')
   if (code === 'access_denied') return t('Du hast die Anmeldung bei Google abgebrochen.')
