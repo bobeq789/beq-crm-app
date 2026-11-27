@@ -21,6 +21,8 @@ import {
   activeGuests,
   sharesOf,
   markCardSeen,
+  isPinned,
+  togglePin,
   state,
   spurFor,
   emailsOfPersons,
@@ -150,11 +152,29 @@ function PanelFrame({ card, project, children }) {
     <aside class="panel" role="dialog" aria-modal="true" aria-label=${t('Deal') + ' ' + (card ? card.title : '')} onClick=${(e) => e.stopPropagation()}>
       <div class="panel-head">
         <div class="kicker">${project && html`<${Dot} color=${project.color} />`}${t('Deal')}${project ? ' · ' : ''}${project ? brandSafe(project.name) : ''}</div>
-        <button type="button" class="icon-btn" aria-label=${t('Schließen')} onClick=${closeCard}><${Icon} name="x" /></button>
+        <div class="panel-head-actions">
+          ${card && !isGuest() && html`<${PinButton} card=${card} />`}
+          <button type="button" class="icon-btn" aria-label=${t('Schließen')} onClick=${closeCard}><${Icon} name="x" /></button>
+        </div>
       </div>
       <div class="panel-body">${children}</div>
     </aside>
   </div>`
+}
+
+// Anheften (47_angeheftet.sql): nur für mich, oben in meinen Pipelines und unter „Team“, wenn es
+// Neues gibt. Gäste nie.
+function PinButton({ card }) {
+  const on = isPinned(card.id)
+  return html`<button
+    type="button"
+    class=${'btn btn-small pin-btn' + (on ? ' on' : '')}
+    aria-pressed=${on}
+    title=${on ? t('Lösen') : t('Oben in deinen Pipelines anheften')}
+    onClick=${() => togglePin(card.id)}
+  >
+    <${Icon} name="pin" size=${16} /> ${on ? t('Angeheftet') : t('Anheften')}
+  </button>`
 }
 
 // „Antwort da“ (Nachtrag Follow-up): ein Kontakt hat geschrieben, seit die Aufgabe zuletzt

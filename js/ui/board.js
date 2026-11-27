@@ -43,6 +43,8 @@ import {
   lastOfKindHint,
   answerFor,
   cardHolders,
+  pinnedCards,
+  isNew,
 } from '../store.js'
 import { navigate, openCard } from '../router.js'
 import { PageHead, Dot, Avatar, PrioBadge, DueBadge, NewBadge, Modal, Field, Empty, Labels, ActivityBadge, dialogKinds, useIsMobile, Segmented } from './common.js'
@@ -536,6 +538,30 @@ function ArchiveWindow({ project, initialQuery }) {
   <//>`
 }
 
+// Angeheftete Deals (47_angeheftet.sql, Wunsch vom 27.11.2026): schmaler Streifen oben in den
+// eigenen Pipelines („Intern <Name>“ und „Vertrieb <Name>“), waagerecht scrollbar. Je Deal Titel,
+// Pipeline und Spalte, grüner Punkt bei Neuem seit dem letzten Öffnen. Ohne Pins kein Streifen.
+function PinnedStrip() {
+  const cards = pinnedCards()
+  if (!cards.length) return null
+  return html`<section class="pinned-strip" aria-label=${t('Angeheftet')}>
+    <h2 class="pinned-title"><${Icon} name="pin" size=${16} /> ${t('Angeheftet')} <span class="count">${cards.length}</span></h2>
+    <ul class="pinned-list">
+      ${cards.map((c) => {
+        const p = getProject(c.project_id)
+        const st = getStage(c.stage_id)
+        const fresh = isNew(c.id)
+        return html`<li key=${c.id}>
+          <button type="button" class="pinned-card" onClick=${() => openCard(c.id)} aria-label=${c.title + (fresh ? ', ' + t('neu') : '')}>
+            <span class="pinned-card-title">${fresh && html`<span class="pin-new" aria-hidden="true"></span>`}${c.title}</span>
+            <span class="pinned-card-meta">${p && html`<${Dot} color=${p.color} />`}${p ? p.name : ''}${st ? ' · ' + stageLabel(st.name) : ''}${c.archived ? ' · ' + t('archiviert') : ''}</span>
+          </button>
+        </li>`
+      })}
+    </ul>
+  </section>`
+}
+
 export function Board({ projectId, archiveOpen = false, archiveQuery = '' }) {
   const mobile = useIsMobile()
   const projects = activeProjects()
@@ -697,6 +723,7 @@ export function Board({ projectId, archiveOpen = false, archiveQuery = '' }) {
       </a>
     </p>`}
 
+    ${!isGuest() && isOwnProject(current, ownWords(myEmail(), memberName(myEmail()))) && html`<${PinnedStrip} />`}
     ${view === 'liste'
       ? html`<${CardTable} cards=${filtered} />
           ${mobile &&

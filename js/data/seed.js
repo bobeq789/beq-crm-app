@@ -693,7 +693,32 @@ export function buildSeed() {
   seedPipeline(db, K, today)
   seedChat(db)
   seedInternBoards(db, created)
+  db.deal_angeheftet = seedPins(db)
   return db
+}
+
+// Angeheftete Deals (47_angeheftet.sql): Anna heftet drei Deals anderer an, aus drei Pipelines.
+// Am ersten hat Jonas vor zwei Stunden eine Notiz geschrieben, er zeigt also „Neuigkeiten“.
+// Auch für ältere Demo-Stände ohne diese Liste (demo.js ruft es beim Laden nach).
+export function seedPins(db) {
+  const kindOf = Object.fromEntries(db.stages.map((s) => [s.id, s.kind]))
+  const used = new Set()
+  const picks = db.cards.filter((c) => {
+    // Deals anderer, die Anna weder hat noch vergeben hat
+    if (c.archived || kindOf[c.stage_id] === 'done' || c.assignee === A || (c.mitzustaendig || []).includes(A) || c.vergeben_von === A) return false
+    if (used.has(c.project_id)) return false
+    used.add(c.project_id)
+    return true
+  }).slice(0, 3)
+  const at = daysAgo(3)
+  picks.forEach((c, i) => {
+    db.card_seen = (db.card_seen || []).filter((s) => !(s.card_id === c.id && s.email === A))
+    db.card_seen.push({ card_id: c.id, email: A, seen_at: daysAgo(1, 8, i) })
+  })
+  if (picks[0]) {
+    db.card_events.push({ id: uid(), card_id: picks[0].id, at: new Date(Date.now() - 2 * 3600000).toISOString(), actor: J, kind: 'notiz', detail: null })
+  }
+  return picks.map((c) => ({ email: A, card_id: c.id, created_at: at, zuletzt_gemeldet: null }))
 }
 
 // Je Person eine interne Pipeline „Intern <Vorname>“ wie im echten CRM (Entscheidung vom

@@ -1,7 +1,7 @@
 // Demo-Modus: Daten liegen nur in diesem Browser (localStorage). Gleiche Schnittstelle wie supabase.js.
 // Mit ?demo&gast sieht man die App so, wie ein Gast sie sieht.
 import { local, matches, uid } from '../lib/util.js'
-import { buildSeed, DEMO_ME, DEMO_GUEST, DEMO_TEAM } from './seed.js'
+import { buildSeed, seedPins, DEMO_ME, DEMO_GUEST, DEMO_TEAM } from './seed.js'
 import {
   prepareInsert,
   prepareUpdate,
@@ -60,6 +60,11 @@ function loadDb() {
 
 export function createDemoApi({ asGuest = false } = {}) {
   let db = loadDb()
+  // Angeheftete Deals (47_angeheftet.sql) gab es in älteren Demo-Ständen noch nicht
+  if (!Array.isArray(db.deal_angeheftet)) {
+    db.deal_angeheftet = seedPins(db)
+    local.set(KEY, db)
+  }
   const me = asGuest ? DEMO_GUEST : DEMO_ME
   const save = () => local.set(KEY, db)
   // Was in Supabase nachts der Zeitplan tut (24_archiv.sql), passiert hier beim Laden
@@ -521,6 +526,23 @@ export function createDemoApi({ asGuest = false } = {}) {
       return clone(db.card_events.filter((e) => e.card_id === cardId).sort((a, b) => b.at.localeCompare(a.at)))
     },
     // Karte als gesehen merken
+    // Angeheftete Deals: nur die eigenen, Gäste nie, höchstens 50 (wie 47_angeheftet.sql)
+    async pins() {
+      if (asGuest) return []
+      return clone(db.deal_angeheftet.filter((p) => p.email === me).map((p) => ({ card_id: p.card_id, created_at: p.created_at })))
+    },
+    async pin(cardId) {
+      if (asGuest || !db.cards.some((c) => c.id === cardId)) throw notAllowed()
+      if (db.deal_angeheftet.some((p) => p.email === me && p.card_id === cardId)) return
+      if (db.deal_angeheftet.filter((p) => p.email === me).length >= 50) throw dbError('demo', 'Höchstens 50 angeheftete Deals. Löse erst einen anderen.')
+      db.deal_angeheftet.push({ email: me, card_id: cardId, created_at: new Date().toISOString(), zuletzt_gemeldet: null })
+      save()
+    },
+    async unpin(cardId) {
+      if (asGuest) throw notAllowed()
+      db.deal_angeheftet = db.deal_angeheftet.filter((p) => !(p.email === me && p.card_id === cardId))
+      save()
+    },
     async markSeen(cardId) {
       const now = new Date().toISOString()
       const row = db.card_seen.find((x) => x.card_id === cardId && x.email === me)

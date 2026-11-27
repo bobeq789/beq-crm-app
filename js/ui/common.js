@@ -210,7 +210,8 @@ export function Field({ label, children, hint, htmlFor }) {
 
 // Eine Zeile „Zu erledigen“: Haken, Titel, darunter Projekt, Kontakt, Zuständig und Marken
 // checkActivity: in „Wiedervorlagen“ hakt der Kreis diese Aktivität ab, die Aufgabe bleibt.
-export function TaskRow({ card, showSince, sinceText, checkActivity }) {
+// nextHint: kleine Zeile darunter, in „Team“ zum Beispiel „danach in Zu erledigen“
+export function TaskRow({ card, showSince, sinceText, checkActivity, nextHint }) {
   const project = getProject(card.project_id)
   const person = getPerson(card.person_id)
   const org = getOrg(card.org_id)
@@ -247,6 +248,7 @@ export function TaskRow({ card, showSince, sinceText, checkActivity }) {
         ${!done && html`<${ActivityBadge} cardId=${card.id} />`}
         ${showSince && html`<span class="badge due-later">${sinceText}</span>`}
       </div>
+      ${nextHint && html`<div class="task-next">${nextHint}</div>`}
     </div>
   </li>`
 }

@@ -1,6 +1,9 @@
 // Übersicht (Startseite): Schnellerfassung, Zu erledigen, Team, Termine, Wiedervorlagen, Letzte Meetings.
-// Jede Aufgabe steht nur einmal: To-dos und „In Arbeit“ in „Zu erledigen“, alle übrigen Arten
-// außer „Erledigt“ in „Wiedervorlagen“ (Nachträge Aktivitäten und Terminlink vom 08.11.2026).
+// Grundregel (Entscheidung vom 27.11.2026): Jeder Deal steht in der Übersicht nur an einer Stelle.
+//   Neu für mich (erwähnt, gegeben, Aktivität bekommen, angeheftet mit Neuigkeiten): nur in „Team“,
+//   bis ich ihn öffne. Danach an seinem festen Platz: To-dos und „In Arbeit“ in „Zu erledigen“,
+//   „Später“ zugeklappt darunter, „Warte auf Rückmeldung“ und Fälliges in „Wiedervorlagen“.
+// overviewPlan() verteilt alles einmal, die Kacheln zeigen nur, was ihnen zugeteilt ist.
 import { html, useState } from '../lib/preact.js'
 import { Icon } from '../lib/icons.js'
 import { todayStr, endOfWeekStr, addDays, fmtDateLong, fmtDateTime, fmtTimeRange, fmtRelative, firstName, sinceLabel, local, ymd, norm } from '../lib/util.js'
@@ -34,6 +37,9 @@ import {
   activeMembers,
   savePrefs,
   openDialog,
+  givenActivities,
+  markActivitiesSeen,
+  pinnedCards,
 } from '../store.js'
 import { TILE_DEFAULT, tileLayout, moveTile, ArrangeView, useTileDrag } from './tiles.js'
 import { openEvent, openCard, navigate } from '../router.js'
@@ -71,8 +77,9 @@ export function isMine(card) {
   return isCardOf(card, myEmail())
 }
 
-function TodoTile({ cards, drag }) {
+function TodoTile({ cards, later = [], drag }) {
   const [showAll, setShowAll] = useState(false)
+  const [showLater, setShowLater] = useState(false)
   const today = todayStr()
   const weekEnd = endOfWeekStr()
   const groups = { today: [], urgent: [], week: [], rest: [] }
@@ -97,7 +104,7 @@ function TodoTile({ cards, drag }) {
       : null
   const addTask = html`<button type="button" class="link-btn" onClick=${() => openDialog({ kind: 'new-task', title: '' })}><${Icon} name="plus" size=${16} /> ${t('Deal')}</button>`
   return html`<${Tile} title="Zu erledigen (Deals)" count=${cards.length} cls="tile-todo" drag=${drag} actions=${addTask}>
-    ${cards.length === 0 && html`<${Empty}>${t('Nichts offen. Schön.')}<//>`}
+    ${cards.length === 0 && !later.length && html`<${Empty}>${t('Nichts offen. Schön.')}<//>`}
     ${section('Überfällig und heute', groups.today)}
     ${section('Dringend', groups.urgent)}
     ${section('Diese Woche', groups.week)}
@@ -111,6 +118,14 @@ function TodoTile({ cards, drag }) {
           </button>`}
         </div>`
       : null}
+    ${later.length > 0 &&
+    html`<div class="task-group">
+      <h3 class="group-title">${t('Später')} <span class="count">${later.length}</span></h3>
+      <button type="button" class="link-btn later-toggle" aria-expanded=${showLater} onClick=${() => setShowLater(!showLater)}>
+        ${showLater ? t('Zuklappen') : t('Deals in „Später“ anzeigen')}
+      </button>
+      ${showLater && html`<ul class="task-list">${[...later].sort(taskSort).map((c) => html`<${TaskRow} card=${c} key=${c.id} />`)}</ul>`}
+    </div>`}
   <//>`
 }
 
@@ -265,50 +280,171 @@ const givenText = (g) => {
   const vars = { name: firstName(memberName(g.actor) || g.actor), when: fmtRelative(g.at) }
   return g.art === 'mitzustaendig' ? t('von {name}, dazu, {when}', vars) : t('von {name}, {when}', vars)
 }
-function TeamTile({ drag }) {
-  const me = norm(myEmail())
-  const open = state.db.cards.filter(isOpen)
-  const lastChange = (c) => String((flagOf(c.id) || {}).last_change || '')
-  const mentioned = open.filter((c) => isMentioned(c.id)).sort((a, b) => lastChange(b).localeCompare(lastChange(a)))
-  const given = open
-    .filter((c) => !isMentioned(c.id) && givenToMe(c.id))
-    .map((c) => ({ card: c, g: givenToMe(c.id) }))
-    .sort((a, b) => String(b.g.at).localeCompare(String(a.g.at)))
-  // Von dir vergeben: jemand anderes ist Hauptperson, und ich habe sie zuletzt an sie gegeben.
-  // „seit“: letzte Zuweisung an die zuständige Person, sonst das Anlegen.
-  const elsewhere = open
-    .filter((c) => c.assignee && norm(c.assignee) !== me && norm(c.vergeben_von || '') === me)
-    .map((c) => {
-      const h = lastHandover(c.id)
-      return { card: c, since: h && norm(h.assignee || '') === norm(c.assignee) ? h.at : c.created_at }
-    })
-    .sort((a, b) => String(a.since).localeCompare(String(b.since)))
-  // Die Zahl zählt immer alle, sichtbar sind zuerst 8, „Alle n anzeigen“ klappt den Rest auf
-  // Kurze Erklärung je Gruppe (Wunsch vom 25.11.2026: sonst schwer nachvollziehbar)
+// „danach in …“: wo ein Eintrag aus „Team“ nach dem Öffnen steht (overviewPlan().home)
+const HOME_TEXT = {
+  todo: 'danach in Zu erledigen',
+  follow: 'danach in Wiedervorlagen',
+  later: 'danach unter Später',
+}
+const homeText = (where) => t(HOME_TEXT[where] || 'danach nur im Board')
+
+// Aktivität, die mir jemand gegeben hat: Text, Deal oder Kontakt, von wem, fällig, danach wohin.
+// Ein Klick öffnet den Deal (dann gilt sie als gesehen) oder bei Aktivitäten ohne Deal den Kontakt.
+function GivenActivityRow({ act, home }) {
+  const card = act.card_id ? state.db.cards.find((c) => c.id === act.card_id) : null
+  const person = getPerson(act.person_id)
+  const org = getOrg(act.org_id) || (person && getOrg(person.org_id))
+  const kind = activityKind(act.art)
+  const when = activityWhen(act)
+  const open = () => {
+    if (card) return openCard(card.id)
+    markActivitiesSeen([act.id])
+    if (person) navigate('/kontakte/' + person.id)
+    else if (org) navigate('/firmen/' + org.id)
+  }
+  const from = t('von {name}, {when}', { name: firstName(memberName(act.created_by) || act.created_by), when: fmtRelative(act.created_at) })
+  return html`<li class="task-row">
+    <button type="button" class="check" title=${t('Abhaken')} aria-label=${t('Abhaken: {text}', { text: activityText(act) })} onClick=${() => completeActivity(act)}>
+      <${Icon} name="check" size=${16} />
+    </button>
+    <div class="task-main">
+      <button type="button" class="task-title act-loose" onClick=${open}><${Icon} name=${kind.icon} size=${16} /><span>${activityText(act)}</span></button>
+      <div class="task-meta">
+        ${card
+          ? html`<span class="meta-item">${card.title}</span>`
+          : [person && person.name, org && org.name].filter(Boolean).map((x) => html`<span class="meta-item muted">${x}</span>`)}
+        <span class=${'badge due-' + when.tone}>${when.text}</span>
+        <span class="badge due-later">${from}</span>
+      </div>
+      <div class="task-next">${homeText(home)}</div>
+    </div>
+  </li>`
+}
+
+// Kachel „Team“ (Entscheidungen vom 24. und 27.11.2026): was andere für mich getan haben und was ich
+// anderen gegeben habe. Was hier steht, steht nirgends sonst in der Übersicht (overviewPlan()).
+function TeamTile({ plan, drag }) {
+  const { mentioned, given, givenActs, elsewhere, pinnedNews, home, actHome } = plan
+  const newItems = [...given.map((x) => ({ key: 'k' + x.card.id, x })), ...givenActs.map((a) => ({ key: 'a' + a.id, a }))]
   return html`<${Tile} title="Team" drag=${drag}>
-    <p class="tile-hint muted small">${t('Was andere dir geschickt oder gegeben haben und was du anderen gegeben hast. Deine eigenen Deals stehen unter „Zu erledigen“.')}</p>
+    <p class="tile-hint muted small">${t('Neues von anderen steht nur hier, bis du es öffnest. Danach steht es an seinem festen Platz, darunter steht wo.')}</p>
     <div class="task-group">
       <h3 class="group-title">${t('Du wurdest erwähnt')} ${mentioned.length > 0 && html`<span class="count">${mentioned.length}</span>`}</h3>
-      <p class="group-hint muted small">${t('Jemand hat dich in einer Notiz mit @Name angesprochen. Verschwindet, sobald du den Deal öffnest.')}</p>
+      <p class="group-hint muted small">${t('Jemand hat dich in einer Notiz mit @Name angesprochen.')}</p>
       ${mentioned.length
-        ? html`<${MoreList} items=${mentioned} render=${(c) => html`<${TaskRow} card=${c} key=${c.id} />`} />`
+        ? html`<${MoreList} items=${mentioned} render=${(c) => html`<${TaskRow} card=${c} key=${c.id} nextHint=${homeText(home(c))} />`} />`
         : html`<${Empty}>${t('Niemand hat dich neu erwähnt.')}<//>`}
     </div>
     <div class="task-group">
-      <h3 class="group-title">${t('Dir neu gegeben')} ${given.length > 0 && html`<span class="count">${given.length}</span>`}</h3>
-      <p class="group-hint muted small">${t('Jemand hat dich zuständig gemacht, als weitere Zuständige eingetragen oder den Deal für dich angelegt. Verschwindet, sobald du den Deal öffnest.')}</p>
-      ${given.length
-        ? html`<${MoreList} items=${given} render=${(x) => html`<${TaskRow} card=${x.card} key=${x.card.id} showSince=${true} sinceText=${givenText(x.g)} />`} />`
+      <h3 class="group-title">${t('Dir neu gegeben')} ${newItems.length > 0 && html`<span class="count">${newItems.length}</span>`}</h3>
+      <p class="group-hint muted small">${t('Deals und Aktivitäten, die dir jemand gegeben oder für dich angelegt hat.')}</p>
+      ${newItems.length
+        ? html`<${MoreList}
+            items=${newItems}
+            render=${(it) =>
+              it.a
+                ? html`<${GivenActivityRow} act=${it.a} home=${actHome(it.a)} key=${it.key} />`
+                : html`<${TaskRow} card=${it.x.card} key=${it.key} showSince=${true} sinceText=${givenText(it.x.g)} nextHint=${homeText(home(it.x.card))} />`}
+          />`
         : html`<${Empty}>${t('Dir hat niemand etwas Neues gegeben.')}<//>`}
     </div>
+    ${pinnedNews.length > 0 &&
+    html`<div class="task-group">
+      <h3 class="group-title">${t('Angeheftet, mit Neuigkeiten')} <span class="count">${pinnedNews.length}</span></h3>
+      <p class="group-hint muted small">${t('Deals anderer, die du angeheftet hast und an denen sich etwas getan hat.')}</p>
+      <${MoreList} items=${pinnedNews} render=${(c) => html`<${TaskRow} card=${c} key=${c.id} />`} />
+    </div>`}
     <div class="task-group">
       <h3 class="group-title">${t('Von dir vergeben')} ${elsewhere.length > 0 && html`<span class="count">${elsewhere.length}</span>`}</h3>
-      <p class="group-hint muted small">${t('Deals, die du jemand anderem gegeben hast und die noch offen sind, mit „seit“. So siehst du, was bei anderen liegt. Verschwindet, wenn der Deal erledigt ist.')}</p>
+      <p class="group-hint muted small">${t('Was du anderen gegeben hast und noch offen ist, mit „seit“.')}</p>
       ${elsewhere.length
         ? html`<${MoreList} items=${elsewhere} render=${(x) => html`<${TaskRow} card=${x.card} key=${x.card.id} showSince=${true} sinceText=${sinceLabel(x.since)} />`} />`
         : html`<${Empty}>${t('Gerade hast du nichts an andere vergeben.')}<//>`}
     </div>
   <//>`
+}
+
+// Alles für die Übersicht einmal verteilen (Grundregel: jeder Deal nur an einer Stelle).
+// teamOn: Kachel „Team“ wird gezeigt (ab zwei Personen im Team). Ohne sie bleibt alles an seinem
+// festen Platz.
+export function overviewPlan(scope, teamOn = true) {
+  const me = norm(myEmail())
+  const visible = state.db.cards.filter((c) => !c.archived && (scope === 'all' || isMine(c)))
+  const todoAll = visible.filter((c) => ['todo', 'doing'].includes(cardKind(c)))
+  // Wiedervorlagen: alle übrigen Arten außer „Erledigt“. Bei „Meine“ zählt auch, wenn die
+  // nächste Aktivität mir gehört.
+  const followCards = state.db.cards.filter((c) => {
+    if (c.archived || ['todo', 'doing', 'done'].includes(cardKind(c))) return false
+    if (scope === 'all' || isMine(c)) return true
+    const next = nextActivity(c.id)
+    return !!next && isMyActivity(next)
+  })
+  const followAll = followUpItems(followCards, scope)
+  const followIds = new Set([...followAll.answers, ...followAll.due, ...followAll.soon].filter((x) => x.card).map((x) => x.card.id))
+  followAll.waiting.forEach((c) => followIds.add(c.id))
+  // Später: eigene Deals der Art „Später“, die nicht schon wegen einer Aktivität in Wiedervorlagen stehen
+  const laterAll = visible.filter((c) => cardKind(c) === 'later' && !followIds.has(c.id))
+  const todoIds = new Set(todoAll.map((c) => c.id))
+  const laterIds = new Set(laterAll.map((c) => c.id))
+  const home = (c) => (todoIds.has(c.id) ? 'todo' : followIds.has(c.id) ? 'follow' : laterIds.has(c.id) ? 'later' : null)
+  // Aktivität ohne Deal: Wiedervorlagen (ab 7 Tagen vor Fälligkeit), mit Deal: wo der Deal steht
+  const actHome = (a) => (a.card_id ? home(state.db.cards.find((c) => c.id === a.card_id) || {}) : 'follow')
+
+  // Team
+  const open = state.db.cards.filter(isOpen)
+  const lastChange = (c) => String((flagOf(c.id) || {}).last_change || '')
+  const mentioned = teamOn ? open.filter((c) => isMentioned(c.id)).sort((a, b) => lastChange(b).localeCompare(lastChange(a))) : []
+  const given = teamOn
+    ? open
+        .filter((c) => !isMentioned(c.id) && givenToMe(c.id))
+        .map((c) => ({ card: c, g: givenToMe(c.id) }))
+        .sort((a, b) => String(b.g.at).localeCompare(String(a.g.at)))
+    : []
+  const teamCards = new Set([...mentioned.map((c) => c.id), ...given.map((x) => x.card.id)])
+  // Aktivitäten, die mir jemand gegeben hat, ohne die an Deals, die schon oben stehen
+  const givenActs = teamOn
+    ? givenActivities()
+        .filter((a) => !a.card_id || !teamCards.has(a.card_id))
+        .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+    : []
+  const teamActs = new Set(givenActs.map((a) => a.id))
+  // Deals, die gerade in „Team“ stehen oder deren nächste Aktivität dort neu steht, warten dort
+  const waitsInTeam = (c) => {
+    if (teamCards.has(c.id)) return true
+    const next = nextActivity(c.id)
+    return !!next && teamActs.has(next.id)
+  }
+  // Von dir vergeben: jemand anderes ist Hauptperson, ich habe den Deal zuletzt an sie gegeben.
+  // Ohne die, bei denen ich selbst mit zuständig bin (die stehen an ihrem Platz).
+  // „seit“: letzte Zuweisung an die zuständige Person, sonst das Anlegen.
+  const elsewhereAll = teamOn
+    ? open
+        .filter((c) => c.assignee && norm(c.assignee) !== me && norm(c.vergeben_von || '') === me && !isMine(c) && !waitsInTeam(c))
+        .map((c) => {
+          const h = lastHandover(c.id)
+          return { card: c, since: h && norm(h.assignee || '') === norm(c.assignee) ? h.at : c.created_at }
+        })
+        .sort((a, b) => String(a.since).localeCompare(String(b.since)))
+    : []
+
+  const todo = todoAll.filter((c) => !waitsInTeam(c))
+  const later = laterAll.filter((c) => !waitsInTeam(c))
+  const keepItem = (x) => (x.card ? !waitsInTeam(x.card) : !teamActs.has(x.act.id))
+  const follow = {
+    answers: followAll.answers.filter(keepItem),
+    due: followAll.due.filter(keepItem),
+    soon: followAll.soon.filter(keepItem),
+    waiting: followAll.waiting.filter((c) => !waitsInTeam(c)),
+  }
+  // Was schon an seinem festen Platz steht
+  const placed = new Set([...todo, ...later, ...follow.waiting].map((c) => c.id))
+  ;[...follow.answers, ...follow.due, ...follow.soon].forEach((x) => x.card && placed.add(x.card.id))
+  // Bei „Alle“ stehen vergebene Deals schon in „Zu erledigen“ oder „Wiedervorlagen“
+  const elsewhere = elsewhereAll.filter((x) => !placed.has(x.card.id))
+  elsewhere.forEach((x) => placed.add(x.card.id))
+  // Angeheftet, mit Neuigkeiten: nur, was sonst nirgends in der Übersicht steht
+  const pinnedNews = teamOn ? pinnedCards().filter((c) => isOpen(c) && isNew(c.id) && !placed.has(c.id) && !waitsInTeam(c)) : []
+  return { todo, later, follow, mentioned, given, givenActs, elsewhere, pinnedNews, home, actHome }
 }
 
 function EventsTile({ scope, drag }) {
@@ -390,24 +526,16 @@ export function Overview() {
     setScope(v)
     local.set('beqcrm-scope', v)
   }
-  const visible = state.db.cards.filter((c) => !c.archived && (scope === 'all' || isMine(c)))
-  const todo = visible.filter((c) => ['todo', 'doing'].includes(cardKind(c)))
-  // Wiedervorlagen: alle übrigen Arten außer „Erledigt“. Bei „Meine“ zählt auch, wenn die
-  // nächste Aktivität mir gehört.
-  const followCards = state.db.cards.filter((c) => {
-    if (c.archived || ['todo', 'doing', 'done'].includes(cardKind(c))) return false
-    if (scope === 'all' || isMine(c)) return true
-    const next = nextActivity(c.id)
-    return !!next && isMyActivity(next)
-  })
-  const follow = followUpItems(followCards, scope)
+  const teamOn = activeMembers().length > 1
+  const plan = overviewPlan(scope, teamOn)
+  const { todo, follow } = plan
   const isMobile = useIsMobile()
   const name = state.me ? firstName(state.me.name) : ''
 
   // Kacheln (B2): Anordnung je Person aus nutzer_einstellungen. „Team“ gilt erst ab zwei Personen
   // im Team und taucht sonst auch beim Anordnen nicht auf.
   const [arranging, setArranging] = useState(false)
-  const available = TILE_DEFAULT.reihe.filter((id) => id !== 'team' || activeMembers().length > 1)
+  const available = TILE_DEFAULT.reihe.filter((id) => id !== 'team' || teamOn)
   const saved = state.prefs.kacheln
   const custom = !!(saved && Array.isArray(saved.reihe))
   const layout = tileLayout(saved, available)
@@ -426,8 +554,8 @@ export function Overview() {
   const names = { aufgaben: 'Zu erledigen (Deals)', team: 'Team', termine: 'Termine heute und morgen', wiedervorlagen: 'Wiedervorlagen', meetings: 'Letzte Meetings' }
   const tileFor = (id) => {
     const d = { onPointerDown: (e) => drag.start(id, e) }
-    if (id === 'aufgaben') return html`<${TodoTile} cards=${todo} drag=${d} />`
-    if (id === 'team') return html`<${TeamTile} drag=${d} />`
+    if (id === 'aufgaben') return html`<${TodoTile} cards=${todo} later=${plan.later} drag=${d} />`
+    if (id === 'team') return html`<${TeamTile} plan=${plan} drag=${d} />`
     if (id === 'termine') return html`<${EventsTile} scope=${scope} drag=${d} />`
     if (id === 'wiedervorlagen') return html`<${FollowUpTile} groups=${follow} drag=${d} />`
     return html`<${MeetingsTile} drag=${d} />`

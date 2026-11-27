@@ -1753,3 +1753,21 @@ img.avatar-img { display: inline-block; object-fit: cover; padding: 0; backgroun
 .auth-lang button { border: 0; background: none; color: var(--grey); font: inherit; font-size: 14px; font-weight: 500; padding: 8px 10px; min-height: 40px; border-radius: 8px; cursor: pointer; }
 .auth-lang button:hover { color: var(--white); }
 .auth-lang button.active { color: var(--white); background: var(--navy-2); }
+
+/* Angeheftete Deals (47_angeheftet.sql): Knopf im Deal und Streifen oben in den eigenen Pipelines */
+.panel-head-actions { display: flex; align-items: center; gap: 8px; }
+.pin-btn[aria-pressed="true"] { background: var(--chip-active-bg); color: var(--today-text); }
+.pinned-strip { margin: 0 0 16px; }
+.pinned-title { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; color: var(--muted); margin: 0 0 8px; }
+.pinned-title .count { color: var(--muted); }
+.pinned-list { list-style: none; margin: 0; padding: 0 0 4px; display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+.pinned-list li { flex: 0 0 auto; scroll-snap-align: start; }
+.pinned-card { display: flex; flex-direction: column; gap: 4px; width: 220px; max-width: 70vw; min-height: 56px; padding: 10px 12px; border: 0; border-radius: var(--radius); background: var(--surface); color: var(--text); text-align: left; font: inherit; cursor: pointer; }
+.pinned-card:hover { filter: var(--hover-filter); }
+.pinned-card:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.pinned-card-title { display: block; font-weight: 500; font-size: 15px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pinned-card-meta { display: block; font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pinned-card-meta .dot { vertical-align: middle; margin-right: 6px; }
+.pin-new { display: inline-block; vertical-align: middle; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--green); }
+.task-next { margin-top: 2px; font-size: 13px; color: var(--muted); }
+.later-toggle { margin-top: 4px; }

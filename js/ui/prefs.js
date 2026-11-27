@@ -371,6 +371,7 @@ function PushTile() {
             <label class="check-label"><input type="checkbox" checked=${flag('gruppen')} onChange=${(e) => savePushPrefs({ gruppen: e.target.checked })} /> ${t('Gruppen')}</label>
             <label class="check-label"><input type="checkbox" checked=${flag('erwaehnungen')} onChange=${(e) => savePushPrefs({ erwaehnungen: e.target.checked })} /> ${t('@Erwähnungen und Antworten im Verlauf')}</label>
             <label class="check-label"><input type="checkbox" checked=${flag('zuweisungen')} onChange=${(e) => savePushPrefs({ zuweisungen: e.target.checked })} /> ${t('Deals und Aktivitäten, die dir jemand gibt')}</label>
+            <label class="check-label"><input type="checkbox" checked=${flag('angeheftet')} onChange=${(e) => savePushPrefs({ angeheftet: e.target.checked })} /> ${t('Neuigkeiten bei angehefteten Deals')}</label>
           </fieldset>
           ${channels.length > 0 &&
           html`<fieldset class="push-kinds">

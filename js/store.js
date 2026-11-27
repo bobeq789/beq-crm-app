@@ -40,6 +40,8 @@ export const state = {
   handovers: new Map(),
   // Deals, die mir seit meinem letzten Blick gegeben wurden (43_team_kachel.sql)
   given: new Map(),
+  // Angeheftete Deals der angemeldeten Person (47_angeheftet.sql): card_id -> { card_id, created_at }
+  pins: new Map(),
   // Zählt hoch, wenn neue Verlaufseinträge ohne Kartenänderung dazukommen (zum Beispiel Dateien)
   historyTick: 0,
   // Follow-up (20_follow_up.sql), nur eigene Postfächer: „Antwort da“ je Aufgabe, neue Mails im
@@ -154,6 +156,8 @@ export function errorText(err) {
   if (/guest_guard|Gäste dürfen/i.test(msg)) return t('Als Gast kannst du hier nur Spalte, Dringlichkeit, Fälligkeit und Zuständig ändern.')
   // Meldungen aus 25_claude_zugang.sql (Freigabe für Claude) sind schon für Menschen geschrieben
   if (/Claude-Zugang|Claude kann|zuerst mit dem zweiten Faktor|Kennung des Claude/i.test(msg)) return t(msg)
+  // Grenze aus 47_angeheftet.sql
+  if (/angeheftete Deals|Anheften geht nur/i.test(msg)) return t(msg)
   // Sperre aus 44_deals_nur_archivieren.sql
   if (/nur archivieren/i.test(msg)) return t(msg)
   // Meldungen aus 39_kalender_abos.sql ebenso
@@ -558,6 +562,7 @@ export async function reload(throwErrors = false) {
   try {
     state.db = await api.loadAll(state.role)
     await loadFlags()
+    await loadPins()
     state.full = { meetings: new Set(), emails: new Set() }
     if (isDemo) {
       // Im Demo-Modus ist alles schon vollständig
@@ -600,13 +605,99 @@ export const flagOf = (cardId) => state.flags.get(cardId) || null
 export const lastHandover = (cardId) => state.handovers.get(cardId) || null
 export const isMentioned = (cardId) => !!(state.flags.get(cardId) || {}).mentioned
 
+// ------------------------------------------------------------
+// Angeheftete Deals (47_angeheftet.sql, Wunsch vom 27.11.2026)
+// ------------------------------------------------------------
+// Jede Person heftet für sich an. Gezeigt oben in den eigenen Pipelines und in der Übersicht
+// unter „Team“, wenn es Neues gibt. Ohne die SQL-Datei liefert api.pins() eine leere Liste.
+export async function loadPins() {
+  if (isGuest() || !api.pins) {
+    state.pins = new Map()
+    return
+  }
+  try {
+    const rows = (await api.pins()) || []
+    state.pins = new Map(rows.map((r) => [r.card_id, r]))
+  } catch {
+    state.pins = new Map()
+  }
+}
+export const isPinned = (cardId) => state.pins.has(cardId)
+export async function togglePin(cardId) {
+  const was = state.pins.get(cardId)
+  const next = new Map(state.pins)
+  if (was) next.delete(cardId)
+  else next.set(cardId, { card_id: cardId, created_at: new Date().toISOString() })
+  state.pins = next
+  emit()
+  try {
+    if (was) await api.unpin(cardId)
+    else await api.pin(cardId)
+    toast(was ? t('Gelöst') : t('Angeheftet. Du siehst ihn oben in deinen Pipelines.'))
+  } catch (err) {
+    const back = new Map(state.pins)
+    if (was) back.set(cardId, was)
+    else back.delete(cardId)
+    state.pins = back
+    emit()
+    toast(errorText(err), { error: true })
+  }
+}
+// Angeheftete Deals zum Anzeigen, zuletzt angeheftet zuerst. Erledigte und archivierte fallen
+// heraus, wenn sie seit 30 Tagen unverändert sind (gelöst wird dabei nichts).
+const PIN_KEEP_MS = 30 * 24 * 3600 * 1000
+export function pinnedCards() {
+  const byIdCards = new Map(state.db.cards.map((c) => [c.id, c]))
+  const now = Date.now()
+  return [...state.pins.values()]
+    .map((p) => ({ pin: p, card: byIdCards.get(p.card_id) }))
+    .filter(({ card }) => card && (isOpen(card) || now - Date.parse(card.updated_at || 0) < PIN_KEEP_MS))
+    .sort((a, b) => String(b.pin.created_at).localeCompare(String(a.pin.created_at)))
+    .map(({ card }) => card)
+}
+
+// ------------------------------------------------------------
+// Aktivitäten, die mir jemand anderes gegeben hat (Übersicht, „Team“, „Dir neu gegeben“)
+// ------------------------------------------------------------
+// Neu, solange ich sie nicht gesehen habe: an einem Deal, bis ich den Deal öffne (der Verlauf
+// hat seit dem Anlegen einen ungesehenen Eintrag), ohne Deal, bis ich sie anklicke. Gesehen
+// merkt sich nutzer_einstellungen.werte.aktivitaeten_gesehen (nur Kennungen, höchstens 200).
+// Nur die letzten 14 Tage, damit beim ersten Mal keine alten auftauchen.
+const GIVEN_ACT_DAYS = 14
+const SEEN_ACT_MAX = 200
+export function givenActivities() {
+  if (isGuest() || !state.me) return []
+  const me = norm(myEmail())
+  const seen = new Set(state.prefs.aktivitaeten_gesehen || [])
+  const since = Date.now() - GIVEN_ACT_DAYS * 24 * 3600 * 1000
+  const cards = new Map(state.db.cards.map((c) => [c.id, c]))
+  return allActivities().filter((a) => {
+    if (a.erledigt_at || norm(a.zustaendig || '') !== me || !a.created_by || norm(a.created_by) === me || seen.has(a.id)) return false
+    const created = Date.parse(a.created_at || 0)
+    if (!(created >= since)) return false
+    if (!a.card_id) return true
+    const card = cards.get(a.card_id)
+    if (!card || !isOpen(card)) return false
+    const flag = state.flags.get(a.card_id)
+    return !!flag && Date.parse(flag.last_change || 0) >= created - 1000
+  })
+}
+export function markActivitiesSeen(ids) {
+  if (!ids.length) return
+  const old = (state.prefs.aktivitaeten_gesehen || []).filter((x) => !ids.includes(x))
+  savePrefs({ aktivitaeten_gesehen: [...ids, ...old].slice(0, SEEN_ACT_MAX) })
+}
+
 // Öffnen einer Karte: „gesehen“ setzen. Klappt das nicht, still weitermachen.
+// Aktivitäten an dieser Karte, die mir jemand gegeben hat, gelten damit auch als gesehen.
 export async function markCardSeen(cardId) {
+  const acts = givenActivities().filter((a) => a.card_id === cardId).map((a) => a.id)
   if (state.flags.has(cardId)) {
     state.flags.delete(cardId)
     if (state.given) state.given.delete(cardId)
     emit()
   }
+  if (acts.length) markActivitiesSeen(acts)
   try {
     await api.markSeen(cardId, myEmail())
   } catch {

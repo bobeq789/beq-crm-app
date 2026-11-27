@@ -251,6 +251,18 @@ export async function createSupabaseApi(config) {
       const row = check(await client.from('kontakt_altdaten').select('inhalt').eq('person_id', personId).maybeSingle())
       return row ? row.inhalt : ''
     },
+    // Angeheftete Deals der angemeldeten Person (47_angeheftet.sql). Vor der Datei: leer.
+    async pins() {
+      const { data, error } = await client.from('deal_angeheftet').select('card_id,created_at')
+      if (error) return []
+      return data || []
+    },
+    async pin(cardId) {
+      check(await client.from('deal_angeheftet').insert({ card_id: cardId }))
+    },
+    async unpin(cardId) {
+      check(await client.from('deal_angeheftet').delete().eq('card_id', cardId))
+    },
     async fetchRow(table, id) {
       return check(await client.from(table).select('*').eq('id', id).maybeSingle())
     },
