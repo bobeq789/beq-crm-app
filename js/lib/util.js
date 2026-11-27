@@ -167,18 +167,31 @@ export function firstName(name) {
 }
 
 // Text in Teile zerlegen: normale Strings und Links
-const URL_RE = /(https?:\/\/[^\s<>"]+|www\.[^\s<>"]+)/g
+// Erkannt werden ausgeschriebene Links (https://…, www.…) und die Schreibweise aus Gmail und
+// anderen Mailprogrammen „Text <https://…>“. Dort fallen die spitzen Klammern in der Anzeige weg.
+// Sehr lange Links (Newsletter, Nachverfolgung) werden in der Anzeige gekürzt, der Link bleibt ganz.
+const URL_RE = /<(https?:\/\/[^\s<>"]+)>|(https?:\/\/[^\s<>"]+|www\.[^\s<>"]+)/g
+const LINK_SHOW_MAX = 70
+function shortLink(url) {
+  if (url.length <= LINK_SHOW_MAX) return url
+  return url.slice(0, LINK_SHOW_MAX - 1) + '…'
+}
 export function splitLinks(text) {
   const s = String(text || '')
   const parts = []
   let last = 0
-  s.replace(URL_RE, (m, _g, offset) => {
+  s.replace(URL_RE, (m, bracketed, bare, offset) => {
     if (offset > last) parts.push(s.slice(last, offset))
-    // Satzzeichen am Ende gehören nicht zum Link
-    const trail = m.match(/[.,!?)]+$/)
-    const url = trail ? m.slice(0, -trail[0].length) : m
-    parts.push({ href: url.startsWith('http') ? url : `https://${url}`, text: url })
-    if (trail) parts.push(trail[0])
+    if (bracketed) {
+      parts.push({ href: bracketed, text: shortLink(bracketed), title: bracketed })
+    } else {
+      // Satzzeichen am Ende gehören nicht zum Link
+      const trail = bare.match(/[.,!?;:)]+$/)
+      const url = trail ? bare.slice(0, -trail[0].length) : bare
+      const href = url.startsWith('http') ? url : `https://${url}`
+      parts.push({ href, text: shortLink(url), title: href })
+      if (trail) parts.push(trail[0])
+    }
     last = offset + m.length
     return m
   })
@@ -335,12 +348,25 @@ export function fmtTimeRange(start, end, allDay) {
 }
 
 // Text aus HTML gewinnen, ohne etwas davon auszuführen (DOMParser führt keine Skripte aus)
+// Nur echte HTML-Tags zählen. „<https://…>“ und „<name@firma.de>“ in normalen Mails sind kein HTML,
+// früher hielt die App solche Mails für HTML und ließ die Links ganz weg.
+const HTML_TAG_RE = /<\/?(html|head|body|div|p|br|span|table|tbody|thead|tr|td|th|a|b|i|u|strong|em|font|img|ul|ol|li|h[1-6]|blockquote|center|hr|meta|style|section|header|footer)\b[^>]*>/i
 export function htmlToText(html) {
   const s = String(html || '')
-  if (!/<[a-z][\s\S]*>/i.test(s)) return s
-  const withBreaks = s.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li|h\d)>/gi, '\n')
+  if (!HTML_TAG_RE.test(s)) return s
+  const withBreaks = s.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li|h\d|tr|table|blockquote)>/gi, '\n')
+  // DOMParser führt nichts aus und lädt nichts nach (keine Skripte, keine Bilder)
   const doc = new DOMParser().parseFromString(withBreaks, 'text/html')
-  return (doc.body.textContent || '').replace(/\n{3,}/g, '\n\n').trim()
+  doc.querySelectorAll('style, script, head, title').forEach((el) => el.remove())
+  // Links behalten: „hier klicken“ wird „hier klicken <https://…>“, das macht LinkText anklickbar
+  doc.querySelectorAll('a[href]').forEach((a) => {
+    const href = (a.getAttribute('href') || '').trim()
+    if (!/^https?:\/\//i.test(href)) return
+    const label = (a.textContent || '').replace(/\s+/g, ' ').trim()
+    const same = !label || label === href || href.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '') === label.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')
+    a.replaceWith(doc.createTextNode(same ? href : `${label} <${href}>`))
+  })
+  return (doc.body.textContent || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
 }
 
 // Mailtext in neuen Teil und zitierten Verlauf trennen

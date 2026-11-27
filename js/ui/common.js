@@ -152,7 +152,7 @@ export function Labels({ labels }) {
 // Text mit anklickbaren Links und Zeilenumbrüchen, ohne HTML
 export function LinkText({ text }) {
   return html`<span class="linktext">${splitLinks(text).map((p) =>
-    typeof p === 'string' ? p : html`<a href=${p.href} target="_blank" rel="noopener noreferrer">${p.text}</a>`
+    typeof p === 'string' ? p : html`<a href=${p.href} title=${p.title || p.href} target="_blank" rel="noopener noreferrer">${p.text}</a>`
   )}</span>`
 }
 

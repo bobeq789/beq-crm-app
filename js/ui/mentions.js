@@ -95,6 +95,6 @@ export function NoteText({ text, mentions }) {
 
 function linkParts(text) {
   return splitLinks(text).map((p) =>
-    typeof p === 'string' ? p : html`<a href=${p.href} target="_blank" rel="noopener noreferrer">${p.text}</a>`
+    typeof p === 'string' ? p : html`<a href=${p.href} title=${p.title || p.href} target="_blank" rel="noopener noreferrer">${p.text}</a>`
   )
 }
